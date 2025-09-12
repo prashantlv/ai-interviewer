@@ -296,6 +296,13 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
         logger.info("Client disconnected")
         await task.cancel()
 
+    @transport.event_handler("on_participant_left")
+    async def on_participant_left(transport, participant):
+        # Only react if it's the bot that left (not the candidate)
+        if participant.get("user_name") == "AI Interviewer Bot":
+            logger.warning("AI Interviewer left the call - candidate may still be present")
+            # Task will be cancelled and can be restarted with same room URL
+
     runner = PipelineRunner(handle_sigint=False)
     await runner.run(task)
 
