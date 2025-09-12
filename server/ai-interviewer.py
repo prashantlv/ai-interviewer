@@ -11,9 +11,9 @@ or Google's Gemini Multimodal Live model based on the BOT_IMPLEMENTATION environ
 
 Features:
 - Real-time audio/video interaction through Daily
-- Realistic human avatar through Tavus (optional)
+- Four video options: Robot animation, Simli, HeyGen, Tavus avatars
 - Configurable AI backend (OpenAI + separate STT/TTS or Gemini with built-in TTS)
-- Voice activity detection and transcription
+- Interactive features: Voice activity detection, interruption handling
 - Cost-optimized with separate STT/TTS services
 
 The bot runs as part of a pipeline that processes audio/video frames and manages
@@ -50,7 +50,7 @@ load_dotenv(override=True)
 
 # Load configuration from environment
 BOT_IMPLEMENTATION = os.getenv("BOT_IMPLEMENTATION", "openai").lower()
-VIDEO_SERVICE = os.getenv("VIDEO_SERVICE", "none").lower()  # none, tavus, simli
+VIDEO_SERVICE = os.getenv("VIDEO_SERVICE", "none").lower()  # none, tavus, simli, heygen
 
 # Import AI services based on configuration
 if BOT_IMPLEMENTATION == "openai":
@@ -76,6 +76,13 @@ elif VIDEO_SERVICE == "simli":
         from simli import SimliConfig
     except ImportError:
         logger.error("Simli integration not available. Install with: pip install pipecat-ai[simli]")
+        sys.exit(1)
+elif VIDEO_SERVICE == "heygen":
+    try:
+        from pipecat.services.heygen.video import HeyGenVideoService
+        from pipecat.services.heygen.api import NewSessionRequest
+    except ImportError:
+        logger.error("HeyGen integration not available. Install with: pip install pipecat-ai[heygen]")
         sys.exit(1)
 
 # Load animation sprites
@@ -246,6 +253,25 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
             latency_interval=0,      # Latency monitoring interval
         )
         logger.info(f"Initialized Simli with face: {os.getenv('SIMLI_FACE_ID')}")
+        
+    elif VIDEO_SERVICE == "heygen":
+        if not os.getenv("HEYGEN_API_KEY"):
+            logger.error("HEYGEN_API_KEY is required when VIDEO_SERVICE=heygen")
+            sys.exit(1)
+            
+        # Configure HeyGen with default or custom avatar
+        avatar_id = os.getenv("HEYGEN_AVATAR_ID", "Shawn_Therapist_public")  # Default public avatar
+        
+        session_request = NewSessionRequest(
+            avatar_id=avatar_id
+        )
+        
+        video_service = HeyGenVideoService(
+            api_key=os.getenv("HEYGEN_API_KEY"),
+            session=session,
+            session_request=session_request,
+        )
+        logger.info(f"Initialized HeyGen with avatar: {avatar_id}")
     
     # Initialize animation fallback (only if no video service is used)
     ta = None
@@ -348,6 +374,10 @@ async def bot(runner_args: RunnerArguments):
         if video_service == "simli":
             # Simli optimized resolution (512x512)
             video_width, video_height = 512, 512
+            video_framerate = 30
+        elif video_service == "heygen":
+            # HeyGen optimal resolution (1280x720)
+            video_width, video_height = 1280, 720
             video_framerate = 30
         else:
             # Default/Tavus resolution (1024x576)
