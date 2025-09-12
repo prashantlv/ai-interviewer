@@ -50,7 +50,7 @@ load_dotenv(override=True)
 
 # Load configuration from environment
 BOT_IMPLEMENTATION = os.getenv("BOT_IMPLEMENTATION", "openai").lower()
-USE_TAVUS = os.getenv("USE_TAVUS", "false").lower() == "true"
+VIDEO_SERVICE = os.getenv("VIDEO_SERVICE", "none").lower()  # none, tavus, simli
 
 # Import AI services based on configuration
 if BOT_IMPLEMENTATION == "openai":
@@ -63,12 +63,19 @@ else:
     logger.error(f"Invalid BOT_IMPLEMENTATION: {BOT_IMPLEMENTATION}. Must be 'openai' or 'gemini'")
     sys.exit(1)
 
-# Import Tavus services if enabled
-if USE_TAVUS:
+# Import video services based on configuration
+if VIDEO_SERVICE == "tavus":
     try:
         from pipecat.services.tavus.video import TavusVideoService
     except ImportError:
         logger.error("Tavus integration not available. Install with: pip install pipecat-ai[tavus]")
+        sys.exit(1)
+elif VIDEO_SERVICE == "simli":
+    try:
+        from pipecat.services.simli.video import SimliVideoService
+        from simli import SimliConfig
+    except ImportError:
+        logger.error("Simli integration not available. Install with: pip install pipecat-ai[simli]")
         sys.exit(1)
 
 # Load animation sprites
@@ -146,8 +153,8 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
     """
 
     logger.info(f"Starting AI Interviewer with {BOT_IMPLEMENTATION.upper()} backend")
-    if USE_TAVUS:
-        logger.info("Tavus video avatar enabled")
+    if VIDEO_SERVICE != "none":
+        logger.info(f"{VIDEO_SERVICE.capitalize()} video avatar enabled")
 
     # Initialize AI services based on configuration
     if BOT_IMPLEMENTATION == "openai":
@@ -199,26 +206,50 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
     # Initialize RTVI processor
     rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
     
-    # Initialize Tavus video service if enabled
-    tavus = None
-    if USE_TAVUS:
+    # Initialize video service based on configuration
+    video_service = None
+    if VIDEO_SERVICE == "tavus":
         if not os.getenv("TAVUS_API_KEY"):
-            logger.error("TAVUS_API_KEY is required when USE_TAVUS=true")
+            logger.error("TAVUS_API_KEY is required when VIDEO_SERVICE=tavus")
             sys.exit(1)
         if not os.getenv("TAVUS_REPLICA_ID"):
-            logger.error("TAVUS_REPLICA_ID is required when USE_TAVUS=true")
+            logger.error("TAVUS_REPLICA_ID is required when VIDEO_SERVICE=tavus")
             sys.exit(1)
             
-        tavus = TavusVideoService(
+        video_service = TavusVideoService(
             api_key=os.getenv("TAVUS_API_KEY"),
             replica_id=os.getenv("TAVUS_REPLICA_ID"),
             session=session,
         )
         logger.info(f"Initialized Tavus with replica: {os.getenv('TAVUS_REPLICA_ID')}")
+        
+    elif VIDEO_SERVICE == "simli":
+        if not os.getenv("SIMLI_API_KEY"):
+            logger.error("SIMLI_API_KEY is required when VIDEO_SERVICE=simli")
+            sys.exit(1)
+        if not os.getenv("SIMLI_FACE_ID"):
+            logger.error("SIMLI_FACE_ID is required when VIDEO_SERVICE=simli")
+            sys.exit(1)
+            
+        simli_config = SimliConfig(
+            apiKey=os.getenv("SIMLI_API_KEY"),
+            faceId=os.getenv("SIMLI_FACE_ID"),
+            handleSilence=True,      # Keep video active during silence
+            maxSessionLength=1200,   # 20 minute session limit
+            maxIdleTime=60,          # 60 second idle timeout
+            syncAudio=True,          # Synchronize audio streams
+        )
+        
+        video_service = SimliVideoService(
+            simli_config,
+            use_turn_server=False,   # Set to True if needed for restrictive networks
+            latency_interval=0,      # Latency monitoring interval
+        )
+        logger.info(f"Initialized Simli with face: {os.getenv('SIMLI_FACE_ID')}")
     
-    # Initialize animation fallback (only if Tavus is not used)
+    # Initialize animation fallback (only if no video service is used)
     ta = None
-    if not USE_TAVUS:
+    if VIDEO_SERVICE == "none":
         ta = TalkingAnimation()
 
     # Build pipeline based on configuration
@@ -234,8 +265,8 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
         ]
         
         # Add video processing
-        if USE_TAVUS:
-            pipeline_processors.append(tavus)
+        if video_service:
+            pipeline_processors.append(video_service)
         elif ta:
             pipeline_processors.append(ta)
         
@@ -253,9 +284,9 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
             llm,
         ]
         
-        # Add video processing (Tavus works with Gemini audio)
-        if USE_TAVUS:
-            pipeline_processors.append(tavus)
+        # Add video processing (Video services work with Gemini audio)
+        if video_service:
+            pipeline_processors.append(video_service)
         elif ta:
             pipeline_processors.append(ta)
             
@@ -297,7 +328,7 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
         await task.cancel()
 
     @transport.event_handler("on_participant_left")
-    async def on_participant_left(transport, participant):
+    async def on_participant_left(_transport, participant):
         # Only react if it's the bot that left (not the candidate)
         if participant.get("user_name") == "AI Interviewer Bot":
             logger.warning("AI Interviewer left the call - candidate may still be present")
@@ -310,8 +341,19 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
 async def bot(runner_args: RunnerArguments):
     """Main bot entry point compatible with Pipecat Cloud."""
 
-    # Use aiohttp session for Tavus integration
+    # Use aiohttp session for video service integration
     async with aiohttp.ClientSession() as session:
+        # Configure video output based on service
+        video_service = os.getenv("VIDEO_SERVICE", "none").lower()
+        if video_service == "simli":
+            # Simli optimized resolution (512x512)
+            video_width, video_height = 512, 512
+            video_framerate = 30
+        else:
+            # Default/Tavus resolution (1024x576)
+            video_width, video_height = 1024, 576
+            video_framerate = 30
+        
         transport = DailyTransport(
             runner_args.room_url,
             runner_args.token,
@@ -320,8 +362,10 @@ async def bot(runner_args: RunnerArguments):
                 audio_in_enabled=True,
                 audio_out_enabled=True,
                 video_out_enabled=True,
-                video_out_width=1024,
-                video_out_height=576,
+                video_out_is_live=True,           # Real-time video streaming
+                video_out_width=video_width,
+                video_out_height=video_height,
+                video_out_framerate=video_framerate,
                 vad_analyzer=SileroVADAnalyzer(),
                 transcription_enabled=True,
             ),
