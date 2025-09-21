@@ -23,6 +23,8 @@ the conversation flow.
 import os
 import sys
 import aiohttp
+import json
+from typing import Dict, Any, Optional
 
 from dotenv import load_dotenv
 from loguru import logger
@@ -47,6 +49,83 @@ from pipecat.transports.base_transport import BaseTransport
 from pipecat.transports.daily.transport import DailyParams, DailyTransport
 
 load_dotenv(override=True)
+
+# Web server integration configuration
+WEB_SERVER_URL = os.getenv("WEB_SERVER_URL", "http://localhost:8009")
+INTERVIEW_ID = os.getenv("INTERVIEW_ID", "default_interview")
+
+async def fetch_interview_config(session: aiohttp.ClientSession, interview_id: str) -> Optional[Dict[str, Any]]:
+    """Fetch interview configuration from web server"""
+    try:
+        url = f"{WEB_SERVER_URL}/api/bot/interview-config/{interview_id}"
+        logger.info(f"Fetching interview config from: {url}")
+        
+        async with session.get(url) as response:
+            if response.status == 200:
+                config = await response.json()
+                logger.info(f"✅ Retrieved interview config for {interview_id}")
+                return config
+            else:
+                logger.warning(f"Failed to fetch interview config: {response.status}")
+                return None
+    except Exception as e:
+        logger.error(f"Error fetching interview config: {e}")
+        return None
+
+async def send_interview_result(
+    session: aiohttp.ClientSession, 
+    interview_id: str, 
+    transcript: str, 
+    evaluation: Dict[str, Any]
+) -> bool:
+    """Send interview results back to web server"""
+    try:
+        url = f"{WEB_SERVER_URL}/api/bot/interview-result"
+        payload = {
+            "interview_id": interview_id,
+            "transcript": transcript,
+            "evaluation": evaluation
+        }
+        
+        logger.info(f"Sending interview results to: {url}")
+        
+        async with session.post(url, json=payload) as response:
+            if response.status == 200:
+                logger.info(f"✅ Successfully sent interview results for {interview_id}")
+                return True
+            else:
+                logger.warning(f"Failed to send interview results: {response.status}")
+                return False
+    except Exception as e:
+        logger.error(f"Error sending interview results: {e}")
+        return False
+
+def create_dynamic_system_prompt(interview_config: Optional[Dict[str, Any]]) -> str:
+    """Create dynamic system prompt based on interview configuration"""
+    base_prompt = """You are an AI Interviewer, a professional and friendly assistant conducting job interviews. 
+Your goal is to ask thoughtful questions, evaluate candidates, and create a comfortable interview environment. 
+Keep your responses concise and professional. Always maintain a conversational tone while being thorough in your assessment.
+You are hiring on behalf of Hire2Inspire."""
+    
+    if not interview_config:
+        return base_prompt + " Start by introducing yourself and explaining the interview process."
+    
+    # Extract interview-specific information
+    questions = interview_config.get("questions", [])
+    candidate_info = interview_config.get("candidate_info", {})
+    
+    if questions:
+        question_text = "\\n".join([f"- {q.get('question', '')}" for q in questions[:3]])
+        base_prompt += f"""
+
+Interview Focus Areas:
+{question_text}
+
+Start by introducing yourself, then ask these questions one by one, waiting for complete answers before proceeding."""
+    else:
+        base_prompt += " Start by introducing yourself and asking about their background and experience."
+    
+    return base_prompt
 
 # Load configuration from environment
 BOT_IMPLEMENTATION = os.getenv("BOT_IMPLEMENTATION", "openai").lower()
@@ -151,9 +230,10 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
     """Main bot execution function.
 
     Sets up and runs the bot pipeline including:
+    - Web server integration for dynamic questions
     - Configurable AI backend (OpenAI or Gemini)
     - Separate STT/TTS services for cost optimization
-    - Tavus video avatar (optional)
+    - Video avatar integration (optional)
     - Language model integration
     - Animation processing (fallback)
     - RTVI event handling
@@ -162,6 +242,13 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
     logger.info(f"Starting AI Interviewer with {BOT_IMPLEMENTATION.upper()} backend")
     if VIDEO_SERVICE != "none":
         logger.info(f"{VIDEO_SERVICE.capitalize()} video avatar enabled")
+    
+    # Fetch interview configuration from web server
+    interview_config = await fetch_interview_config(session, INTERVIEW_ID)
+    if interview_config:
+        logger.info(f"🎯 Using dynamic interview config with {len(interview_config.get('questions', []))} questions")
+    else:
+        logger.warning("⚠️ Using fallback interview configuration")
 
     # Initialize AI services based on configuration
     if BOT_IMPLEMENTATION == "openai":
@@ -181,10 +268,12 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
             model="gpt-4o-mini",  # Cost-optimized model
         )
 
+        # Conversation context for OpenAI with dynamic prompt
+        dynamic_prompt = create_dynamic_system_prompt(interview_config)
         messages = [
             {
                 "role": "system",
-                "content": "You are an AI Interviewer, a professional and friendly assistant conducting job interviews. Your goal is to ask thoughtful questions, evaluate candidates, and create a comfortable interview environment. Keep your responses concise and professional. Always maintain a conversational tone while being thorough in your assessment. Start by introducing yourself and explaining the interview process. You are hiring on behalf of Hire2Inspire and already have spoken with candidate on call so. When you ask questions ask one by one and wait for the answer. And after that provide score and feedback to candidate at the end. interview would be short so ask only though full questions.",
+                "content": dynamic_prompt,
             },
         ]
 
@@ -199,10 +288,12 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
             voice_id="Puck",  # Available: Aoede, Charon, Fenrir, Kore, Puck
         )
 
+        # Conversation context for Gemini with dynamic prompt
+        dynamic_prompt = create_dynamic_system_prompt(interview_config)
         messages = [
             {
                 "role": "user",
-                "content": "You are an AI Interviewer, a professional and friendly assistant conducting job interviews. Your goal is to ask thoughtful questions, evaluate candidates, and create a comfortable interview environment. Keep your responses concise and professional. Always maintain a conversational tone while being thorough in your assessment. Start by introducing yourself and explaining the interview process.",
+                "content": dynamic_prompt,
             },
         ]
 

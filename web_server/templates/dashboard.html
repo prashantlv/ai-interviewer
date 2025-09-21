@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - AI Interviewer{% endblock %}
+
+{% block page_title %}Dashboard{% endblock %}
+
+{% block header_actions %}
+<div class="btn-group">
+    <a href="/dashboard/schedule" class="btn btn-primary">
+        <i class="bi bi-calendar-plus"></i> Schedule Interview
+    </a>
+    <button class="btn btn-outline-secondary" onclick="refreshDashboard()">
+        <i class="bi bi-arrow-clockwise"></i> Refresh
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Stats Overview -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card text-center">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                            Total Interviews
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {{ data.total_interviews }}
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-people text-primary" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card text-center">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                            Today's Interviews
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {{ data.interviews_today }}
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-calendar-check text-success" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card text-center">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col">
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            Pending Reviews
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {{ data.pending_interviews }}
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-clock text-warning" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card text-center">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col">
+                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                            Completed Today
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {{ data.completed_today }}
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-check-circle text-info" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Interviews -->
+<div class="row">
+    <div class="col-xl-8 col-lg-7">
+        <div class="card">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">Recent Interviews</h6>
+                <a href="/dashboard/interviews" class="btn btn-sm btn-primary">View All</a>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Candidate</th>
+                                <th>Position</th>
+                                <th>Status</th>
+                                <th>Score</th>
+                                <th>Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for interview in data.recent_interviews %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-sm bg-primary rounded-circle d-flex align-items-center justify-content-center me-2">
+                                            <span class="text-white fw-bold">
+                                                {{ interview.candidate_name[0] }}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold">{{ interview.candidate_name }}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>{{ interview.position }}</td>
+                                <td>
+                                    <span class="interview-status status-{{ interview.status }}">
+                                        {{ interview.status.replace('_', ' ').title() }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if interview.score %}
+                                        <span class="score-badge 
+                                            {% if interview.score >= 90 %}score-excellent
+                                            {% elif interview.score >= 75 %}score-good
+                                            {% elif interview.score >= 60 %}score-average
+                                            {% else %}score-poor{% endif %}">
+                                            {{ interview.score }}%
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ interview.date }}</td>
+                                <td>
+                                    <a href="/dashboard/interview/{{ interview.id }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i> View
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Actions -->
+    <div class="col-xl-4 col-lg-5">
+        <div class="card">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Quick Actions</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="/dashboard/schedule" class="btn btn-primary">
+                        <i class="bi bi-calendar-plus me-2"></i>
+                        Schedule New Interview
+                    </a>
+                    <a href="/dashboard/interviews?status=completed" class="btn btn-outline-success">
+                        <i class="bi bi-clipboard-check me-2"></i>
+                        Review Completed Interviews
+                    </a>
+                    <a href="/dashboard/settings" class="btn btn-outline-secondary">
+                        <i class="bi bi-gear me-2"></i>
+                        Configure AI Settings
+                    </a>
+                </div>
+                
+                <hr class="my-4">
+                
+                <h6 class="font-weight-bold mb-3">System Status</h6>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-sm">AI Bot</span>
+                    <span class="badge bg-success">Online</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-sm">Question Engine</span>
+                    <span class="badge bg-success">Operational</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-sm">Scoring Engine</span>
+                    <span class="badge bg-success">Operational</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-sm">Database</span>
+                    <span class="badge bg-info">Mock Mode</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function refreshDashboard() {
+    location.reload();
+}
+
+// Auto-refresh every 30 seconds
+setInterval(function() {
+    // Only refresh if user is active (to avoid disrupting user interaction)
+    if (!document.hidden) {
+        const lastActivity = localStorage.getItem('lastActivity');
+        const now = Date.now();
+        if (!lastActivity || (now - parseInt(lastActivity)) < 30000) {
+            refreshDashboard();
+        }
+    }
+}, 30000);
+
+// Track user activity
+document.addEventListener('click', function() {
+    localStorage.setItem('lastActivity', Date.now().toString());
+});
+</script>
+{% endblock %}
