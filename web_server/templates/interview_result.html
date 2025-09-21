@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+
+{% block title %}Interview Results - AI Interviewer{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">📋 Interview Results</h1>
+                <a href="/dashboard/" class="btn btn-secondary">← Back to Dashboard</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Candidate Overview -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">👤 Candidate Information</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Name:</strong> Priya Sharma</p>
+                    <p><strong>Position:</strong> Senior Software Engineer - Full Stack</p>
+                    <p><strong>Experience:</strong> 6 years</p>
+                    <p><strong>Interview Date:</strong> {{ current_date }}</p>
+                    <p><strong>Duration:</strong> 25 minutes</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">🎯 Overall Score</h5>
+                </div>
+                <div class="card-body text-center">
+                    <h2 class="text-success">82.5/100</h2>
+                    <span class="badge bg-success fs-6">HIRE</span>
+                    <p class="mt-3 mb-0">Strong candidate with excellent technical skills and communication</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Scores -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">📊 Detailed Evaluation</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Correctness (25%)</label>
+                                <div class="progress">
+                                    <div class="progress-bar bg-success" style="width: 85%">85/100</div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Terminology (20%)</label>
+                                <div class="progress">
+                                    <div class="progress-bar bg-info" style="width: 78%">78/100</div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Confidence (15%)</label>
+                                <div class="progress">
+                                    <div class="progress-bar bg-success" style="width: 88%">88/100</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Experience Relevance (20%)</label>
+                                <div class="progress">
+                                    <div class="progress-bar bg-success" style="width: 82%">82/100</div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Problem Solving (20%)</label>
+                                <div class="progress">
+                                    <div class="progress-bar bg-warning" style="width: 75%">75/100</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interview Transcript -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">💬 Interview Transcript</h5>
+                </div>
+                <div class="card-body">
+                    <div class="transcript-container" style="max-height: 500px; overflow-y: auto; background-color: #f8f9fa; padding: 15px; border-radius: 5px;">
+                        
+                        <!-- AI Introduction -->
+                        <div class="message ai-message mb-3">
+                            <div class="d-flex">
+                                <div class="flex-shrink-0">
+                                    <span class="badge bg-primary rounded-pill">AI</span>
+                                </div>
+                                <div class="flex-grow-1 ms-3">
+                                    <p class="mb-1"><strong>AI INTERVIEWER:</strong> Hello Priya! Welcome to your interview with Hire2Inspire. I'm your AI interviewer today. I'll be asking you some questions about your technical experience and background. Are you ready to begin?</p>
+                                    <small class="text-muted">10:30 AM</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Candidate Response -->
+                        <div class="message candidate-message mb-3">
+                            <div class="d-flex">
+                                <div class="flex-shrink-0">
+                                    <span class="badge bg-success rounded-pill">👤</span>
+                                </div>
+                                <div class="flex-grow-1 ms-3">
+                                    <p class="mb-1"><strong>CANDIDATE:</strong> Hi! Yes, I'm excited to be here and ready to start. Thank you for the opportunity.</p>
+                                    <small class="text-muted">10:30 AM</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Technical Question -->
+                        <div class="message ai-message mb-3">
+                            <div class="d-flex">
+                                <div class="flex-shrink-0">
+                                    <span class="badge bg-primary rounded-pill">AI</span>
+                                </div>
+                                <div class="flex-grow-1 ms-3">
+                                    <p class="mb-1"><strong>AI INTERVIEWER:</strong> Great! Let's start with your technical background. Can you tell me about your experience with React.js and how you've used it in your recent projects?</p>
+                                    <small class="text-muted">10:31 AM</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Detailed Technical Response -->
+                        <div class="message candidate-message mb-3">
+                            <div class="d-flex">
+                                <div class="flex-shrink-0">
+                                    <span class="badge bg-success rounded-pill">👤</span>
+                                </div>
+                                <div class="flex-grow-1 ms-3">
+                                    <p class="mb-1"><strong>CANDIDATE:</strong> I have about 4 years of hands-on experience with React.js. In my current role at TechCorp, I've been working on a large-scale e-commerce platform using React with TypeScript. I've implemented complex state management using Redux Toolkit, built reusable component libraries, and optimized performance using React.memo and useMemo hooks. One of my recent achievements was reducing the initial page load time by 40% through code splitting and lazy loading of components.</p>
+                                    <small class="text-muted">10:32 AM</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Problem Solving Question -->
+                        <div class="message ai-message mb-3">
+                            <div class="d-flex">
+                                <div class="flex-shrink-0">
+                                    <span class="badge bg-primary rounded-pill">AI</span>
+                                </div>
+                                <div class="flex-grow-1 ms-3">
+                                    <p class="mb-1"><strong>AI INTERVIEWER:</strong> Excellent! That shows strong optimization skills. Now, can you describe a challenging technical problem you encountered recently and how you approached solving it?</p>
+                                    <small class="text-muted">10:33 AM</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Problem Solving Response -->
+                        <div class="message candidate-message mb-3">
+                            <div class="d-flex">
+                                <div class="flex-shrink-0">
+                                    <span class="badge bg-success rounded-pill">👤</span>
+                                </div>
+                                <div class="flex-grow-1 ms-3">
+                                    <p class="mb-1"><strong>CANDIDATE:</strong> Sure! We had a critical performance issue where our API responses were taking 3-4 seconds during peak hours, affecting user experience. I approached this systematically: First, I used browser dev tools and New Relic to identify bottlenecks. I found that we had N+1 query problems in our database calls. I implemented query optimization using database indexes and batching API calls. I also added Redis caching for frequently accessed data. The result was a 70% reduction in response time to under 1 second. I documented the entire process and shared it with the team to prevent similar issues.</p>
+                                    <small class="text-muted">10:35 AM</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Experience Question -->
+                        <div class="message ai-message mb-3">
+                            <div class="d-flex">
+                                <div class="flex-shrink-0">
+                                    <span class="badge bg-primary rounded-pill">AI</span>
+                                </div>
+                                <div class="flex-grow-1 ms-3">
+                                    <p class="mb-1"><strong>AI INTERVIEWER:</strong> That's impressive problem-solving! Tell me about your experience with cloud platforms. I see AWS mentioned in your resume.</p>
+                                    <small class="text-muted">10:36 AM</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Final Response -->
+                        <div class="message candidate-message mb-3">
+                            <div class="d-flex">
+                                <div class="flex-shrink-0">
+                                    <span class="badge bg-success rounded-pill">👤</span>
+                                </div>
+                                <div class="flex-grow-1 ms-3">
+                                    <p class="mb-1"><strong>CANDIDATE:</strong> Yes, I have solid AWS experience. I've worked with EC2, S3, RDS, and Lambda functions. I'm certified as an AWS Solutions Architect Associate. In our recent project, I designed and implemented a serverless architecture using API Gateway, Lambda, and DynamoDB for a real-time notification system. I also set up CI/CD pipelines using AWS CodePipeline and managed infrastructure as code using CloudFormation templates. I'm comfortable with both the console and CLI, and I understand AWS pricing models to optimize costs.</p>
+                                    <small class="text-muted">10:38 AM</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-center mt-4">
+                            <small class="text-muted">--- Interview Completed ---</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback and Recommendations -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0">✅ Strengths</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li>• Strong technical knowledge in React.js and modern frontend technologies</li>
+                        <li>• Excellent problem-solving approach with systematic thinking</li>
+                        <li>• Good understanding of performance optimization</li>
+                        <li>• Solid AWS cloud experience with relevant certifications</li>
+                        <li>• Clear and confident communication style</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="card-title mb-0">📈 Areas for Growth</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li>• Could provide more specific metrics and business impact examples</li>
+                        <li>• Consider discussing testing strategies and methodologies</li>
+                        <li>• Leadership and mentoring experience could be explored further</li>
+                        <li>• Knowledge of microservices architecture could be deeper</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12 text-center">
+            <a href="/dashboard/" class="btn btn-primary btn-lg">← Back to Dashboard</a>
+            <button class="btn btn-success btn-lg ms-2">✅ Approve Hire</button>
+            <button class="btn btn-outline-secondary btn-lg ms-2">📧 Send Report</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.message {
+    border-left: 3px solid #dee2e6;
+    padding-left: 10px;
+}
+
+.ai-message {
+    border-left-color: #0d6efd;
+}
+
+.candidate-message {
+    border-left-color: #198754;
+}
+
+.progress {
+    height: 25px;
+}
+
+.progress-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+}
+</style>
+{% endblock %}

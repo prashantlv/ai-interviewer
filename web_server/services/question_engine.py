@@ -7,10 +7,17 @@ import os
 from typing import Dict, Any, List
 import json
 from datetime import datetime
+from .static_data import get_static_job_description, get_static_resume_data
 
 class QuestionEngine:
     def __init__(self):
-        self.openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        # Initialize OpenAI client only if API key is available
+        api_key = os.getenv("OPENAI_API_KEY")
+        if api_key:
+            self.openai_client = openai.OpenAI(api_key=api_key)
+        else:
+            self.openai_client = None
+        
         self.default_config = {
             "difficulty_level": "medium",  # easy, medium, hard
             "question_count": 8,
@@ -25,7 +32,7 @@ class QuestionEngine:
     
     def health_check(self) -> str:
         """Check if question engine is working"""
-        return "operational" if os.getenv("OPENAI_API_KEY") else "missing_api_key"
+        return "operational" if self.openai_client else "operational_fallback_mode"
     
     async def generate_questions(
         self,
@@ -218,24 +225,42 @@ class QuestionEngine:
     
     def _prioritize_questions(self, questions: List[Dict[str, Any]], max_count: int) -> List[Dict[str, Any]]:
         """Prioritize and limit questions based on importance"""
-        # Simple prioritization: technical > experience > problem_solving > cultural_fit
-        priority_order = ["technical", "experience", "problem_solving", "cultural_fit"]
         
-        sorted_questions = sorted(questions, key=lambda q: priority_order.index(q.get("category", "cultural_fit")))
+        def get_priority(question):
+            category = question.get("category", "cultural_fit")
+            # Map categories to priority order
+            if "technical" in category:
+                return 0
+            elif "experience" in category:
+                return 1
+            elif "problem" in category:
+                return 2
+            else:
+                return 3
+        
+        sorted_questions = sorted(questions, key=get_priority)
         return sorted_questions[:max_count]
     
     async def _call_openai(self, prompt: str) -> str:
         """Call OpenAI API for question generation"""
-        response = self.openai_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are an expert interview question generator. Generate relevant, insightful questions that help evaluate candidates effectively."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=1000
-        )
-        return response.choices[0].message.content
+        if not self.openai_client:
+            # Return empty string to trigger fallback questions
+            return ""
+        
+        try:
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are an expert interview question generator. Generate relevant, insightful questions that help evaluate candidates effectively."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=1000
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            print(f"Error calling OpenAI: {e}")
+            return ""  # Trigger fallback
     
     def _get_fallback_technical_questions(self, skill_analysis: Dict[str, Any], count: int) -> List[Dict[str, Any]]:
         """Fallback technical questions when API fails"""

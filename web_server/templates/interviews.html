@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+
+{% block title %}Interviews - AI Interviewer{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">📋 Interview Management</h1>
+                <button class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> Schedule Interview
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <select class="form-select">
+                                <option>All Statuses</option>
+                                <option>Scheduled</option>
+                                <option>In Progress</option>
+                                <option>Completed</option>
+                                <option>Cancelled</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select">
+                                <option>All Positions</option>
+                                <option>Frontend Developer</option>
+                                <option>Backend Developer</option>
+                                <option>Full Stack Developer</option>
+                                <option>DevOps Engineer</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <input type="date" class="form-control" placeholder="Date">
+                        </div>
+                        <div class="col-md-3">
+                            <input type="text" class="form-control" placeholder="Search candidate...">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interview List -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Recent Interviews</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Candidate</th>
+                                    <th>Position</th>
+                                    <th>Date & Time</th>
+                                    <th>Duration</th>
+                                    <th>Status</th>
+                                    <th>Score</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for interview in interviews %}
+                                <tr>
+                                    <td>
+                                        <div>
+                                            <strong>{{ interview.candidate_name }}</strong><br>
+                                            <small class="text-muted">{{ interview.candidate_email }}</small>
+                                        </div>
+                                    </td>
+                                    <td>{{ interview.position }}</td>
+                                    <td>{{ interview.scheduled_date }}</td>
+                                    <td>{{ interview.duration }}</td>
+                                    <td>
+                                        {% if interview.status == 'completed' %}
+                                            <span class="badge bg-success">✅ Completed</span>
+                                        {% elif interview.status == 'in_progress' %}
+                                            <span class="badge bg-warning">🟡 In Progress</span>
+                                        {% elif interview.status == 'scheduled' %}
+                                            <span class="badge bg-primary">📅 Scheduled</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ interview.status|title }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if interview.score %}
+                                            <strong>{{ interview.score }}/100</strong>
+                                            {% if interview.score >= 80 %}
+                                                <span class="text-success">📈</span>
+                                            {% elif interview.score >= 60 %}
+                                                <span class="text-warning">📊</span>
+                                            {% else %}
+                                                <span class="text-danger">📉</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            {% if interview.status == 'completed' %}
+                                                <a href="/dashboard/interview/{{ interview.id }}" class="btn btn-outline-primary">
+                                                    👁️ View Results
+                                                </a>
+                                            {% elif interview.status == 'scheduled' %}
+                                                <button class="btn btn-outline-success">▶️ Start</button>
+                                            {% endif %}
+                                            <button class="btn btn-outline-secondary">✏️ Edit</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                
+                                <!-- Demo Data -->
+                                <tr>
+                                    <td>
+                                        <div>
+                                            <strong>Priya Sharma</strong><br>
+                                            <small class="text-muted">priya.sharma@email.com</small>
+                                        </div>
+                                    </td>
+                                    <td>Senior Software Engineer</td>
+                                    <td>Sep 21, 2025 2:30 PM</td>
+                                    <td>25 minutes</td>
+                                    <td><span class="badge bg-success">✅ Completed</span></td>
+                                    <td>
+                                        <strong>82/100</strong>
+                                        <span class="text-success">📈</span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="/dashboard/interview/demo_001" class="btn btn-outline-primary">
+                                                👁️ View Results
+                                            </a>
+                                            <button class="btn btn-outline-secondary">✏️ Edit</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>
+                                        <div>
+                                            <strong>Rajesh Kumar</strong><br>
+                                            <small class="text-muted">rajesh.kumar@email.com</small>
+                                        </div>
+                                    </td>
+                                    <td>Frontend Developer</td>
+                                    <td>Sep 21, 2025 4:00 PM</td>
+                                    <td>-</td>
+                                    <td><span class="badge bg-primary">📅 Scheduled</span></td>
+                                    <td><span class="text-muted">-</span></td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-success">▶️ Start</button>
+                                            <button class="btn btn-outline-secondary">✏️ Edit</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>
+                                        <div>
+                                            <strong>Anita Desai</strong><br>
+                                            <small class="text-muted">anita.desai@email.com</small>
+                                        </div>
+                                    </td>
+                                    <td>DevOps Engineer</td>
+                                    <td>Sep 20, 2025 11:00 AM</td>
+                                    <td>35 minutes</td>
+                                    <td><span class="badge bg-success">✅ Completed</span></td>
+                                    <td>
+                                        <strong>76/100</strong>
+                                        <span class="text-warning">📊</span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="/dashboard/interview/int_003" class="btn btn-outline-primary">
+                                                👁️ View Results
+                                            </a>
+                                            <button class="btn btn-outline-secondary">✏️ Edit</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="row mt-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">📊 Total Interviews</h5>
+                    <h2 class="text-primary">42</h2>
+                    <small class="text-muted">This month</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">✅ Completed</h5>
+                    <h2 class="text-success">28</h2>
+                    <small class="text-muted">66.7% completion rate</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">📈 Average Score</h5>
+                    <h2 class="text-info">78.5</h2>
+                    <small class="text-muted">Out of 100</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">🎯 Hire Rate</h5>
+                    <h2 class="text-warning">65%</h2>
+                    <small class="text-muted">Recommended hires</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
