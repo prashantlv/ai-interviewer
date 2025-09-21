@@ -37,6 +37,8 @@ from pipecat.frames.frames import (
     LLMRunFrame,
     OutputImageRawFrame,
     SpriteFrame,
+    TextFrame,
+    TranscriptionFrame,
 )
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
@@ -226,6 +228,29 @@ class TalkingAnimation(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
+class TranscriptCollector(FrameProcessor):
+    """Collects conversation transcript for later analysis."""
+    
+    def __init__(self, transcript_list: list):
+        super().__init__()
+        self.transcript_list = transcript_list
+    
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        # Capture user speech (transcription)
+        if isinstance(frame, TranscriptionFrame):
+            if frame.text.strip():
+                self.transcript_list.append(f"CANDIDATE: {frame.text}")
+                logger.debug(f"📝 Candidate said: {frame.text}")
+        
+        # Capture bot responses
+        elif isinstance(frame, TextFrame):
+            if frame.text.strip():
+                self.transcript_list.append(f"AI INTERVIEWER: {frame.text}")
+                logger.debug(f"📝 AI said: {frame.text}")
+        
+        await self.push_frame(frame, direction)
+
+
 async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
     """Main bot execution function.
 
@@ -301,6 +326,10 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
     context = OpenAILLMContext(messages)
     context_aggregator = llm.create_context_aggregator(context)
     
+    # Initialize transcript collection
+    interview_transcript = []
+    transcript_collector = TranscriptCollector(interview_transcript)
+    
     # Initialize RTVI processor
     rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
     
@@ -374,6 +403,7 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
         # Pipeline for OpenAI with separate STT/TTS
         pipeline_processors = [
             transport.input(),
+            transcript_collector,  # Collect conversation
             stt,
             rtvi,
             context_aggregator.user(),
@@ -396,6 +426,7 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
         # Pipeline for Gemini (built-in STT/TTS)
         pipeline_processors = [
             transport.input(),
+            transcript_collector,  # Collect conversation
             rtvi,
             context_aggregator.user(),
             llm,
@@ -442,6 +473,30 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(_transport, _client):
         logger.info("Client disconnected")
+        
+        # Send interview results to web server before ending
+        if interview_transcript:
+            full_transcript = "\n".join(interview_transcript)
+            logger.info(f"📝 Sending interview transcript ({len(interview_transcript)} messages)")
+            
+            # Mock evaluation for now - in real implementation this would be calculated
+            mock_evaluation = {
+                "overall_score": 75.0,
+                "individual_scores": {
+                    "correctness": 78,
+                    "terminology": 72,
+                    "confidence": 80,
+                    "experience_relevance": 75,
+                    "problem_solving": 70
+                },
+                "score_category": "good",
+                "recommendation": "hire",
+                "feedback": "Candidate showed good technical knowledge and communication skills"
+            }
+            
+            # Send results to web server
+            await send_interview_result(session, INTERVIEW_ID, full_transcript, mock_evaluation)
+        
         await task.cancel()
 
     @transport.event_handler("on_participant_left")

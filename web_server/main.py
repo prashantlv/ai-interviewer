@@ -20,6 +20,7 @@ from routers import interviews, dashboard, feedback
 from services.database import DatabaseService
 from services.question_engine import QuestionEngine
 from services.scoring_engine import ScoringEngine
+from services.static_data import get_demo_interview_config
 
 # Load environment variables
 load_dotenv()
@@ -100,23 +101,23 @@ async def receive_interview_result(payload: Dict[str, Any]):
 async def get_interview_config(interview_id: str):
     """Provide interview configuration to Pipecat bot"""
     try:
-        # Get interview data including JD and resume
-        interview_data = await db_service.get_interview(interview_id)
-        if not interview_data:
-            raise HTTPException(status_code=404, detail="Interview not found")
+        # For Milestone 2 demo, use static JD and resume data
+        demo_config = get_demo_interview_config()
         
-        # Generate questions based on JD and resume
+        # Generate questions based on static JD and resume
         questions = await question_engine.generate_questions(
-            job_description=interview_data.get("job_description"),
-            resume_data=interview_data.get("resume_data"),
-            interview_config=interview_data.get("config", {})
+            job_description=demo_config["job_description"],
+            resume_data=demo_config["resume_data"],
+            interview_config=demo_config.get("interview_settings", {})
         )
         
         return {
             "interview_id": interview_id,
             "questions": questions,
-            "scoring_config": interview_data.get("scoring_config", {}),
-            "candidate_info": interview_data.get("candidate_info", {})
+            "scoring_config": demo_config.get("scoring_config", {}),
+            "candidate_info": demo_config.get("candidate_info", {}),
+            "job_description": demo_config["job_description"],
+            "resume_data": demo_config["resume_data"]
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get interview config: {str(e)}")

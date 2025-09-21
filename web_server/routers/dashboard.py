@@ -106,9 +106,10 @@ async def interview_detail(request: Request, interview_id: str):
         "feedback": None
     }
     
-    return templates.TemplateResponse("interview_detail.html", {
+    return templates.TemplateResponse("interview_result.html", {
         "request": request,
-        "interview": interview_data
+        "interview": interview_data,
+        "current_date": datetime.now().strftime("%B %d, %Y")
     })
 
 @router.get("/schedule", response_class=HTMLResponse)
