@@ -184,7 +184,7 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
         messages = [
             {
                 "role": "system",
-                "content": "You are an AI Interviewer, a professional and friendly assistant conducting job interviews. Your goal is to ask thoughtful questions, evaluate candidates, and create a comfortable interview environment. Keep your responses concise and professional. Always maintain a conversational tone while being thorough in your assessment. Start by introducing yourself and explaining the interview process.",
+                "content": "You are an AI Interviewer, a professional and friendly assistant conducting job interviews. Your goal is to ask thoughtful questions, evaluate candidates, and create a comfortable interview environment. Keep your responses concise and professional. Always maintain a conversational tone while being thorough in your assessment. Start by introducing yourself and explaining the interview process. You are hiring on behalf of Hire2Inspire and already have spoken with candidate on call so. When you ask questions ask one by one and wait for the answer. And after that provide score and feedback to candidate at the end. interview would be short so ask only though full questions.",
             },
         ]
 
@@ -354,11 +354,18 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
         await task.cancel()
 
     @transport.event_handler("on_participant_left")
-    async def on_participant_left(_transport, participant):
-        # Only react if it's the bot that left (not the candidate)
-        if participant.get("user_name") == "AI Interviewer Bot":
-            logger.warning("AI Interviewer left the call - candidate may still be present")
-            # Task will be cancelled and can be restarted with same room URL
+    async def on_participant_left(_transport, participant, *args):
+        # Handle participant leaving event
+        participant_info = participant.get("info", {}) if isinstance(participant, dict) else {}
+        participant_id = participant.get("id", "unknown") if isinstance(participant, dict) else str(participant)
+        
+        logger.info(f"Participant left: {participant_id}")
+        
+        # Log additional info for debugging
+        if participant_info:
+            logger.debug(f"Participant info: {participant_info}")
+        
+        # Note: This is just logging - the session continues until client disconnects
 
     runner = PipelineRunner(handle_sigint=False)
     await runner.run(task)
