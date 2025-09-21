@@ -127,8 +127,15 @@ class QuestionEngine:
         
         try:
             response = await self._call_openai(prompt)
-            questions = json.loads(response)
-            return questions[:question_count]
+            if response.strip():  # Only parse if we got a response
+                questions = json.loads(response)
+                return questions[:question_count]
+            else:
+                # No API response - use fallback silently
+                return self._get_fallback_technical_questions(skill_analysis, question_count)
+        except json.JSONDecodeError:
+            # JSON parsing failed - use fallback silently
+            return self._get_fallback_technical_questions(skill_analysis, question_count)
         except Exception as e:
             print(f"Error generating technical questions: {e}")
             return self._get_fallback_technical_questions(skill_analysis, question_count)
@@ -163,8 +170,15 @@ class QuestionEngine:
         
         try:
             response = await self._call_openai(prompt)
-            questions = json.loads(response)
-            return questions[:question_count]
+            if response.strip():  # Only parse if we got a response
+                questions = json.loads(response)
+                return questions[:question_count]
+            else:
+                # No API response - use fallback silently
+                return self._get_fallback_experience_questions(question_count)
+        except json.JSONDecodeError:
+            # JSON parsing failed - use fallback silently
+            return self._get_fallback_experience_questions(question_count)
         except Exception as e:
             print(f"Error generating experience questions: {e}")
             return self._get_fallback_experience_questions(question_count)

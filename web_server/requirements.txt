@@ -1,8 +1,8 @@
 # FastAPI Web Server Dependencies (Compatible with pipecat-env)
 fastapi>=0.104.1
 uvicorn[standard]>=0.24.0
-# motor>=3.3.2                    # Async MongoDB driver (not needed for mock mode)
-# pymongo>=4.6.0                  # MongoDB driver (not needed for mock mode)
+motor>=3.3.2                    # Async MongoDB driver
+pymongo>=4.6.0                  # MongoDB driver
 pydantic>=2.10.6                # Data validation (compatible with pipecat)
 jinja2>=3.1.2                   # Template engine
 python-multipart>=0.0.6         # Form handling

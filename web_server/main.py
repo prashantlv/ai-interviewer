@@ -21,6 +21,8 @@ from services.database import DatabaseService
 from services.question_engine import QuestionEngine
 from services.scoring_engine import ScoringEngine
 from services.static_data import get_demo_interview_config
+import json
+import os
 
 # Load environment variables
 load_dotenv()
@@ -97,27 +99,69 @@ async def receive_interview_result(payload: Dict[str, Any]):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to store interview result: {str(e)}")
 
+def _load_json_file(filename: str) -> Dict[str, Any]:
+    """Load data from JSON file in current directory (easy to modify for testing)"""
+    try:
+        # Load from current directory for easy testing
+        file_path = os.path.join(os.path.dirname(__file__), filename)
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"❌ Error loading {filename}: {e}")
+        return {}
+
 @app.get("/api/bot/interview-config/{interview_id}")
 async def get_interview_config(interview_id: str):
     """Provide interview configuration to Pipecat bot"""
     try:
-        # For Milestone 2 demo, use static JD and resume data
-        demo_config = get_demo_interview_config()
+        # Load JD and resume from local JSON files (easy to modify for testing)
+        job_description = _load_json_file("job_description_local.json")
+        candidate_resume = _load_json_file("candidate_resume_local.json")
         
-        # Generate questions based on static JD and resume
+        # Debug: Print loaded candidate name
+        print(f"🔍 Loaded candidate: {candidate_resume.get('personal_info', {}).get('name', 'UNKNOWN')}")
+        
+        if not job_description or not candidate_resume:
+            raise HTTPException(status_code=500, detail="Failed to load JD or resume data")
+        
+        # Create interview config
+        interview_config = {
+            "difficulty_level": job_description.get("difficulty_level", "medium"),
+            "focus_areas": job_description.get("interview_focus_areas", {
+                "technical_skills": 40,
+                "experience": 25,
+                "problem_solving": 20,
+                "cultural_fit": 10,
+                "leadership": 5
+            }),
+            "question_count": 8
+        }
+        
+        # Generate questions based on JD and resume
         questions = await question_engine.generate_questions(
-            job_description=demo_config["job_description"],
-            resume_data=demo_config["resume_data"],
-            interview_config=demo_config.get("interview_settings", {})
+            job_description=job_description,
+            resume_data=candidate_resume,
+            interview_config=interview_config
         )
         
         return {
             "interview_id": interview_id,
             "questions": questions,
-            "scoring_config": demo_config.get("scoring_config", {}),
-            "candidate_info": demo_config.get("candidate_info", {}),
-            "job_description": demo_config["job_description"],
-            "resume_data": demo_config["resume_data"]
+            "scoring_config": {
+                "correctness": 0.25,
+                "terminology": 0.20,
+                "confidence": 0.15,
+                "experience_relevance": 0.20,
+                "problem_solving": 0.20
+            },
+            "candidate_info": {
+                "name": candidate_resume.get("personal_info", {}).get("name", "Unknown"),
+                "experience_years": candidate_resume.get("experience", {}).get("total_years", 0),
+                "current_role": candidate_resume.get("experience", {}).get("current_role", "Unknown"),
+                "skills_match": 85  # Can be calculated from skills comparison
+            },
+            "job_description": job_description,
+            "resume_data": candidate_resume
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get interview config: {str(e)}")

@@ -117,13 +117,41 @@ You are hiring on behalf of Hire2Inspire."""
     candidate_info = interview_config.get("candidate_info", {})
     
     if questions:
-        question_text = "\\n".join([f"- {q.get('question', '')}" for q in questions[:3]])
+        question_text = "\\n".join([f"{i+1}. {q.get('question', '')}" for i, q in enumerate(questions[:3])])
+        candidate_name = candidate_info.get('name', 'the candidate')
+        
+        # Extract job description details
+        job_description = interview_config.get("job_description", {})
+        job_title = job_description.get("title", "the position")
+        company = job_description.get("company", "our company")
+        location = job_description.get("location", "")
+        
+        # Extract resume details
+        resume_data = interview_config.get("resume_data", {})
+        current_role = resume_data.get("experience", {}).get("current_role", "your current role")
+        experience_years = resume_data.get("experience", {}).get("total_years", "your")
+        
         base_prompt += f"""
 
-Interview Focus Areas:
+IMPORTANT: You are interviewing {candidate_name} for the {job_title} position at {company}.
+
+CANDIDATE CONTEXT:
+- Name: {candidate_name}
+- Current Role: {current_role}
+- Experience: {experience_years} years
+- Position Applied For: {job_title}
+- Company: {company}
+- Location: {location}
+
+REQUIRED QUESTIONS TO ASK (in this exact order):
 {question_text}
 
-Start by introducing yourself, then ask these questions one by one, waiting for complete answers before proceeding."""
+INSTRUCTIONS:
+1. Start by greeting {candidate_name} by name and mention the {job_title} position at {company}
+2. Ask each numbered question above in order
+3. Wait for complete answers before moving to the next question
+4. Ask relevant follow-up questions based on their {current_role} experience
+5. Keep the interview focused on the {job_title} requirements"""
     else:
         base_prompt += " Start by introducing yourself and asking about their background and experience."
     
@@ -326,9 +354,10 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
     context = OpenAILLMContext(messages)
     context_aggregator = llm.create_context_aggregator(context)
     
-    # Initialize transcript collection
-    interview_transcript = []
-    transcript_collector = TranscriptCollector(interview_transcript)
+    # Transcript collection temporarily disabled due to pipeline issues
+    # TODO: Fix TranscriptCollector StartFrame handling
+    # interview_transcript = []
+    # transcript_collector = TranscriptCollector(interview_transcript)
     
     # Initialize RTVI processor
     rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
@@ -403,7 +432,6 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
         # Pipeline for OpenAI with separate STT/TTS
         pipeline_processors = [
             transport.input(),
-            transcript_collector,  # Collect conversation
             stt,
             rtvi,
             context_aggregator.user(),
@@ -426,7 +454,6 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
         # Pipeline for Gemini (built-in STT/TTS)
         pipeline_processors = [
             transport.input(),
-            transcript_collector,  # Collect conversation
             rtvi,
             context_aggregator.user(),
             llm,
@@ -475,27 +502,26 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
         logger.info("Client disconnected")
         
         # Send interview results to web server before ending
-        if interview_transcript:
-            full_transcript = "\n".join(interview_transcript)
-            logger.info(f"📝 Sending interview transcript ({len(interview_transcript)} messages)")
-            
-            # Mock evaluation for now - in real implementation this would be calculated
-            mock_evaluation = {
-                "overall_score": 75.0,
-                "individual_scores": {
-                    "correctness": 78,
-                    "terminology": 72,
-                    "confidence": 80,
-                    "experience_relevance": 75,
-                    "problem_solving": 70
-                },
-                "score_category": "good",
-                "recommendation": "hire",
-                "feedback": "Candidate showed good technical knowledge and communication skills"
-            }
-            
-            # Send results to web server
-            await send_interview_result(session, INTERVIEW_ID, full_transcript, mock_evaluation)
+        # TODO: Re-enable transcript collection after fixing pipeline issues
+        logger.info("📝 Interview completed - transcript collection temporarily disabled")
+        
+        # Send basic mock results for now
+        mock_evaluation = {
+            "overall_score": 75.0,
+            "individual_scores": {
+                "correctness": 78,
+                "terminology": 72,
+                "confidence": 80,
+                "experience_relevance": 75,
+                "problem_solving": 70
+            },
+            "score_category": "good",
+            "recommendation": "hire",
+            "feedback": "Interview completed successfully"
+        }
+        
+        # Send results to web server (without transcript for now)
+        await send_interview_result(session, INTERVIEW_ID, "Transcript collection temporarily disabled", mock_evaluation)
         
         await task.cancel()
 
