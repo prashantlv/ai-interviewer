@@ -1,0 +1,78 @@
+{
+  "job_id": "JD_001",
+  "title": "Senior Software Engineer - Full Stack",
+  "company": "Hire2Inspire Tech Solutions",
+  "department": "Engineering",
+  "employment_type": "Full-time",
+  "location": "Remote / Bangalore, India",
+  "experience_level": "5-7 years",
+  "salary_range": "₹18-25 LPA",
+  "posted_date": "2025-09-20",
+  
+  "job_description": "We are looking for a Senior Software Engineer to join our growing engineering team. You will be responsible for developing scalable web applications and working with modern technologies including React, Node.js, Python, and cloud platforms. This role offers the opportunity to work on cutting-edge projects and mentor junior developers.",
+  
+  "key_responsibilities": [
+    "Design and develop scalable web applications using modern frameworks",
+    "Collaborate with cross-functional teams including product, design, and QA",
+    "Implement REST APIs and microservices architecture",
+    "Optimize application performance and ensure high availability",
+    "Code review and mentoring junior developers",
+    "Participate in architectural decisions and technical planning",
+    "Write comprehensive tests and maintain code quality standards"
+  ],
+  
+  "required_skills": [
+    "JavaScript/TypeScript",
+    "React.js",
+    "Node.js",
+    "Python",
+    "REST APIs",
+    "Database Design (SQL/NoSQL)",
+    "AWS/Azure Cloud Platforms",
+    "Git/Version Control",
+    "Agile/Scrum Methodology",
+    "Problem Solving"
+  ],
+  
+  "preferred_skills": [
+    "Docker/Kubernetes",
+    "GraphQL",
+    "Redis/Caching",
+    "CI/CD Pipelines",
+    "Microservices Architecture",
+    "System Design",
+    "Performance Optimization",
+    "Security Best Practices"
+  ],
+  
+  "requirements": [
+    "5+ years of software development experience",
+    "Strong proficiency in JavaScript and Python",
+    "Experience with React.js and modern frontend frameworks",
+    "Knowledge of backend technologies (Node.js, Express)",
+    "Database experience (PostgreSQL, MongoDB)",
+    "Cloud platform experience (AWS/Azure)",
+    "Excellent problem-solving and analytical skills",
+    "Strong communication and collaboration skills",
+    "Bachelor's degree in Computer Science or related field"
+  ],
+  
+  "nice_to_have": [
+    "Experience with DevOps tools and practices",
+    "Knowledge of mobile development (React Native)",
+    "Understanding of machine learning concepts",
+    "Open source contributions",
+    "Technical leadership experience"
+  ],
+  
+  "interview_focus_areas": {
+    "technical_skills": 40,
+    "experience": 25,
+    "problem_solving": 20,
+    "cultural_fit": 10,
+    "leadership": 5
+  },
+  
+  "difficulty_level": "medium",
+  "interview_duration": "45-60 minutes"
+}

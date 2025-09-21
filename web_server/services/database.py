@@ -19,21 +19,89 @@ class DatabaseService:
         
     async def connect(self):
         """Connect to MongoDB"""
-        # For now, always run in mock mode - MongoDB not required
-        print("🔄 Running in mock mode - MongoDB not required for development")
-        return True
+        try:
+            # Connect to real MongoDB
+            self.client = AsyncIOMotorClient(self.mongodb_url)
+            self.database = self.client[self.database_name]
+            
+            # Test connection
+            await self.client.admin.command('ping')
+            print(f"✅ Connected to MongoDB: {self.database_name}")
+            
+            # Initialize collections and indexes
+            await self._initialize_collections()
+            return True
+            
+        except Exception as e:
+            print(f"❌ MongoDB connection failed: {e}")
+            print("🔄 Falling back to mock mode")
+            self.client = None
+            self.database = None
+            return False
     
     async def disconnect(self):
         """Disconnect from MongoDB"""
-        # Mock mode - nothing to disconnect
-        print("🔌 Mock mode shutdown complete")
+        if self.client:
+            self.client.close()
+            print("🔌 MongoDB connection closed")
+        else:
+            print("🔌 Mock mode shutdown complete")
     
     async def health_check(self) -> str:
         """Check database health"""
-        # Always return mock_mode for now
-        return "mock_mode"
+        if self.client:
+            try:
+                await self.client.admin.command('ping')
+                return "connected"
+            except:
+                return "disconnected"
+        else:
+            return "mock_mode"
     
-    # PLACEHOLDER METHODS - Will be implemented with real ATS schema
+    async def _initialize_collections(self):
+        """Initialize MongoDB collections and indexes"""
+        if self.database is None:
+            return
+        
+        # Create collections if they don't exist
+        collections = await self.database.list_collection_names()
+        
+        if "interviews" not in collections:
+            await self.database.create_collection("interviews")
+            # Create indexes for interviews
+            await self.database.interviews.create_index("interview_id", unique=True)
+            await self.database.interviews.create_index("candidate_id")
+            await self.database.interviews.create_index("status")
+            await self.database.interviews.create_index("created_at")
+            print("✅ Created 'interviews' collection with indexes")
+        
+        if "candidates" not in collections:
+            await self.database.create_collection("candidates")
+            await self.database.candidates.create_index("candidate_id", unique=True)
+            await self.database.candidates.create_index("email", unique=True)
+            print("✅ Created 'candidates' collection with indexes")
+        
+        if "job_descriptions" not in collections:
+            await self.database.create_collection("job_descriptions")
+            await self.database.job_descriptions.create_index("job_id", unique=True)
+            print("✅ Created 'job_descriptions' collection with indexes")
+        
+        if "interview_results" not in collections:
+            await self.database.create_collection("interview_results")
+            await self.database.interview_results.create_index("interview_id", unique=True)
+            print("✅ Created 'interview_results' collection with indexes")
+    
+    def _load_json_data(self, filename: str) -> Dict[str, Any]:
+        """Load data from JSON file"""
+        try:
+            file_path = os.path.join(os.path.dirname(__file__), "..", "data", filename)
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"❌ Error loading {filename}: {e}")
+            return {}
+    
+    # Database Methods - Use JSON files for JD and Resume, store results in MongoDB
     
     async def create_interview(self, interview_data: Dict[str, Any]) -> str:
         """Create a new interview record"""
@@ -61,8 +129,29 @@ class DatabaseService:
         status: str
     ) -> bool:
         """Update interview with results"""
-        # TODO: Implement with real MongoDB schema
-        # PLACEHOLDER: Return success
+        result_data = {
+            "interview_id": interview_id,
+            "transcript": transcript,
+            "evaluation": evaluation,
+            "status": status,
+            "completed_at": datetime.now(),
+            "created_at": datetime.now()
+        }
+        
+        if self.database is not None:
+            try:
+                # Store in MongoDB
+                await self.database.interview_results.replace_one(
+                    {"interview_id": interview_id},
+                    result_data,
+                    upsert=True
+                )
+                print(f"✅ Stored interview result: {interview_id}")
+                return True
+            except Exception as e:
+                print(f"❌ Error storing interview result: {e}")
+        
+        # Fallback: return success even in mock mode
         return True
     
     async def get_interviews(
