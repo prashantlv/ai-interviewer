@@ -59,6 +59,47 @@
                             </div>
                         </div>
 
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="scoring_level" class="form-label">Scoring Strictness *</label>
+                                <select class="form-select" id="scoring_level" name="scoring_level" required>
+                                    <option value="easy">🟢 Easy - Lenient (Junior/Entry-level)</option>
+                                    <option value="intermediate" selected>🟡 Intermediate - Balanced (Mid-level)</option>
+                                    <option value="strict">🔴 Strict - Rigorous (Senior/Expert)</option>
+                                </select>
+                                <div class="form-text">
+                                    Choose scoring strictness based on position level
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Scoring Details</label>
+                                <div class="card bg-light">
+                                    <div class="card-body p-2">
+                                        <small id="scoring-info">
+                                            <strong>Intermediate:</strong><br>
+                                            Balanced scoring for mid-level positions (2-5 years exp)
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <script>
+                            // Update scoring info based on selection
+                            document.getElementById('scoring_level').addEventListener('change', function() {
+                                const infoText = document.getElementById('scoring-info');
+                                const level = this.value;
+                                
+                                const descriptions = {
+                                    'easy': '<strong>Easy - Lenient:</strong><br>+20% score boost, lower thresholds (0-2 years exp)<br>More weight on communication & confidence',
+                                    'intermediate': '<strong>Intermediate - Balanced:</strong><br>Standard scoring, moderate thresholds (2-5 years exp)<br>Balanced weights across all criteria',
+                                    'strict': '<strong>Strict - Rigorous:</strong><br>-25% score penalty, higher thresholds (5+ years exp)<br>More weight on technical correctness'
+                                };
+                                
+                                infoText.innerHTML = descriptions[level];
+                            });
+                        </script>
+
                         <div class="mb-3">
                             <label for="notes" class="form-label">Additional Notes</label>
                             <textarea class="form-control" id="notes" name="notes" rows="3" 

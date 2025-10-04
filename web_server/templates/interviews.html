@@ -137,8 +137,8 @@
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title">📊 Total Interviews</h5>
-                    <h2 class="text-primary">42</h2>
-                    <small class="text-muted">This month</small>
+                    <h2 class="text-primary">{{ total_interviews }}</h2>
+                    <small class="text-muted">All time{% if this_month_count > 0 %} ({{ this_month_count }} this month){% endif %}</small>
                 </div>
             </div>
         </div>
@@ -146,8 +146,8 @@
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title">✅ Completed</h5>
-                    <h2 class="text-success">28</h2>
-                    <small class="text-muted">66.7% completion rate</small>
+                    <h2 class="text-success">{{ completed_count }}</h2>
+                    <small class="text-muted">{{ completion_rate }}% completion rate</small>
                 </div>
             </div>
         </div>
@@ -155,7 +155,7 @@
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title">📈 Average Score</h5>
-                    <h2 class="text-info">78.5</h2>
+                    <h2 class="text-info">{{ average_score }}</h2>
                     <small class="text-muted">Out of 100</small>
                 </div>
             </div>
@@ -164,7 +164,7 @@
             <div class="card text-center">
                 <div class="card-body">
                     <h5 class="card-title">🎯 Hire Rate</h5>
-                    <h2 class="text-warning">65%</h2>
+                    <h2 class="text-warning">{{ hire_rate }}%</h2>
                     <small class="text-muted">Recommended hires</small>
                 </div>
             </div>

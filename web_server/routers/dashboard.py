@@ -20,6 +20,8 @@ async def dashboard_home(request: Request):
     # Get real data from database via HTTP call to debug endpoint
     try:
         import httpx
+        from datetime import datetime, timedelta
+        
         async with httpx.AsyncClient() as client:
             response = await client.get("http://localhost:8009/debug/interviews")
             if response.status_code == 200:
@@ -28,13 +30,33 @@ async def dashboard_home(request: Request):
             else:
                 interviews = []
         
+        # Sort interviews by date (most recent first) - FIX #1
+        interviews.sort(key=lambda x: x.get("scheduled_date", ""), reverse=True)
+        
         # Calculate dashboard statistics
         total_interviews = len(interviews)
-        completed_today = len([i for i in interviews if i.get("status") == "completed"])
-        pending_interviews = len([i for i in interviews if i.get("status") in ["scheduled", "in_progress"]])
-        interviews_today = total_interviews  # Simplified for now
         
-        # Get recent interviews (limit to 5 for dashboard)
+        # Get today's date for filtering
+        today = datetime.now().date()
+        
+        # Count today's interviews - FIX #1
+        interviews_today = 0
+        completed_today = 0
+        for interview in interviews:
+            date_str = interview.get("scheduled_date", "")
+            if date_str and date_str != "N/A":
+                try:
+                    interview_date = datetime.fromisoformat(date_str.replace('Z', '+00:00')).date()
+                    if interview_date == today:
+                        interviews_today += 1
+                        if interview.get("status") == "completed":
+                            completed_today += 1
+                except:
+                    pass
+        
+        pending_interviews = len([i for i in interviews if i.get("status") in ["scheduled", "in_progress"]])
+        
+        # Get recent interviews (limit to 5 for dashboard) - already sorted
         recent_interviews = []
         for interview in interviews[:5]:
             recent_interviews.append({
@@ -43,7 +65,7 @@ async def dashboard_home(request: Request):
                 "position": interview.get("position", "Unknown Position"),
                 "status": interview.get("status", "unknown"),
                 "score": interview.get("score", 0),
-                "date": interview.get("created_at", "N/A")
+                "date": interview.get("scheduled_date", "N/A")
             })
         
         dashboard_data = {
@@ -65,9 +87,22 @@ async def dashboard_home(request: Request):
             "recent_interviews": []
         }
     
+    # Get system status - FIX #3
+    # For now, we check database status. Bot status would need heartbeat/health check
+    global db_service
+    db_status = "connected" if (db_service and db_service.database is not None) else "disconnected"
+    
+    system_status = {
+        "database": db_status,
+        "bot": "manual_check",  # Note: Bot status requires manual check - no heartbeat system yet
+        "question_engine": "operational",
+        "scoring_engine": "operational"
+    }
+    
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
-        "data": dashboard_data
+        "data": dashboard_data,
+        "system_status": system_status
     })
 
 @router.get("/test-db")
@@ -90,6 +125,7 @@ async def interviews_page(request: Request, status: Optional[str] = None, page: 
     offset = (page - 1) * per_page
     
     # Get interviews from database by calling the working debug endpoint
+    all_interviews = []  # Initialize early to avoid NameError
     try:
         import httpx
         async with httpx.AsyncClient() as client:
@@ -101,6 +137,9 @@ async def interviews_page(request: Request, status: Optional[str] = None, page: 
             else:
                 print(f"🔍 DEBUG: Failed to get interviews: {response.status_code}")
                 all_interviews = []
+        
+        # Sort by date - most recent first - FIX #2
+        all_interviews.sort(key=lambda x: x.get("scheduled_date", ""), reverse=True)
         
         # Apply pagination
         start_idx = offset
@@ -128,6 +167,7 @@ async def interviews_page(request: Request, status: Optional[str] = None, page: 
     except Exception as e:
         print(f"❌ Error getting interviews: {e}")
         # Fallback to empty list
+        all_interviews = []
         interview_list = []
         total_interviews = 0
         total_pages = 0
@@ -135,6 +175,43 @@ async def interviews_page(request: Request, status: Optional[str] = None, page: 
     print(f"🔍 DEBUG: Sending {len(interview_list)} interviews to template")
     for i, interview in enumerate(interview_list):
         print(f"🔍 DEBUG: Interview {i}: {interview}")
+    
+    # Calculate real statistics for the page footer - FIX #4
+    from datetime import datetime
+    completed_count = len([i for i in all_interviews if i.get("status") == "completed"])
+    completion_rate = (completed_count / total_interviews * 100) if total_interviews > 0 else 0
+    
+    # Calculate average score (only for completed interviews with scores > 0)
+    scored_interviews = [i for i in all_interviews if i.get("status") == "completed" and i.get("score", 0) > 0]
+    average_score = sum(i.get("score", 0) for i in scored_interviews) / len(scored_interviews) if scored_interviews else 0
+    
+    # Calculate hire rate (recommendation = "yes" or "strong_yes")
+    # For now, use score >= 65 as proxy for "recommended"
+    recommended_count = len([i for i in all_interviews if i.get("status") == "completed" and i.get("score", 0) >= 65])
+    hire_rate = (recommended_count / completed_count * 100) if completed_count > 0 else 0
+    
+    # Count this month's interviews
+    from datetime import datetime
+    today = datetime.now()
+    this_month_count = 0
+    for interview in all_interviews:
+        # Try multiple date fields
+        date_str = interview.get("scheduled_date") or interview.get("created_at") or ""
+        if date_str and date_str != "N/A":
+            try:
+                # Handle both string and datetime objects
+                if isinstance(date_str, str):
+                    interview_date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                elif isinstance(date_str, datetime):
+                    interview_date = date_str
+                else:
+                    continue
+                
+                if interview_date.year == today.year and interview_date.month == today.month:
+                    this_month_count += 1
+            except Exception as e:
+                print(f"⚠️ Date parsing error for {interview.get('id')}: {date_str} - {e}")
+                pass
     
     return templates.TemplateResponse("interviews.html", {
         "request": request,
@@ -146,7 +223,13 @@ async def interviews_page(request: Request, status: Optional[str] = None, page: 
         "has_prev": page > 1,
         "has_next": page < total_pages,
         "prev_page": page - 1 if page > 1 else 1,
-        "next_page": page + 1 if page < total_pages else total_pages
+        "next_page": page + 1 if page < total_pages else total_pages,
+        # Real statistics - FIX #4
+        "this_month_count": this_month_count,
+        "completed_count": completed_count,
+        "completion_rate": round(completion_rate, 1),
+        "average_score": round(average_score, 1),
+        "hire_rate": round(hire_rate)
     })
 
 @router.get("/interview/{interview_id}", response_class=HTMLResponse)
@@ -238,6 +321,7 @@ async def create_interview(
     candidate_email: str = Form(...),
     position: str = Form(...),
     interview_type: str = Form("technical"),
+    scoring_level: str = Form("intermediate"),
     notes: str = Form("")
 ):
     """Create a new interview"""
@@ -259,6 +343,7 @@ async def create_interview(
         "candidate_email": candidate_email,
         "position": position,
         "interview_type": interview_type,
+        "scoring_level": scoring_level,
         "status": "scheduled",
         "notes": notes,
         "created_at": datetime.now(),
@@ -268,6 +353,7 @@ async def create_interview(
     try:
         print(f"🔍 DEBUG: Attempting to save interview {interview_id}")
         print(f"   Candidate: {candidate_name}, Position: {position}")
+        print(f"   Scoring Level: {scoring_level}")
         print(f"   db_service status: {db_service is not None}")
         
         # Store in database - create proper interview result entry
@@ -280,6 +366,7 @@ async def create_interview(
                 "position": position,
                 "company": "Hire2Inspire Tech Solutions",
                 "interview_type": interview_type,
+                "scoring_level": scoring_level,
                 "status": "scheduled",
                 "overall_score": 0,
                 "individual_scores": {

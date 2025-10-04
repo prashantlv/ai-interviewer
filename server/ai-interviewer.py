@@ -28,6 +28,9 @@ from typing import Dict, Any, Optional
 
 from dotenv import load_dotenv
 from loguru import logger
+
+# Import scoring engine
+from scoring_engine import ScoringEngine
 from PIL import Image
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.frames.frames import (
@@ -264,16 +267,24 @@ class TranscriptCollector(FrameProcessor):
         self.transcript_list = transcript_list
     
     async def process_frame(self, frame: Frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+        
         # Capture user speech (transcription)
         if isinstance(frame, TranscriptionFrame):
             if frame.text.strip():
-                self.transcript_list.append(f"CANDIDATE: {frame.text}")
+                self.transcript_list.append({
+                    "role": "candidate",
+                    "content": frame.text
+                })
                 logger.debug(f"📝 Candidate said: {frame.text}")
         
         # Capture bot responses
         elif isinstance(frame, TextFrame):
             if frame.text.strip():
-                self.transcript_list.append(f"AI INTERVIEWER: {frame.text}")
+                self.transcript_list.append({
+                    "role": "ai_interviewer",
+                    "content": frame.text
+                })
                 logger.debug(f"📝 AI said: {frame.text}")
         
         await self.push_frame(frame, direction)
@@ -355,9 +366,9 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
     context_aggregator = llm.create_context_aggregator(context)
     
     # Transcript collection temporarily disabled due to pipeline issues
-    # TODO: Fix TranscriptCollector StartFrame handling
-    # interview_transcript = []
-    # transcript_collector = TranscriptCollector(interview_transcript)
+    # Initialize transcript collection
+    interview_transcript = []
+    transcript_collector = TranscriptCollector(interview_transcript)
     
     # Initialize RTVI processor
     rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
@@ -433,6 +444,7 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
         pipeline_processors = [
             transport.input(),
             stt,
+            transcript_collector,  # Collect transcript
             rtvi,
             context_aggregator.user(),
             llm,
@@ -501,38 +513,70 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
     async def on_client_disconnected(_transport, _client):
         logger.info("Client disconnected")
         
-        # Send interview results to web server before ending
-        # TODO: Re-enable transcript collection after fixing pipeline issues
-        logger.info("📝 Interview completed - transcript collection temporarily disabled")
+        # Collect transcript
+        transcript_text = "\n\n".join([
+            f"{entry['role'].upper()}: {entry['content']}" 
+            for entry in interview_transcript
+        ]) if interview_transcript else "No transcript available"
         
-        # Get candidate info from interview config for complete results
+        logger.info(f"📝 Interview completed - collected {len(interview_transcript)} transcript entries")
+        
+        # Get candidate info from interview config
         candidate_info = interview_config.get("candidate_info", {}) if interview_config else {}
         job_description = interview_config.get("job_description", {}) if interview_config else {}
+        questions = interview_config.get("questions", []) if interview_config else []
+        questions_asked = [q.get("question", "") for q in questions]
         
-        # Send comprehensive mock results with candidate information
-        mock_evaluation = {
-            "overall_score": 75.0,
-            "individual_scores": {
-                "correctness": 78,
-                "terminology": 72,
-                "confidence": 80,
-                "experience_relevance": 75,
-                "problem_solving": 70
-            },
-            "score_category": "good",
-            "recommendation": "hire",
-            "feedback": "Interview completed successfully",
+        # Initialize scoring engine with DB-based config
+        logger.info("🤖 Starting AI-based scoring analysis...")
+        scoring_config = interview_config.get("scoring_config") if interview_config else None
+        scoring_engine = ScoringEngine(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            scoring_config=scoring_config
+        )
+        
+        # Score the interview using LLM
+        scoring_result = await scoring_engine.score_interview(
+            transcript=interview_transcript,
+            job_description=job_description,
+            questions_asked=questions_asked
+        )
+        
+        # Build complete evaluation with candidate info and config snapshot
+        evaluation = {
+            "overall_score": scoring_result.get("overall_score", 0),
+            "individual_scores": scoring_result.get("individual_scores", {
+                "correctness": 0,
+                "terminology": 0,
+                "confidence": 0,
+                "experience_relevance": 0,
+                "problem_solving": 0
+            }),
+            "score_category": scoring_result.get("score_category", "pending"),
+            "recommendation": scoring_result.get("recommendation", "pending"),
+            "feedback": scoring_result.get("feedback", f"Interview completed with {len(interview_transcript)} exchanges."),
+            "strengths": scoring_result.get("strengths", []),
+            "weaknesses": scoring_result.get("weaknesses", []),
+            "improvement_suggestions": scoring_result.get("improvement_suggestions", []),
             # Include candidate information
             "candidate_name": candidate_info.get("name", "Unknown Candidate"),
             "candidate_email": candidate_info.get("email", "N/A"),
             "position": job_description.get("title", "Unknown Position"),
             "company": job_description.get("company", "Unknown Company"),
             "interview_id": INTERVIEW_ID,
-            "questions_asked": [q.get("question", "") for q in interview_config.get("questions", [])] if interview_config else []
+            "questions_asked": questions_asked,
+            # Store scoring config snapshot for audit trail
+            "scoring_config_used": scoring_result.get("config_used", {
+                "config_id": "unknown",
+                "config_level": "unknown",
+                "config_source": "fallback"
+            })
         }
         
-        # Send results to web server (without transcript for now)
-        await send_interview_result(session, INTERVIEW_ID, "Transcript collection temporarily disabled", mock_evaluation)
+        logger.info(f"✅ Scoring complete - Overall: {evaluation['overall_score']}/100 ({evaluation['score_category']})")
+        
+        # Send results to web server with real transcript and scores
+        await send_interview_result(session, INTERVIEW_ID, transcript_text, evaluation)
         
         await task.cancel()
 
