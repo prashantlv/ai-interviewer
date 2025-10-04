@@ -154,6 +154,23 @@ class DatabaseService:
         # Fallback: return success even in mock mode
         return True
     
+    async def get_interview_result(self, interview_id: str) -> Optional[Dict[str, Any]]:
+        """Get interview result by ID"""
+        if self.database is not None:
+            try:
+                result = await self.database.interview_results.find_one(
+                    {"interview_id": interview_id}
+                )
+                if result:
+                    # Remove MongoDB's _id field for cleaner data
+                    result.pop('_id', None)
+                    return result
+            except Exception as e:
+                print(f"❌ Error retrieving interview result: {e}")
+        
+        # Return None if not found
+        return None
+    
     async def get_interviews(
         self, 
         status: Optional[str] = None,
@@ -161,17 +178,39 @@ class DatabaseService:
         offset: int = 0
     ) -> List[Dict[str, Any]]:
         """Get list of interviews with optional filtering"""
-        # TODO: Implement with real MongoDB schema
-        # PLACEHOLDER: Return mock data
-        return [
-            {
-                "id": "int_001",
-                "candidate_name": "John Doe",
-                "status": "completed",
-                "score": 85.5,
-                "created_at": datetime.now()
-            }
-        ]
+        if self.database is not None:
+            try:
+                # Query the interview_results collection for real data
+                query = {}
+                if status:
+                    query["status"] = status
+                
+                cursor = self.database.interview_results.find(query).limit(limit).skip(offset)
+                results = []
+                
+                async for doc in cursor:
+                    # Remove MongoDB's _id field
+                    doc.pop('_id', None)
+                    
+                    # Extract candidate info from evaluation
+                    evaluation = doc.get("evaluation", {})
+                    
+                    results.append({
+                        "id": doc.get("interview_id", "unknown"),
+                        "candidate_name": evaluation.get("candidate_name", "Unknown"),
+                        "position": evaluation.get("position", "Unknown Position"),
+                        "status": doc.get("status", "unknown"),
+                        "score": evaluation.get("overall_score", 0),
+                        "created_at": doc.get("completed_at", doc.get("created_at")),
+                        "transcript_available": bool(doc.get("transcript"))
+                    })
+                
+                return results
+            except Exception as e:
+                print(f"❌ Error retrieving interviews: {e}")
+        
+        # Fallback: Return empty list if database unavailable
+        return []
     
     async def store_feedback(self, feedback_data: Dict[str, Any]) -> str:
         """Store recruiter feedback"""

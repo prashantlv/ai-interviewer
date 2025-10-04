@@ -19,23 +19,25 @@
 <!-- Stats Overview -->
 <div class="row mb-4">
     <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card stat-card text-center">
-            <div class="card-body">
-                <div class="row no-gutters align-items-center">
-                    <div class="col">
-                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                            Total Interviews
+        <a href="/dashboard/interviews" class="text-decoration-none">
+            <div class="card stat-card text-center hover-shadow">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total Interviews
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ data.total_interviews }}
+                            </div>
                         </div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800">
-                            {{ data.total_interviews }}
+                        <div class="col-auto">
+                            <i class="bi bi-people text-primary" style="font-size: 2rem;"></i>
                         </div>
-                    </div>
-                    <div class="col-auto">
-                        <i class="bi bi-people text-primary" style="font-size: 2rem;"></i>
                     </div>
                 </div>
             </div>
-        </div>
+        </a>
     </div>
     
     <div class="col-xl-3 col-md-6 mb-4">
@@ -79,23 +81,25 @@
     </div>
     
     <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card stat-card text-center">
-            <div class="card-body">
-                <div class="row no-gutters align-items-center">
-                    <div class="col">
-                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                            Completed Today
+        <a href="/dashboard/interviews?status=completed" class="text-decoration-none">
+            <div class="card stat-card text-center hover-shadow">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Completed Today
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ data.completed_today }}
+                            </div>
                         </div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800">
-                            {{ data.completed_today }}
+                        <div class="col-auto">
+                            <i class="bi bi-check-circle text-info" style="font-size: 2rem;"></i>
                         </div>
-                    </div>
-                    <div class="col-auto">
-                        <i class="bi bi-check-circle text-info" style="font-size: 2rem;"></i>
                     </div>
                 </div>
             </div>
-        </div>
+        </a>
     </div>
 </div>
 

@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}Interview Scheduled - AI Interviewer{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-check-circle"></i> Interview Successfully Scheduled!
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h6>Candidate Information:</h6>
+                            <p><strong>Name:</strong> {{ interview.candidate_name }}</p>
+                            <p><strong>Email:</strong> {{ interview.candidate_email }}</p>
+                            <p><strong>Position:</strong> {{ interview.position }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Interview Details:</h6>
+                            <p><strong>Interview ID:</strong> <code>{{ interview.interview_id }}</code></p>
+                            <p><strong>Type:</strong> {{ interview.interview_type|title }}</p>
+                            <p><strong>Status:</strong> <span class="badge bg-warning">{{ interview.status|title }}</span></p>
+                        </div>
+                    </div>
+
+                    {% if interview.notes %}
+                    <div class="mb-4">
+                        <h6>Notes:</h6>
+                        <p class="text-muted">{{ interview.notes }}</p>
+                    </div>
+                    {% endif %}
+
+                    <div class="alert alert-primary">
+                        <h6><i class="bi bi-info-circle"></i> Next Steps:</h6>
+                        <ol>
+                            <li><strong>Start the AI Interviewer:</strong> Use the startup script or manually start the bot with Interview ID: <code>{{ interview.interview_id }}</code></li>
+                            <li><strong>Send to Candidate:</strong> Share the interview link: <a href="{{ interview.room_url }}" target="_blank">{{ interview.room_url }}</a></li>
+                            <li><strong>Monitor Progress:</strong> Track the interview status in the dashboard</li>
+                            <li><strong>Review Results:</strong> Evaluation will be available after completion</li>
+                        </ol>
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <h6><i class="bi bi-exclamation-triangle"></i> Important:</h6>
+                        <p class="mb-0">Make sure to start the AI interviewer bot with the correct Interview ID before the candidate joins the call.</p>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="/dashboard/interviews" class="btn btn-outline-primary">
+                            <i class="bi bi-list"></i> View All Interviews
+                        </a>
+                        <div>
+                            <button class="btn btn-success me-2" onclick="copyInterviewLink()">
+                                <i class="bi bi-copy"></i> Copy Interview Link
+                            </button>
+                            <a href="/dashboard/schedule" class="btn btn-primary">
+                                <i class="bi bi-plus-circle"></i> Schedule Another
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyInterviewLink() {
+    const link = "{{ interview.room_url }}";
+    navigator.clipboard.writeText(link).then(function() {
+        // Show success message
+        const btn = event.target;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check"></i> Copied!';
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-outline-success');
+        
+        setTimeout(function() {
+            btn.innerHTML = originalText;
+            btn.classList.remove('btn-outline-success');
+            btn.classList.add('btn-success');
+        }, 2000);
+    });
+}
+</script>
+{% endblock %}
