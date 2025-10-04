@@ -11,100 +11,212 @@ from datetime import datetime, timedelta
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
+# Global database service (will be set by main.py)
+db_service = None
+
 @router.get("/", response_class=HTMLResponse)
 async def dashboard_home(request: Request):
     """Main dashboard page"""
-    # TODO: Get real data from database
-    dashboard_data = {
-        "total_interviews": 42,
-        "interviews_today": 8,
-        "pending_interviews": 5,
-        "completed_today": 3,
-        "recent_interviews": [
-            {
-                "id": "int_001",
-                "candidate_name": "John Doe",
-                "position": "Frontend Developer",
-                "status": "completed",
-                "score": 85,
-                "date": "2025-01-20 14:30"
-            },
-            {
-                "id": "int_002", 
-                "candidate_name": "Jane Smith",
-                "position": "Backend Developer",
-                "status": "in_progress",
-                "score": None,
-                "date": "2025-01-20 15:00"
-            }
-        ]
-    }
+    # Get real data from database via HTTP call to debug endpoint
+    try:
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.get("http://localhost:8009/debug/interviews")
+            if response.status_code == 200:
+                data = response.json()
+                interviews = data.get("interviews", [])
+            else:
+                interviews = []
+        
+        # Calculate dashboard statistics
+        total_interviews = len(interviews)
+        completed_today = len([i for i in interviews if i.get("status") == "completed"])
+        pending_interviews = len([i for i in interviews if i.get("status") in ["scheduled", "in_progress"]])
+        interviews_today = total_interviews  # Simplified for now
+        
+        # Get recent interviews (limit to 5 for dashboard)
+        recent_interviews = []
+        for interview in interviews[:5]:
+            recent_interviews.append({
+                "id": interview.get("id", "unknown"),
+                "candidate_name": interview.get("candidate_name", "Unknown"),
+                "position": interview.get("position", "Unknown Position"),
+                "status": interview.get("status", "unknown"),
+                "score": interview.get("score", 0),
+                "date": interview.get("created_at", "N/A")
+            })
+        
+        dashboard_data = {
+            "total_interviews": total_interviews,
+            "interviews_today": interviews_today,
+            "pending_interviews": pending_interviews,
+            "completed_today": completed_today,
+            "recent_interviews": recent_interviews
+        }
+        
+    except Exception as e:
+        print(f"❌ Error getting dashboard data: {e}")
+        # Fallback to empty data
+        dashboard_data = {
+            "total_interviews": 0,
+            "interviews_today": 0,
+            "pending_interviews": 0,
+            "completed_today": 0,
+            "recent_interviews": []
+        }
     
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "data": dashboard_data
     })
 
+@router.get("/test-db")
+async def test_database_connection():
+    """Test endpoint to check database connection"""
+    global db_service
+    
+    return {
+        "db_service_is_none": db_service is None,
+        "db_service_type": str(type(db_service)),
+        "has_database": hasattr(db_service, 'database') if db_service else False,
+        "database_is_none": db_service.database is None if (db_service and hasattr(db_service, 'database')) else True
+    }
+
 @router.get("/interviews", response_class=HTMLResponse)
-async def interviews_page(request: Request):
-    """Interviews management page"""
-    # TODO: Get real interviews from database
-    interviews = [
-        {
-            "id": "int_001",
-            "candidate_name": "John Doe",
-            "candidate_email": "john@example.com",
-            "position": "Frontend Developer",
-            "status": "completed",
-            "score": 85,
-            "scheduled_date": "2025-01-20 14:30",
-            "duration": "45 minutes"
-        },
-        {
-            "id": "int_002",
-            "candidate_name": "Jane Smith", 
-            "candidate_email": "jane@example.com",
-            "position": "Backend Developer",
-            "status": "scheduled",
-            "score": None,
-            "scheduled_date": "2025-01-21 10:00",
-            "duration": "60 minutes"
-        }
-    ]
+async def interviews_page(request: Request, status: Optional[str] = None, page: int = 1):
+    """Interviews management page with filtering and pagination"""
+    # Pagination settings
+    per_page = 20
+    offset = (page - 1) * per_page
+    
+    # Get interviews from database by calling the working debug endpoint
+    try:
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.get("http://localhost:8009/debug/interviews")
+            if response.status_code == 200:
+                data = response.json()
+                all_interviews = data.get("interviews", [])
+                print(f"🔍 DEBUG: Retrieved {len(all_interviews)} interviews from debug endpoint")
+            else:
+                print(f"🔍 DEBUG: Failed to get interviews: {response.status_code}")
+                all_interviews = []
+        
+        # Apply pagination
+        start_idx = offset
+        end_idx = offset + per_page
+        interviews = all_interviews[start_idx:end_idx]
+        
+        total_interviews = len(all_interviews)
+        total_pages = (total_interviews + per_page - 1) // per_page if total_interviews > 0 else 0
+        
+        # Transform data for template
+        interview_list = []
+        for interview in interviews:
+            interview_list.append({
+                "id": interview.get("id", "unknown"),
+                "candidate_name": interview.get("candidate_name", "Unknown"),
+                "candidate_email": "N/A",  # TODO: Add email to database
+                "position": interview.get("position", "Unknown Position"),
+                "status": interview.get("status", "unknown"),
+                "score": interview.get("score", 0),
+                "scheduled_date": interview.get("created_at", "N/A"),
+                "duration": "N/A",  # TODO: Calculate from transcript
+                "transcript_available": interview.get("transcript_available", False)
+            })
+            
+    except Exception as e:
+        print(f"❌ Error getting interviews: {e}")
+        # Fallback to empty list
+        interview_list = []
+        total_interviews = 0
+        total_pages = 0
+    
+    print(f"🔍 DEBUG: Sending {len(interview_list)} interviews to template")
+    for i, interview in enumerate(interview_list):
+        print(f"🔍 DEBUG: Interview {i}: {interview}")
     
     return templates.TemplateResponse("interviews.html", {
         "request": request,
-        "interviews": interviews
+        "interviews": interview_list,
+        "current_status": status,
+        "current_page": page,
+        "total_pages": total_pages,
+        "total_interviews": total_interviews,
+        "has_prev": page > 1,
+        "has_next": page < total_pages,
+        "prev_page": page - 1 if page > 1 else 1,
+        "next_page": page + 1 if page < total_pages else total_pages
     })
 
 @router.get("/interview/{interview_id}", response_class=HTMLResponse)
 async def interview_detail(request: Request, interview_id: str):
     """Individual interview detail page"""
-    # TODO: Get real interview data from database
-    interview_data = {
-        "id": interview_id,
-        "candidate_name": "John Doe",
-        "candidate_email": "john@example.com",
-        "position": "Frontend Developer",
-        "status": "completed",
-        "score": 85,
-        "scheduled_date": "2025-01-20 14:30",
-        "duration": "45 minutes",
-        "transcript": "AI: Hello! Welcome to your interview...\nCandidate: Thank you, I'm excited to be here...",
-        "evaluation": {
-            "correctness": 80,
-            "terminology": 85,
-            "confidence": 90,
-            "experience_relevance": 85,
-            "problem_solving": 75
-        },
-        "questions_asked": [
-            "Tell me about your experience with React",
-            "How do you handle state management?",
-            "Describe a challenging project you worked on"
-        ],
-        "feedback": None
-    }
+    # Get interview data from MongoDB directly
+    from motor.motor_asyncio import AsyncIOMotorClient
+    from dotenv import load_dotenv
+    import os
+    
+    load_dotenv()
+    mongodb_url = os.getenv("MONGODB_URL")
+    database_name = os.getenv("DATABASE_NAME")
+    
+    client = AsyncIOMotorClient(mongodb_url)
+    db = client[database_name]
+    interview_result = await db.interview_results.find_one({"interview_id": interview_id})
+    if interview_result:
+        interview_result.pop('_id', None)
+    client.close()
+    
+    if interview_result:
+        # Use real data from database
+        evaluation = interview_result.get("evaluation", {})
+        individual_scores = evaluation.get("individual_scores", {})
+        
+        interview_data = {
+            "id": interview_id,
+            "candidate_name": evaluation.get("candidate_name", "Unknown Candidate"),
+            "candidate_email": evaluation.get("candidate_email", "N/A"),
+            "position": evaluation.get("position", "Unknown Position"),
+            "status": interview_result.get("status", "completed"),
+            "score": evaluation.get("overall_score", 0),
+            "scheduled_date": str(interview_result.get("completed_at", "N/A")),
+            "duration": "N/A",
+            "transcript": interview_result.get("transcript", "No transcript available"),
+            "evaluation": {
+                "correctness": individual_scores.get("correctness", 0),
+                "terminology": individual_scores.get("terminology", 0),
+                "confidence": individual_scores.get("confidence", 0),
+                "experience_relevance": individual_scores.get("experience_relevance", 0),
+                "problem_solving": individual_scores.get("problem_solving", 0)
+            },
+            "questions_asked": evaluation.get("questions_asked", []),
+            "feedback": evaluation.get("feedback", None),
+            "company": evaluation.get("company", "N/A"),
+            "recommendation": evaluation.get("recommendation", "N/A")
+        }
+    else:
+        # Fallback to demo data if interview not found
+        interview_data = {
+            "id": interview_id,
+            "candidate_name": "Interview Not Found",
+            "candidate_email": "N/A",
+            "position": "N/A",
+            "status": "not_found",
+            "score": 0,
+            "scheduled_date": "N/A",
+            "duration": "N/A",
+            "transcript": f"Interview {interview_id} not found in database",
+            "evaluation": {
+                "correctness": 0,
+                "terminology": 0,
+                "confidence": 0,
+                "experience_relevance": 0,
+                "problem_solving": 0
+            },
+            "questions_asked": [],
+            "feedback": None
+        }
     
     return templates.TemplateResponse("interview_result.html", {
         "request": request,
@@ -118,6 +230,87 @@ async def schedule_interview_page(request: Request):
     return templates.TemplateResponse("schedule_interview.html", {
         "request": request
     })
+
+@router.post("/schedule", response_class=HTMLResponse)
+async def create_interview(
+    request: Request,
+    candidate_name: str = Form(...),
+    candidate_email: str = Form(...),
+    position: str = Form(...),
+    interview_type: str = Form("technical"),
+    notes: str = Form("")
+):
+    """Create a new interview"""
+    import uuid
+    from datetime import datetime
+    
+    # Use the global db_service that was set by main.py
+    global db_service
+    if db_service is None:
+        raise HTTPException(status_code=500, detail="Database service not available")
+    
+    # Generate unique interview ID
+    interview_id = f"interview_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
+    
+    # Create interview record
+    interview_data = {
+        "interview_id": interview_id,
+        "candidate_name": candidate_name,
+        "candidate_email": candidate_email,
+        "position": position,
+        "interview_type": interview_type,
+        "status": "scheduled",
+        "notes": notes,
+        "created_at": datetime.now(),
+        "room_url": "https://hi2inspire.daily.co/hi2inspire"
+    }
+    
+    try:
+        print(f"🔍 DEBUG: Attempting to save interview {interview_id}")
+        print(f"   Candidate: {candidate_name}, Position: {position}")
+        print(f"   db_service status: {db_service is not None}")
+        
+        # Store in database - create proper interview result entry
+        success = await db_service.update_interview_result(
+            interview_id=interview_id,
+            transcript="Interview scheduled - waiting for completion",
+            evaluation={
+                "candidate_name": candidate_name,
+                "candidate_email": candidate_email,
+                "position": position,
+                "company": "Hire2Inspire Tech Solutions",
+                "interview_type": interview_type,
+                "status": "scheduled",
+                "overall_score": 0,
+                "individual_scores": {
+                    "correctness": 0,
+                    "terminology": 0,
+                    "confidence": 0,
+                    "experience_relevance": 0,
+                    "problem_solving": 0
+                },
+                "questions_asked": [],
+                "notes": notes
+            },
+            status="scheduled"
+        )
+        
+        print(f"🔍 DEBUG: Save result: {success}")
+        
+        if success:
+            # Redirect to interview instructions
+            return templates.TemplateResponse("interview_scheduled.html", {
+                "request": request,
+                "interview": interview_data
+            })
+        else:
+            raise Exception("Failed to create interview")
+            
+    except Exception as e:
+        return templates.TemplateResponse("schedule_interview.html", {
+            "request": request,
+            "error": f"Failed to schedule interview: {str(e)}"
+        })
 
 @router.post("/schedule")
 async def schedule_interview(

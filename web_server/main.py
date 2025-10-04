@@ -57,6 +57,11 @@ app = FastAPI(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
+# Make database service available to routers BEFORE including them
+import routers.dashboard as dashboard_module
+dashboard_module.db_service = db_service
+dashboard_module.shared_db_service = db_service
+
 # Include routers
 app.include_router(interviews.router, prefix="/api/interviews", tags=["interviews"])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
@@ -74,11 +79,85 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "services": {
-            "database": "mock_mode",
+            "database": db_service.health_check(),
             "question_engine": question_engine.health_check(),
             "scoring_engine": scoring_engine.health_check()
         }
     }
+
+@app.get("/debug/interviews")
+async def debug_interviews():
+    """Debug endpoint to check stored interviews"""
+    try:
+        interviews = await db_service.get_interviews()
+        return {
+            "count": len(interviews),
+            "interviews": interviews
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/debug/dashboard-test")
+async def debug_dashboard_test():
+    """Debug endpoint to test dashboard data flow"""
+    try:
+        # Test the same logic as dashboard route
+        interviews = await db_service.get_interviews()
+        print(f"🔍 DEBUG: Retrieved {len(interviews)} interviews from database")
+        
+        # Transform data for template (same as dashboard route)
+        interview_list = []
+        for interview in interviews:
+            interview_list.append({
+                "id": interview.get("id", "unknown"),
+                "candidate_name": interview.get("candidate_name", "Unknown"),
+                "candidate_email": "N/A",
+                "position": interview.get("position", "Unknown Position"),
+                "status": interview.get("status", "unknown"),
+                "score": interview.get("score", 0),
+                "scheduled_date": interview.get("created_at", "N/A"),
+                "duration": "N/A",
+                "transcript_available": interview.get("transcript_available", False)
+            })
+        
+        return {
+            "raw_interviews": interviews,
+            "transformed_interviews": interview_list,
+            "count": len(interview_list)
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/api/dashboard/interviews")
+async def get_dashboard_interviews(status: Optional[str] = None, page: int = 1):
+    """API endpoint for dashboard to get interview data"""
+    try:
+        per_page = 20
+        offset = (page - 1) * per_page
+        
+        interviews = await db_service.get_interviews(status=status, limit=per_page, offset=offset)
+        
+        # Transform data for template
+        interview_list = []
+        for interview in interviews:
+            interview_list.append({
+                "id": interview.get("id", "unknown"),
+                "candidate_name": interview.get("candidate_name", "Unknown"),
+                "candidate_email": "N/A",
+                "position": interview.get("position", "Unknown Position"),
+                "status": interview.get("status", "unknown"),
+                "score": interview.get("score", 0),
+                "scheduled_date": interview.get("created_at", "N/A"),
+                "duration": "N/A",
+                "transcript_available": interview.get("transcript_available", False)
+            })
+        
+        return {
+            "interviews": interview_list,
+            "count": len(interview_list)
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.post("/api/bot/interview-result")
 async def receive_interview_result(payload: Dict[str, Any]):
@@ -114,15 +193,57 @@ def _load_json_file(filename: str) -> Dict[str, Any]:
 async def get_interview_config(interview_id: str):
     """Provide interview configuration to Pipecat bot"""
     try:
-        # Load JD and resume from local JSON files (easy to modify for testing)
-        job_description = _load_json_file("job_description_local.json")
-        candidate_resume = _load_json_file("candidate_resume_local.json")
+        # First, try to get interview from database
+        interview = await db_service.get_interview_result(interview_id)
         
-        # Debug: Print loaded candidate name
-        print(f"🔍 Loaded candidate: {candidate_resume.get('personal_info', {}).get('name', 'UNKNOWN')}")
+        if interview and interview.get("evaluation"):
+            # Extract candidate info from database
+            evaluation = interview.get("evaluation", {})
+            candidate_name = evaluation.get("candidate_name", "Unknown Candidate")
+            candidate_email = evaluation.get("candidate_email", "N/A")
+            position = evaluation.get("position", "Unknown Position")
+            company = evaluation.get("company", "Hire2Inspire Tech Solutions")
+            
+            print(f"🔍 Loaded from DB - Candidate: {candidate_name}, Position: {position}")
+            
+            # Build candidate info from database
+            candidate_info = {
+                "name": candidate_name,
+                "email": candidate_email
+            }
+            
+            # Build job description from database
+            job_description_data = {
+                "title": position,
+                "company": company,
+                "location": "Remote / Bangalore, India",
+                "difficulty_level": "medium"
+            }
+        else:
+            # Fallback to JSON files for testing/development
+            print(f"⚠️ Interview {interview_id} not found in DB, using JSON files as fallback")
+            job_description_data = _load_json_file("job_description_local.json")
+            candidate_resume = _load_json_file("candidate_resume_local.json")
+            
+            candidate_info = candidate_resume.get("personal_info", {})
+            candidate_name = candidate_info.get("name", "Unknown Candidate")
+            
+            print(f"🔍 Loaded from JSON - Candidate: {candidate_name}")
+            
+            # Use JSON file structure for backward compatibility
+            job_description = job_description_data
+            candidate_resume = candidate_resume
         
-        if not job_description or not candidate_resume:
-            raise HTTPException(status_code=500, detail="Failed to load JD or resume data")
+        # For DB-loaded interviews, create compatible structure
+        if interview and interview.get("evaluation"):
+            job_description = job_description_data
+            candidate_resume = {
+                "personal_info": candidate_info,
+                "experience": {
+                    "current_role": evaluation.get("interview_type", "Developer"),
+                    "total_years": 6
+                }
+            }
         
         # Create interview config
         interview_config = {

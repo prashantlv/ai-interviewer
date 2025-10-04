@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Schedule Interview - AI Interviewer{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">📅 Schedule New Interview</h1>
+                <a href="/dashboard/" class="btn btn-secondary">← Back to Dashboard</a>
+            </div>
+        </div>
+    </div>
+
+    {% if error %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-danger" role="alert">
+                <i class="bi bi-exclamation-triangle"></i> {{ error }}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Interview Details</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="/dashboard/schedule">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="candidate_name" class="form-label">Candidate Name *</label>
+                                <input type="text" class="form-control" id="candidate_name" name="candidate_name" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="candidate_email" class="form-label">Candidate Email *</label>
+                                <input type="email" class="form-control" id="candidate_email" name="candidate_email" required>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="position" class="form-label">Position *</label>
+                                <input type="text" class="form-control" id="position" name="position" 
+                                       placeholder="e.g., Senior Software Engineer" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="interview_type" class="form-label">Interview Type</label>
+                                <select class="form-select" id="interview_type" name="interview_type">
+                                    <option value="technical">Technical Interview</option>
+                                    <option value="behavioral">Behavioral Interview</option>
+                                    <option value="cultural_fit">Cultural Fit</option>
+                                    <option value="mixed">Mixed (Technical + Behavioral)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">Additional Notes</label>
+                            <textarea class="form-control" id="notes" name="notes" rows="3" 
+                                      placeholder="Any specific requirements or notes for this interview..."></textarea>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <h6><i class="bi bi-info-circle"></i> Interview Process:</h6>
+                            <ul class="mb-0">
+                                <li>The AI interviewer will automatically greet the candidate by name</li>
+                                <li>Questions will be generated based on the position and interview type</li>
+                                <li>The interview will be recorded and evaluated automatically</li>
+                                <li>Results will be available in the dashboard after completion</li>
+                            </ul>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="/dashboard/" class="btn btn-outline-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-calendar-plus"></i> Schedule Interview
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -505,7 +505,11 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
         # TODO: Re-enable transcript collection after fixing pipeline issues
         logger.info("📝 Interview completed - transcript collection temporarily disabled")
         
-        # Send basic mock results for now
+        # Get candidate info from interview config for complete results
+        candidate_info = interview_config.get("candidate_info", {}) if interview_config else {}
+        job_description = interview_config.get("job_description", {}) if interview_config else {}
+        
+        # Send comprehensive mock results with candidate information
         mock_evaluation = {
             "overall_score": 75.0,
             "individual_scores": {
@@ -517,7 +521,14 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
             },
             "score_category": "good",
             "recommendation": "hire",
-            "feedback": "Interview completed successfully"
+            "feedback": "Interview completed successfully",
+            # Include candidate information
+            "candidate_name": candidate_info.get("name", "Unknown Candidate"),
+            "candidate_email": candidate_info.get("email", "N/A"),
+            "position": job_description.get("title", "Unknown Position"),
+            "company": job_description.get("company", "Unknown Company"),
+            "interview_id": INTERVIEW_ID,
+            "questions_asked": [q.get("question", "") for q in interview_config.get("questions", [])] if interview_config else []
         }
         
         # Send results to web server (without transcript for now)
