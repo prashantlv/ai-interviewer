@@ -20,6 +20,7 @@ from routers import interviews, dashboard, feedback
 from services.database import DatabaseService
 from services.question_engine import QuestionEngine
 from services.scoring_engine import ScoringEngine
+from services.scoring_config_service import ScoringConfigService
 from services.static_data import get_demo_interview_config
 import json
 import os
@@ -31,12 +32,18 @@ load_dotenv()
 db_service = DatabaseService()
 question_engine = QuestionEngine()
 scoring_engine = ScoringEngine()
+scoring_config_service = ScoringConfigService()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     # Startup
     await db_service.connect()
+    
+    # Initialize scoring config service with database
+    scoring_config_service.database = db_service.database
+    await scoring_config_service.initialize_default_configs()
+    
     print("🚀 FastAPI Web Server started successfully!")
     print(f"📊 Dashboard: http://localhost:8009/dashboard")
     print(f"📚 API Docs: http://localhost:8009/docs")
@@ -190,11 +197,19 @@ def _load_json_file(filename: str) -> Dict[str, Any]:
         return {}
 
 @app.get("/api/bot/interview-config/{interview_id}")
-async def get_interview_config(interview_id: str):
-    """Provide interview configuration to Pipecat bot"""
+async def get_interview_config(interview_id: str, scoring_level: Optional[str] = None):
+    """Provide interview configuration to Pipecat bot (includes scoring config)"""
     try:
         # First, try to get interview from database
         interview = await db_service.get_interview_result(interview_id)
+        
+        # Get scoring level from interview record if not provided
+        if interview and not scoring_level:
+            evaluation = interview.get("evaluation", {})
+            scoring_level = evaluation.get("scoring_level", "intermediate")
+            print(f"📊 Using scoring level from interview: {scoring_level}")
+        elif not scoring_level:
+            scoring_level = "intermediate"  # Default fallback
         
         if interview and interview.get("evaluation"):
             # Extract candidate info from database
@@ -217,7 +232,8 @@ async def get_interview_config(interview_id: str):
                 "title": position,
                 "company": company,
                 "location": "Remote / Bangalore, India",
-                "difficulty_level": "medium"
+                "difficulty_level": "medium",
+                "required_skills": ["Python", "FastAPI", "MongoDB"]  # TODO: Get from DB
             }
         else:
             # Fallback to JSON files for testing/development
@@ -265,18 +281,19 @@ async def get_interview_config(interview_id: str):
             interview_config=interview_config
         )
         
+        # Get scoring configuration from database
+        scoring_config = await scoring_config_service.get_config_by_level(scoring_level)
+        if not scoring_config:
+            print(f"⚠️ Scoring config not found for level '{scoring_level}', using default")
+            scoring_config = await scoring_config_service.get_default_config()
+        
         return {
             "interview_id": interview_id,
             "questions": questions,
-            "scoring_config": {
-                "correctness": 0.25,
-                "terminology": 0.20,
-                "confidence": 0.15,
-                "experience_relevance": 0.20,
-                "problem_solving": 0.20
-            },
+            "scoring_config": scoring_config,  # Full DB-based scoring config
             "candidate_info": {
                 "name": candidate_resume.get("personal_info", {}).get("name", "Unknown"),
+                "email": candidate_resume.get("personal_info", {}).get("email", "N/A"),
                 "experience_years": candidate_resume.get("experience", {}).get("total_years", 0),
                 "current_role": candidate_resume.get("experience", {}).get("current_role", "Unknown"),
                 "skills_match": 85  # Can be calculated from skills comparison
@@ -286,6 +303,112 @@ async def get_interview_config(interview_id: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get interview config: {str(e)}")
+
+# ============================================================================
+# SCORING CONFIGURATION API ENDPOINTS
+# ============================================================================
+
+@app.get("/api/scoring-configs")
+async def get_scoring_configs():
+    """Get all active scoring configurations"""
+    try:
+        configs = await scoring_config_service.get_all_configs()
+        return {
+            "success": True,
+            "count": len(configs),
+            "configs": configs
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get scoring configs: {str(e)}")
+
+@app.get("/api/scoring-configs/default")
+async def get_default_scoring_config():
+    """Get the default scoring configuration"""
+    try:
+        config = await scoring_config_service.get_default_config()
+        if config:
+            return {
+                "success": True,
+                "config": config
+            }
+        else:
+            raise HTTPException(status_code=404, detail="No default scoring config found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get default config: {str(e)}")
+
+@app.get("/api/scoring-configs/level/{level}")
+async def get_scoring_config_by_level(level: str):
+    """Get scoring configuration by level (easy/intermediate/strict)"""
+    try:
+        if level not in ["easy", "intermediate", "strict"]:
+            raise HTTPException(status_code=400, detail="Level must be: easy, intermediate, or strict")
+        
+        config = await scoring_config_service.get_config_by_level(level)
+        if config:
+            return {
+                "success": True,
+                "config": config
+            }
+        else:
+            raise HTTPException(status_code=404, detail=f"No config found for level: {level}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get config: {str(e)}")
+
+@app.get("/api/scoring-configs/{config_id}")
+async def get_scoring_config_by_id(config_id: str):
+    """Get scoring configuration by ID"""
+    try:
+        config = await scoring_config_service.get_config_by_id(config_id)
+        if config:
+            return {
+                "success": True,
+                "config": config
+            }
+        else:
+            raise HTTPException(status_code=404, detail=f"Config not found: {config_id}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get config: {str(e)}")
+
+@app.put("/api/scoring-configs/{config_id}")
+async def update_scoring_config(config_id: str, updates: Dict[str, Any]):
+    """Update a scoring configuration"""
+    try:
+        success = await scoring_config_service.update_config(config_id, updates)
+        if success:
+            return {
+                "success": True,
+                "message": f"Config {config_id} updated successfully"
+            }
+        else:
+            raise HTTPException(status_code=404, detail=f"Config not found or no changes made: {config_id}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update config: {str(e)}")
+
+@app.post("/api/scoring-configs")
+async def create_scoring_config(config_data: Dict[str, Any]):
+    """Create a new custom scoring configuration"""
+    try:
+        config_id = await scoring_config_service.create_custom_config(config_data)
+        if config_id:
+            return {
+                "success": True,
+                "config_id": config_id,
+                "message": "Config created successfully"
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Failed to create config")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create config: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run(

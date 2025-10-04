@@ -200,7 +200,8 @@
                 <h6 class="font-weight-bold mb-3">System Status</h6>
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <span class="text-sm">AI Bot</span>
-                    <span class="badge bg-success">Online</span>
+                    <span class="badge bg-warning">Manual Check Required</span>
+                    <small class="text-muted d-block" style="font-size: 0.7rem;">Check bot process manually</small>
                 </div>
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <span class="text-sm">Question Engine</span>
@@ -212,7 +213,11 @@
                 </div>
                 <div class="d-flex justify-content-between align-items-center">
                     <span class="text-sm">Database</span>
-                    <span class="badge bg-info">Mock Mode</span>
+                    {% if system_status.database == 'connected' %}
+                    <span class="badge bg-success">Connected</span>
+                    {% else %}
+                    <span class="badge bg-danger">Disconnected</span>
+                    {% endif %}
                 </div>
             </div>
         </div>
