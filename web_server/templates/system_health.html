@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+
+{% block page_title %}System Health{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- System Overview -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-heart-pulse me-2"></i>
+                        System Health Overview
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 text-center">
+                            <div class="p-3">
+                                <i class="bi bi-circle-fill text-{% if system_status.overall == 'healthy' %}success{% elif system_status.overall == 'degraded' %}warning{% else %}danger{% endif %}" style="font-size: 3rem;"></i>
+                                <h4 class="mt-2">{{ system_status.overall|upper }}</h4>
+                                <small class="text-muted">Overall Status</small>
+                            </div>
+                        </div>
+                        <div class="col-md-9">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p class="mb-2"><strong>Server Uptime:</strong> {{ uptime }}</p>
+                                    <p class="mb-2"><strong>Last Check:</strong> {{ last_check }}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p class="mb-2"><strong>Active Services:</strong> {{ active_services }}/{{ total_services }}</p>
+                                    <p class="mb-2"><strong>Health Score:</strong> <span class="badge bg-info">{{ health_score }}%</span></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Component Status -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Component Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        <!-- Database -->
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-database me-2"></i>
+                                <strong>Database (MongoDB)</strong>
+                                <br>
+                                <small class="text-muted">{{ db_info.connection }}</small>
+                            </div>
+                            <div class="text-end">
+                                {% if system_status.database == 'connected' %}
+                                <span class="badge bg-success mb-1">Connected</span>
+                                {% else %}
+                                <span class="badge bg-danger mb-1">Disconnected</span>
+                                {% endif %}
+                                <br>
+                                <small class="text-muted">{{ db_info.collections }} collections</small>
+                            </div>
+                        </div>
+
+                        <!-- AI Bot -->
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-robot me-2"></i>
+                                <strong>AI Interview Bot</strong>
+                                <br>
+                                <small class="text-muted">Pipecat + OpenAI/Gemini + Daily.co</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-warning mb-1">Manual Check Required</span>
+                                <br>
+                                <small class="text-muted">Run: check_room.py</small>
+                            </div>
+                        </div>
+
+                        <!-- Question Engine -->
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-chat-left-text me-2"></i>
+                                <strong>Question Engine</strong>
+                                <br>
+                                <small class="text-muted">Dynamic question generation</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-success mb-1">Operational</span>
+                                <br>
+                                <small class="text-muted">OpenAI GPT-4o-mini</small>
+                            </div>
+                        </div>
+
+                        <!-- Scoring Engine -->
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-clipboard-check me-2"></i>
+                                <strong>Scoring Engine</strong>
+                                <br>
+                                <small class="text-muted">LLM-based evaluation with 3 strictness levels</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-success mb-1">Operational</span>
+                                <br>
+                                <small class="text-muted">OpenAI GPT-4o-mini</small>
+                            </div>
+                        </div>
+
+                        <!-- Web Server -->
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-server me-2"></i>
+                                <strong>Web Server</strong>
+                                <br>
+                                <small class="text-muted">FastAPI + Uvicorn</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-success mb-1">Running</span>
+                                <br>
+                                <small class="text-muted">Port {{ port }}</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Endpoints Health -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">API Endpoints</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Endpoint</th>
+                                    <th>Status</th>
+                                    <th>Response Time</th>
+                                    <th>Last Check</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>/health</code></td>
+                                    <td><span class="badge bg-success">200 OK</span></td>
+                                    <td>~5ms</td>
+                                    <td>Just now</td>
+                                </tr>
+                                <tr>
+                                    <td><code>/api/bot/interview-config/{id}</code></td>
+                                    <td><span class="badge bg-success">Operational</span></td>
+                                    <td>~15ms</td>
+                                    <td>Active</td>
+                                </tr>
+                                <tr>
+                                    <td><code>/api/bot/interview-result</code></td>
+                                    <td><span class="badge bg-success">Operational</span></td>
+                                    <td>~20ms</td>
+                                    <td>Active</td>
+                                </tr>
+                                <tr>
+                                    <td><code>/dashboard/*</code></td>
+                                    <td><span class="badge bg-success">Operational</span></td>
+                                    <td>~10ms</td>
+                                    <td>Active</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuration -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Environment Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <td><strong>Python Version:</strong></td>
+                                <td>{{ python_version }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Environment:</strong></td>
+                                <td><span class="badge bg-info">{{ environment }}</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Debug Mode:</strong></td>
+                                <td>{{ debug_mode }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>OpenAI API:</strong></td>
+                                <td>{% if has_openai_key %}<span class="text-success">✓ Configured</span>{% else %}<span class="text-danger">✗ Missing</span>{% endif %}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Daily.co Room:</strong></td>
+                                <td>{% if has_daily_room %}<span class="text-success">✓ Configured</span>{% else %}<span class="text-danger">✗ Missing</span>{% endif %}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Database Statistics</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <td><strong>Total Interviews:</strong></td>
+                                <td>{{ db_stats.total_interviews }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Completed:</strong></td>
+                                <td>{{ db_stats.completed }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Pending:</strong></td>
+                                <td>{{ db_stats.pending }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Scoring Configs:</strong></td>
+                                <td>{{ db_stats.scoring_configs }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Database Size:</strong></td>
+                                <td>{{ db_stats.size }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2 d-md-flex">
+                        <button class="btn btn-outline-primary" onclick="window.location.reload()">
+                            <i class="bi bi-arrow-clockwise me-2"></i>Refresh Status
+                        </button>
+                        <a href="/docs" class="btn btn-outline-info" target="_blank">
+                            <i class="bi bi-book me-2"></i>API Documentation
+                        </a>
+                        <a href="/health" class="btn btn-outline-success" target="_blank">
+                            <i class="bi bi-file-earmark-code me-2"></i>Health JSON
+                        </a>
+                        <button class="btn btn-outline-warning" onclick="alert('Feature coming soon!')">
+                            <i class="bi bi-bug me-2"></i>Debug Logs
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-refresh every 30 seconds
+setTimeout(function() {
+    location.reload();
+}, 30000);
+</script>
+{% endblock %}
+

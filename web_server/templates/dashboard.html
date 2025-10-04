@@ -198,26 +198,16 @@
                 <hr class="my-4">
                 
                 <h6 class="font-weight-bold mb-3">System Status</h6>
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span class="text-sm">AI Bot</span>
-                    <span class="badge bg-warning">Manual Check Required</span>
-                    <small class="text-muted d-block" style="font-size: 0.7rem;">Check bot process manually</small>
-                </div>
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span class="text-sm">Question Engine</span>
-                    <span class="badge bg-success">Operational</span>
-                </div>
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span class="text-sm">Scoring Engine</span>
-                    <span class="badge bg-success">Operational</span>
-                </div>
-                <div class="d-flex justify-content-between align-items-center">
-                    <span class="text-sm">Database</span>
-                    {% if system_status.database == 'connected' %}
-                    <span class="badge bg-success">Connected</span>
-                    {% else %}
-                    <span class="badge bg-danger">Disconnected</span>
-                    {% endif %}
+                <p class="text-muted">
+                    <i class="bi bi-info-circle me-2"></i>
+                    View detailed system health in 
+                    <a href="/dashboard/system-health">System Health</a> page
+                </p>
+                <div class="d-grid">
+                    <a href="/dashboard/system-health" class="btn btn-outline-primary">
+                        <i class="bi bi-heart-pulse me-2"></i>
+                        Check System Health
+                    </a>
                 </div>
             </div>
         </div>
