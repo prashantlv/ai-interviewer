@@ -31,7 +31,26 @@ async def dashboard_home(request: Request):
                 interviews = []
         
         # Sort interviews by date (most recent first) - FIX #1
-        interviews.sort(key=lambda x: x.get("scheduled_date", ""), reverse=True)
+        # Handle both datetime objects and strings
+        def get_sort_date(interview):
+            date_val = interview.get("scheduled_date") or interview.get("created_at") or ""
+            if not date_val or date_val == "N/A":
+                return ""
+            try:
+                if isinstance(date_val, str):
+                    return date_val
+                else:
+                    return date_val.isoformat()
+            except:
+                return ""
+        
+        interviews.sort(key=get_sort_date, reverse=True)
+        
+        print(f"🔍 DASHBOARD DEBUG: Total interviews: {len(interviews)}")
+        if interviews:
+            print(f"🔍 DASHBOARD DEBUG: First 3 interviews:")
+            for i, interview in enumerate(interviews[:3]):
+                print(f"   {i+1}. {interview.get('candidate_name')} - {interview.get('scheduled_date')} - Score: {interview.get('score')}")
         
         # Calculate dashboard statistics
         total_interviews = len(interviews)

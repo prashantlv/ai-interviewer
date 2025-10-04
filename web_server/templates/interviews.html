@@ -96,7 +96,7 @@
                                         {% endif %}
                                     </td>
                                     <td>
-                                        {% if interview.score %}
+                                        {% if interview.score is not none %}
                                             <strong>{{ interview.score }}/100</strong>
                                             {% if interview.score >= 80 %}
                                                 <span class="text-success">📈</span>

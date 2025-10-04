@@ -146,7 +146,7 @@
                                     </span>
                                 </td>
                                 <td>
-                                    {% if interview.score %}
+                                    {% if interview.score is not none %}
                                         <span class="score-badge 
                                             {% if interview.score >= 90 %}score-excellent
                                             {% elif interview.score >= 75 %}score-good
