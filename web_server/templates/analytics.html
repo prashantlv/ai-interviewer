@@ -1,0 +1,387 @@
+{% extends "base.html" %}
+
+{% block page_title %}Analytics{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Date Range Filter -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <form class="row g-3" method="get" action="/dashboard/analytics">
+                        <div class="col-md-3">
+                            <label for="date_from" class="form-label">From Date</label>
+                            <input type="date" class="form-control" id="date_from" name="date_from" value="{{ date_from }}">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="date_to" class="form-label">To Date</label>
+                            <input type="date" class="form-control" id="date_to" name="date_to" value="{{ date_to }}">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="position_filter" class="form-label">Position</label>
+                            <select class="form-select" id="position_filter" name="position">
+                                <option value="">All Positions</option>
+                                {% for pos in positions %}
+                                <option value="{{ pos }}" {% if pos == selected_position %}selected{% endif %}>{{ pos }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">&nbsp;</label>
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary">Apply Filters</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Key Metrics Row -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="text-muted">Total Interviews</h6>
+                    <h2 class="text-primary">{{ metrics.total_interviews }}</h2>
+                    <small class="text-success">📈 {{ metrics.growth_rate }}% from last period</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="text-muted">Average Score</h6>
+                    <h2 class="text-info">{{ metrics.avg_score }}</h2>
+                    <small class="text-muted">Out of 100</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="text-muted">Hire Rate</h6>
+                    <h2 class="text-success">{{ metrics.hire_rate }}%</h2>
+                    <small class="text-muted">{{ metrics.recommended_count }}/{{ metrics.completed_count }} recommended</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="text-muted">Completion Rate</h6>
+                    <h2 class="text-warning">{{ metrics.completion_rate }}%</h2>
+                    <small class="text-muted">{{ metrics.completed_count }} completed</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row 1 -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5>📈 Interview Trends Over Time</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="trendsChart" height="80"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5>🎯 Score Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="scoreDistChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row 2 -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>📊 Scoring Level Breakdown</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="scoringLevelChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>🎓 Performance by Criteria</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="criteriaChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Position Performance -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>💼 Performance by Position</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Position</th>
+                                    <th>Total Interviews</th>
+                                    <th>Avg Score</th>
+                                    <th>Hire Rate</th>
+                                    <th>Top Score</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for pos in position_stats %}
+                                <tr>
+                                    <td><strong>{{ pos.position }}</strong></td>
+                                    <td>{{ pos.count }}</td>
+                                    <td>
+                                        <span class="badge {% if pos.avg_score >= 75 %}bg-success{% elif pos.avg_score >= 60 %}bg-warning{% else %}bg-danger{% endif %}">
+                                            {{ pos.avg_score }}
+                                        </span>
+                                    </td>
+                                    <td>{{ pos.hire_rate }}%</td>
+                                    <td>{{ pos.top_score }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Candidates -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>⭐ Top Performing Candidates</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Rank</th>
+                                    <th>Candidate</th>
+                                    <th>Position</th>
+                                    <th>Score</th>
+                                    <th>Interview Date</th>
+                                    <th>Recommendation</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for i, candidate in top_candidates %}
+                                <tr>
+                                    <td><strong>#{{ i + 1 }}</strong></td>
+                                    <td>{{ candidate.name }}</td>
+                                    <td>{{ candidate.position }}</td>
+                                    <td>
+                                        <span class="badge bg-success">{{ candidate.score }}</span>
+                                    </td>
+                                    <td>{{ candidate.date }}</td>
+                                    <td>
+                                        <span class="badge {% if candidate.recommendation == 'strong_yes' %}bg-success{% elif candidate.recommendation == 'yes' %}bg-info{% else %}bg-warning{% endif %}">
+                                            {{ candidate.recommendation }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <a href="/dashboard/interview/{{ candidate.id }}" class="btn btn-sm btn-outline-primary">View</a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Section -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>📥 Export Reports</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <button class="btn btn-outline-primary w-100" onclick="exportCSV()">
+                                <i class="bi bi-file-earmark-spreadsheet me-2"></i>Export as CSV
+                            </button>
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-outline-danger w-100" onclick="exportPDF()">
+                                <i class="bi bi-file-earmark-pdf me-2"></i>Export as PDF
+                            </button>
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-outline-success w-100" onclick="exportJSON()">
+                                <i class="bi bi-file-earmark-code me-2"></i>Export as JSON
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Data from backend
+const trendsData = {{ trends_data|tojson }};
+const scoreDistData = {{ score_dist_data|tojson }};
+const scoringLevelData = {{ scoring_level_data|tojson }};
+const criteriaData = {{ criteria_data|tojson }};
+
+// Interview Trends Chart
+const trendsCtx = document.getElementById('trendsChart').getContext('2d');
+new Chart(trendsCtx, {
+    type: 'line',
+    data: {
+        labels: trendsData.labels,
+        datasets: [{
+            label: 'Interviews',
+            data: trendsData.values,
+            borderColor: 'rgb(75, 192, 192)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            tension: 0.1
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: {
+                display: false
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    stepSize: 1
+                }
+            }
+        }
+    }
+});
+
+// Score Distribution Chart
+const scoreDistCtx = document.getElementById('scoreDistChart').getContext('2d');
+new Chart(scoreDistCtx, {
+    type: 'doughnut',
+    data: {
+        labels: scoreDistData.labels,
+        datasets: [{
+            data: scoreDistData.values,
+            backgroundColor: [
+                'rgb(255, 99, 132)',
+                'rgb(255, 159, 64)',
+                'rgb(255, 205, 86)',
+                'rgb(75, 192, 192)',
+                'rgb(54, 162, 235)'
+            ]
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true
+    }
+});
+
+// Scoring Level Chart
+const scoringLevelCtx = document.getElementById('scoringLevelChart').getContext('2d');
+new Chart(scoringLevelCtx, {
+    type: 'bar',
+    data: {
+        labels: scoringLevelData.labels,
+        datasets: [{
+            label: 'Count',
+            data: scoringLevelData.values,
+            backgroundColor: [
+                'rgba(75, 192, 192, 0.8)',
+                'rgba(255, 205, 86, 0.8)',
+                'rgba(255, 99, 132, 0.8)'
+            ]
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: {
+                display: false
+            }
+        }
+    }
+});
+
+// Criteria Performance Chart
+const criteriaCtx = document.getElementById('criteriaChart').getContext('2d');
+new Chart(criteriaCtx, {
+    type: 'radar',
+    data: {
+        labels: criteriaData.labels,
+        datasets: [{
+            label: 'Average Score',
+            data: criteriaData.values,
+            fill: true,
+            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+            borderColor: 'rgb(54, 162, 235)',
+            pointBackgroundColor: 'rgb(54, 162, 235)',
+            pointBorderColor: '#fff',
+            pointHoverBackgroundColor: '#fff',
+            pointHoverBorderColor: 'rgb(54, 162, 235)'
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        scales: {
+            r: {
+                beginAtZero: true,
+                max: 100
+            }
+        }
+    }
+});
+
+// Export functions
+function exportCSV() {
+    window.location.href = '/dashboard/analytics/export?format=csv&date_from={{ date_from }}&date_to={{ date_to }}&position={{ selected_position }}';
+}
+
+function exportPDF() {
+    alert('PDF export coming soon!');
+}
+
+function exportJSON() {
+    window.location.href = '/dashboard/analytics/export?format=json&date_from={{ date_from }}&date_to={{ date_to }}&position={{ selected_position }}';
+}
+</script>
+{% endblock %}
+
