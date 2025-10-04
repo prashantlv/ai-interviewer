@@ -195,13 +195,15 @@ class DatabaseService:
                     # Extract candidate info from evaluation
                     evaluation = doc.get("evaluation", {})
                     
+                    date_value = doc.get("completed_at", doc.get("created_at"))
                     results.append({
                         "id": doc.get("interview_id", "unknown"),
                         "candidate_name": evaluation.get("candidate_name", "Unknown"),
                         "position": evaluation.get("position", "Unknown Position"),
                         "status": doc.get("status", "unknown"),
                         "score": evaluation.get("overall_score", 0),
-                        "created_at": doc.get("completed_at", doc.get("created_at")),
+                        "created_at": date_value,
+                        "scheduled_date": date_value,  # Alias for compatibility
                         "transcript_available": bool(doc.get("transcript"))
                     })
                 
