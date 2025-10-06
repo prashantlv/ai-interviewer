@@ -351,8 +351,8 @@
 <script>
 // Sprint 1.2: Load queue statistics
 async function refreshQueueStats() {
-    try {
-        const response = await fetch('/api/bots/queue');
+    try:
+        const response = await fetch('/api/v1/bots/queue');
         const data = await response.json();
         
         if (data.success) {

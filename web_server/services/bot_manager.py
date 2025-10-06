@@ -360,9 +360,10 @@ class BotManager:
             
             # Get workers
             workers = Worker.all(connection=self.redis_conn)
+            worker_count = len(list(workers))
             
             # Check if any workers are available
-            workers_available = len(workers) > 0
+            workers_available = worker_count > 0
             
             status = "healthy" if redis_ping and workers_available else "degraded"
             if not redis_ping:
@@ -370,9 +371,9 @@ class BotManager:
             
             return {
                 "status": status,
-                "redis_connected": redis_ping,
+                "redis_connected": bool(redis_ping),
                 "workers_available": workers_available,
-                "worker_count": len(workers),
+                "worker_count": worker_count,
                 "queue_name": self.queue_name,
                 "timestamp": datetime.now().isoformat()
             }

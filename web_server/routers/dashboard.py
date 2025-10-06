@@ -8,22 +8,25 @@ from fastapi.templating import Jinja2Templates
 from typing import Optional
 from datetime import datetime, timedelta
 
+from dependencies import DbServiceDep, BotManagerDep
+from services.daily_service import daily_service
+
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
-# Global database service (will be set by main.py)
-db_service = None
-
 @router.get("/", response_class=HTMLResponse)
-async def dashboard_home(request: Request):
+async def dashboard_home(
+    request: Request,
+    db: DbServiceDep
+):
     """Main dashboard page"""
     # Get real data from database directly
     try:
         from datetime import datetime, timedelta
         
-        # Use the global db_service
-        if db_service and db_service.database is not None:
-            interviews = await db_service.get_interviews()
+        # Use dependency-injected db service
+        if db and db.database is not None:
+            interviews = await db.get_interviews()
         else:
             print("⚠️ Database service not available")
             interviews = []
@@ -106,7 +109,7 @@ async def dashboard_home(request: Request):
     
     # Get system status - FIX #3
     # For now, we check database status. Bot status would need heartbeat/health check
-    db_status = "connected" if (db_service and db_service.database is not None) else "disconnected"
+    db_status = "connected" if (db and db.database is not None) else "disconnected"
     
     system_status = {
         "database": db_status,
@@ -122,17 +125,22 @@ async def dashboard_home(request: Request):
     })
 
 @router.get("/test-db")
-async def test_database_connection():
+async def test_database_connection(db: DbServiceDep):
     """Test endpoint to check database connection"""
     return {
-        "db_service_is_none": db_service is None,
-        "db_service_type": str(type(db_service)),
-        "has_database": hasattr(db_service, 'database') if db_service else False,
-        "database_is_none": db_service.database is None if (db_service and hasattr(db_service, 'database')) else True
+        "db_service_is_none": db is None,
+        "db_service_type": str(type(db)),
+        "has_database": hasattr(db, 'database') if db else False,
+        "database_is_none": db.database is None if (db and hasattr(db, 'database')) else True
     }
 
 @router.get("/interviews", response_class=HTMLResponse)
-async def interviews_page(request: Request, status: Optional[str] = None, page: int = 1):
+async def interviews_page(
+    request: Request,
+    db: DbServiceDep,
+    status: Optional[str] = None,
+    page: int = 1
+):
     """Interviews management page with filtering and pagination"""
     # Pagination settings
     per_page = 20
@@ -141,8 +149,8 @@ async def interviews_page(request: Request, status: Optional[str] = None, page: 
     # Get interviews from database directly
     all_interviews = []  # Initialize early to avoid NameError
     try:
-        if db_service and db_service.database is not None:
-            all_interviews = await db_service.get_interviews()
+        if db and db.database is not None:
+            all_interviews = await db.get_interviews()
             print(f"🔍 DEBUG: Retrieved {len(all_interviews)} interviews from database")
         else:
             print("⚠️ Database service not available for interviews page")
@@ -243,23 +251,16 @@ async def interviews_page(request: Request, status: Optional[str] = None, page: 
     })
 
 @router.get("/interview/{interview_id}", response_class=HTMLResponse)
-async def interview_detail(request: Request, interview_id: str):
+async def interview_detail(
+    request: Request,
+    interview_id: str,
+    db: DbServiceDep
+):
     """Individual interview detail page"""
-    # Get interview data from MongoDB directly
-    from motor.motor_asyncio import AsyncIOMotorClient
-    from dotenv import load_dotenv
-    import os
-    
-    load_dotenv()
-    mongodb_url = os.getenv("MONGODB_URL")
-    database_name = os.getenv("DATABASE_NAME")
-    
-    client = AsyncIOMotorClient(mongodb_url)
-    db = client[database_name]
-    interview_result = await db.interview_results.find_one({"interview_id": interview_id})
+    # Get interview data using db service
+    interview_result = await db.database.interview_results.find_one({"interview_id": interview_id})
     if interview_result:
         interview_result.pop('_id', None)
-    client.close()
     
     if interview_result:
         # Use real data from database
@@ -327,6 +328,8 @@ async def schedule_interview_page(request: Request):
 @router.post("/schedule", response_class=HTMLResponse)
 async def create_interview(
     request: Request,
+    db: DbServiceDep,
+    bot_manager: BotManagerDep,
     candidate_name: str = Form(...),
     candidate_email: str = Form(...),
     position: str = Form(...),
@@ -338,11 +341,9 @@ async def create_interview(
     """Create a new interview"""
     import uuid
     from datetime import datetime
-    from services.bot_manager import get_bot_manager
-    from services.daily_service import daily_service
     
-    # Use the global db_service that was set by main.py
-    if db_service is None:
+    # Validate db service is available
+    if db is None:
         raise HTTPException(status_code=500, detail="Database service not available")
     
     # Generate unique interview ID
@@ -391,10 +392,10 @@ async def create_interview(
         print(f"🔍 DEBUG: Attempting to save interview {interview_id}")
         print(f"   Candidate: {candidate_name}, Position: {position}")
         print(f"   Scoring Level: {scoring_level}")
-        print(f"   db_service status: {db_service is not None}")
+        print(f"   db_service status: {db is not None}")
         
         # Store in database - create proper interview result entry
-        success = await db_service.update_interview_result(
+        success = await db.update_interview_result(
             interview_id=interview_id,
             transcript="Interview scheduled - waiting for completion",
             evaluation={
@@ -428,7 +429,7 @@ async def create_interview(
             
             if auto_start:
                 try:
-                    bot_manager = get_bot_manager()
+                    # Use injected bot_manager (already available from DI)
                     
                     # Create bot token (owner privileges)
                     bot_token = await daily_service.create_bot_token(
@@ -534,6 +535,7 @@ async def settings_page(request: Request):
 @router.get("/analytics", response_class=HTMLResponse)
 async def analytics_page(
     request: Request,
+    db: DbServiceDep,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     position: Optional[str] = None
@@ -551,8 +553,8 @@ async def analytics_page(
     
     # Get all interviews from database directly
     try:
-        if db_service and db_service.database is not None:
-            all_interviews = await db_service.get_interviews()
+        if db and db.database is not None:
+            all_interviews = await db.get_interviews()
         else:
             all_interviews = []
     except Exception as e:
@@ -741,7 +743,11 @@ async def analytics_page(
     })
 
 @router.get("/system-health", response_class=HTMLResponse)
-async def system_health_page(request: Request):
+async def system_health_page(
+    request: Request,
+    db: DbServiceDep,
+    bot_manager: BotManagerDep
+):
     """System health monitoring page"""
     import sys
     import os
@@ -749,20 +755,20 @@ async def system_health_page(request: Request):
     from datetime import datetime
     
     # Check database status
-    db_status = "connected" if (db_service and db_service.database is not None) else "disconnected"
+    db_status = "connected" if (db and db.database is not None) else "disconnected"
     
     # Get database info
-    if db_service and db_service.database is not None:
+    if db and db.database is not None:
         try:
-            db_name = db_service.database.name
-            collection_names = await db_service.database.list_collection_names()
+            db_name = db.database.name
+            collection_names = await db.database.list_collection_names()
             db_collections = len(collection_names)
             
             # Get interview stats
-            total_interviews = await db_service.database.interview_results.count_documents({})
-            completed = await db_service.database.interview_results.count_documents({"status": "completed"})
-            pending = await db_service.database.interview_results.count_documents({"status": {"$ne": "completed"}})
-            scoring_configs = await db_service.database.scoring_configs.count_documents({})
+            total_interviews = await db.database.interview_results.count_documents({})
+            completed = await db.database.interview_results.count_documents({"status": "completed"})
+            pending = await db.database.interview_results.count_documents({"status": {"$ne": "completed"}})
+            scoring_configs = await db.database.scoring_configs.count_documents({})
         except:
             db_name = "Unknown"
             db_collections = 0
