@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 
 # Import our modules
-from routers import interviews, dashboard, feedback, bots
+from routers import interviews, dashboard, feedback, bots, tavus
 from services.database import DatabaseService
 from services.question_engine import QuestionEngine
 from services.scoring_engine import ScoringEngine
@@ -83,6 +83,9 @@ app.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 app.include_router(interviews.router, prefix="/api/v1/interviews", tags=["interviews-v1"])
 app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["feedback-v1"])
 app.include_router(bots.router, prefix="/api/v1/bots", tags=["bots-v1"])
+
+# Tavus routes (includes both dashboard and API)
+app.include_router(tavus.router, tags=["tavus"])
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
