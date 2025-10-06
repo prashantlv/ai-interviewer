@@ -35,19 +35,43 @@
                     </div>
                     {% endif %}
 
+                    <!-- Sprint 1.2: Bot Status Display -->
+                    {% if interview.auto_start %}
+                    <div class="alert alert-success">
+                        <h6><i class="bi bi-robot"></i> AI Bot Status:</h6>
+                        <p class="mb-2"><strong>Auto-start:</strong> ✅ Enabled</p>
+                        <p class="mb-2"><strong>Status:</strong> {{ interview.bot_status }}</p>
+                        {% if interview.bot_job_id %}
+                        <p class="mb-0"><strong>Job ID:</strong> <code>{{ interview.bot_job_id }}</code></p>
+                        {% endif %}
+                        <hr>
+                        <small class="text-muted">
+                            The AI bot has been automatically queued and will start processing shortly. 
+                            You can monitor the bot status in the System Health page.
+                        </small>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <h6><i class="bi bi-exclamation-triangle"></i> Manual Bot Start Required:</h6>
+                        <p class="mb-2">You chose to manually start the bot. Use one of these options:</p>
+                        <ol class="mb-2">
+                            <li><strong>Command line:</strong> <code>cd server && INTERVIEW_ID={{ interview.interview_id }} python ai-interviewer.py --transport daily</code></li>
+                            <li><strong>API:</strong> POST to <code>/api/bots/start?interview_id={{ interview.interview_id }}</code></li>
+                        </ol>
+                        <small class="text-muted">Make sure to start the bot before the candidate joins the call.</small>
+                    </div>
+                    {% endif %}
+
                     <div class="alert alert-primary">
                         <h6><i class="bi bi-info-circle"></i> Next Steps:</h6>
                         <ol>
-                            <li><strong>Start the AI Interviewer:</strong> Use the startup script or manually start the bot with Interview ID: <code>{{ interview.interview_id }}</code></li>
-                            <li><strong>Send to Candidate:</strong> Share the interview link: <a href="{{ interview.room_url }}" target="_blank">{{ interview.room_url }}</a></li>
+                            {% if not interview.auto_start %}
+                            <li><strong>Start the AI Interviewer:</strong> Use the command above with Interview ID: <code>{{ interview.interview_id }}</code></li>
+                            {% endif %}
+                            <li><strong>Send to Candidate:</strong> Share the interview link: <a href="{{ interview.join_url }}" target="_blank">{{ interview.join_url }}</a></li>
                             <li><strong>Monitor Progress:</strong> Track the interview status in the dashboard</li>
                             <li><strong>Review Results:</strong> Evaluation will be available after completion</li>
                         </ol>
-                    </div>
-
-                    <div class="alert alert-warning">
-                        <h6><i class="bi bi-exclamation-triangle"></i> Important:</h6>
-                        <p class="mb-0">Make sure to start the AI interviewer bot with the correct Interview ID before the candidate joins the call.</p>
                     </div>
 
                     <div class="d-flex justify-content-between">
@@ -71,7 +95,7 @@
 
 <script>
 function copyInterviewLink() {
-    const link = "{{ interview.room_url }}";
+    const link = "{{ interview.join_url }}";
     navigator.clipboard.writeText(link).then(function() {
         // Show success message
         const btn = event.target;
