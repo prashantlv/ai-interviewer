@@ -639,6 +639,78 @@ async def bot(runner_args: RunnerArguments):
 
 
 if __name__ == "__main__":
-    from pipecat.runner.run import main
-
-    main()
+    import argparse
+    import asyncio
+    
+    # Check if --room-url is provided (direct join mode)
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--room-url", type=str, help="Direct join to Daily.co room URL with token")
+    args, remaining = parser.parse_known_args()
+    
+    if args.room_url:
+        # Direct join mode - bypass Pipecat's web server
+        logger.info(f"🎯 Direct join mode: {args.room_url}")
+        
+        async def direct_join():
+            async with aiohttp.ClientSession() as session:
+                # Extract room URL and token
+                room_url = args.room_url
+                token = None
+                
+                # Parse token from URL if present
+                if "?t=" in room_url:
+                    room_url, token = room_url.split("?t=")
+                
+                logger.info(f"📍 Joining room: {room_url}")
+                if token:
+                    logger.info(f"🔑 Using token: {token[:20]}...")
+                
+                # Configure video based on service
+                video_service = os.getenv("VIDEO_SERVICE", "none").lower()
+                if video_service == "simli":
+                    video_width, video_height = 512, 512
+                    video_framerate = 30
+                elif video_service == "heygen":
+                    video_width, video_height = 1280, 720
+                    video_framerate = 30
+                else:
+                    video_width, video_height = 1024, 576
+                    video_framerate = 30
+                
+                # Create Daily transport
+                transport = DailyTransport(
+                    room_url,
+                    token,
+                    "AI Interviewer Bot",
+                    params=DailyParams(
+                        audio_in_enabled=True,
+                        audio_out_enabled=True,
+                        video_out_enabled=True,
+                        video_out_is_live=True,
+                        video_out_width=video_width,
+                        video_out_height=video_height,
+                        video_out_framerate=video_framerate,
+                        vad_analyzer=SileroVADAnalyzer(),
+                        transcription_enabled=True,
+                    ),
+                )
+                
+                logger.info("🚀 Starting bot in direct join mode...")
+                
+                # Temporarily disable video service for direct join to avoid conflicts
+                original_video_service = os.getenv("VIDEO_SERVICE")
+                os.environ["VIDEO_SERVICE"] = "none"
+                
+                try:
+                    await run_bot(transport, session)
+                finally:
+                    # Restore original video service
+                    if original_video_service:
+                        os.environ["VIDEO_SERVICE"] = original_video_service
+        
+        # Run the async function
+        asyncio.run(direct_join())
+    else:
+        # Standard Pipecat Cloud mode - web server
+        from pipecat.runner.run import main
+        main()

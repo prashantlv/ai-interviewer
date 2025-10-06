@@ -17,18 +17,16 @@ db_service = None
 @router.get("/", response_class=HTMLResponse)
 async def dashboard_home(request: Request):
     """Main dashboard page"""
-    # Get real data from database via HTTP call to debug endpoint
+    # Get real data from database directly
     try:
-        import httpx
         from datetime import datetime, timedelta
         
-        async with httpx.AsyncClient() as client:
-            response = await client.get("http://localhost:8009/debug/interviews")
-            if response.status_code == 200:
-                data = response.json()
-                interviews = data.get("interviews", [])
-            else:
-                interviews = []
+        # Use the global db_service
+        if db_service and db_service.database is not None:
+            interviews = await db_service.get_interviews()
+        else:
+            print("⚠️ Database service not available")
+            interviews = []
         
         # Sort interviews by date (most recent first) - FIX #1
         # Handle both datetime objects and strings
@@ -108,7 +106,6 @@ async def dashboard_home(request: Request):
     
     # Get system status - FIX #3
     # For now, we check database status. Bot status would need heartbeat/health check
-    global db_service
     db_status = "connected" if (db_service and db_service.database is not None) else "disconnected"
     
     system_status = {
@@ -127,8 +124,6 @@ async def dashboard_home(request: Request):
 @router.get("/test-db")
 async def test_database_connection():
     """Test endpoint to check database connection"""
-    global db_service
-    
     return {
         "db_service_is_none": db_service is None,
         "db_service_type": str(type(db_service)),
@@ -143,19 +138,15 @@ async def interviews_page(request: Request, status: Optional[str] = None, page: 
     per_page = 20
     offset = (page - 1) * per_page
     
-    # Get interviews from database by calling the working debug endpoint
+    # Get interviews from database directly
     all_interviews = []  # Initialize early to avoid NameError
     try:
-        import httpx
-        async with httpx.AsyncClient() as client:
-            response = await client.get("http://localhost:8009/debug/interviews")
-            if response.status_code == 200:
-                data = response.json()
-                all_interviews = data.get("interviews", [])
-                print(f"🔍 DEBUG: Retrieved {len(all_interviews)} interviews from debug endpoint")
-            else:
-                print(f"🔍 DEBUG: Failed to get interviews: {response.status_code}")
-                all_interviews = []
+        if db_service and db_service.database is not None:
+            all_interviews = await db_service.get_interviews()
+            print(f"🔍 DEBUG: Retrieved {len(all_interviews)} interviews from database")
+        else:
+            print("⚠️ Database service not available for interviews page")
+            all_interviews = []
         
         # Sort by date - most recent first - FIX #2
         all_interviews.sort(key=lambda x: x.get("scheduled_date", ""), reverse=True)
@@ -341,19 +332,44 @@ async def create_interview(
     position: str = Form(...),
     interview_type: str = Form("technical"),
     scoring_level: str = Form("intermediate"),
-    notes: str = Form("")
+    notes: str = Form(""),
+    auto_start: bool = Form(False)  # Sprint 1.2: Auto-start bot option
 ):
     """Create a new interview"""
     import uuid
     from datetime import datetime
+    from services.bot_manager import get_bot_manager
+    from services.daily_service import daily_service
     
     # Use the global db_service that was set by main.py
-    global db_service
     if db_service is None:
         raise HTTPException(status_code=500, detail="Database service not available")
     
     # Generate unique interview ID
     interview_id = f"interview_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
+    
+    # Create unique Daily.co room for this interview
+    room_data = await daily_service.create_interview_room(
+        interview_id=interview_id,
+        candidate_name=candidate_name,
+        expires_in_minutes=90  # 1.5 hours
+    )
+    
+    if not room_data:
+        raise HTTPException(
+            status_code=500, 
+            detail="Failed to create Daily.co room. Please check DAILY_API_KEY configuration."
+        )
+    
+    # Generate candidate token (with their name)
+    candidate_token = await daily_service.create_candidate_token(
+        room_name=room_data["room_name"],
+        candidate_name=candidate_name,
+        expires_in_minutes=90
+    )
+    
+    # Create candidate join URL with token
+    candidate_join_url = f"{room_data['room_url']}?t={candidate_token}" if candidate_token else room_data['room_url']
     
     # Create interview record
     interview_data = {
@@ -366,7 +382,9 @@ async def create_interview(
         "status": "scheduled",
         "notes": notes,
         "created_at": datetime.now(),
-        "room_url": "https://hi2inspire.daily.co/hi2inspire"
+        "room_url": room_data["room_url"],
+        "room_name": room_data["room_name"],
+        "candidate_join_url": candidate_join_url
     }
     
     try:
@@ -404,6 +422,49 @@ async def create_interview(
         print(f"🔍 DEBUG: Save result: {success}")
         
         if success:
+            # Sprint 1.2: Auto-start bot if requested
+            bot_job_id = None
+            bot_status = "Not started (manual mode)"
+            
+            if auto_start:
+                try:
+                    bot_manager = get_bot_manager()
+                    
+                    # Create bot token (owner privileges)
+                    bot_token = await daily_service.create_bot_token(
+                        room_name=room_data["room_name"],
+                        expires_in_minutes=90
+                    )
+                    
+                    # Bot joins with token for owner access
+                    bot_room_url = f"{room_data['room_url']}?t={bot_token}" if bot_token else room_data['room_url']
+                    
+                    # Pass room URL with token in config
+                    bot_config = {
+                        "room_url": bot_room_url,
+                        "room_name": room_data["room_name"]
+                    }
+                    bot_result = bot_manager.schedule_interview(interview_id, config=bot_config)
+                    if bot_result.get("success"):
+                        bot_job_id = bot_result.get("job_id")
+                        bot_status = f"Queued (Job: {bot_job_id[:16]}...)"
+                        print(f"✅ Bot job enqueued: {bot_job_id}")
+                        print(f"🔗 Bot Room URL: {bot_room_url}")
+                        print(f"🔗 Candidate URL: {candidate_join_url}")
+                    else:
+                        bot_status = f"Failed: {bot_result.get('error', 'Unknown error')}"
+                        print(f"❌ Bot job failed: {bot_status}")
+                except Exception as e:
+                    bot_status = f"Error: {str(e)}"
+                    print(f"❌ Bot job error: {e}")
+            
+            # Add bot info to interview data for display
+            interview_data["bot_job_id"] = bot_job_id
+            interview_data["bot_status"] = bot_status
+            interview_data["auto_start"] = auto_start
+            # Add the actual join URL for the candidate (includes token)
+            interview_data["join_url"] = candidate_join_url
+            
             # Redirect to interview instructions
             return templates.TemplateResponse("interview_scheduled.html", {
                 "request": request,
@@ -488,16 +549,14 @@ async def analytics_page(
     if not date_from:
         date_from = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
     
-    # Get all interviews
+    # Get all interviews from database directly
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get("http://localhost:8009/debug/interviews")
-            if response.status_code == 200:
-                data = response.json()
-                all_interviews = data.get("interviews", [])
-            else:
-                all_interviews = []
-    except:
+        if db_service and db_service.database is not None:
+            all_interviews = await db_service.get_interviews()
+        else:
+            all_interviews = []
+    except Exception as e:
+        print(f"❌ Error getting interviews for analytics: {e}")
         all_interviews = []
     
     # Filter by date range and position
@@ -688,8 +747,6 @@ async def system_health_page(request: Request):
     import os
     import httpx
     from datetime import datetime
-    
-    global db_service
     
     # Check database status
     db_status = "connected" if (db_service and db_service.database is not None) else "disconnected"
