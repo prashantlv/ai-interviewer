@@ -4,19 +4,22 @@ FastAPI Web Server for AI Interviewer
 Handles dashboard, interview management, and reporting
 """
 
+# Load environment variables FIRST (before any other imports that might use them)
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 import uvicorn
-from dotenv import load_dotenv
 import os
 from datetime import datetime
 from typing import Optional, Dict, Any
 
 # Import our modules
-from routers import interviews, dashboard, feedback
+from routers import interviews, dashboard, feedback, bots
 from services.database import DatabaseService
 from services.question_engine import QuestionEngine
 from services.scoring_engine import ScoringEngine
@@ -24,10 +27,6 @@ from services.scoring_config_service import ScoringConfigService
 from services.bot_manager import initialize_bot_manager, get_bot_manager
 from services.static_data import get_demo_interview_config
 import json
-import os
-
-# Load environment variables
-load_dotenv()
 
 # Initialize services
 db_service = DatabaseService()
@@ -47,6 +46,13 @@ async def lifespan(app: FastAPI):
     
     # Initialize bot manager with Redis
     initialize_bot_manager()
+    
+    # Store services in app state for dependency injection
+    app.state.db_service = db_service
+    app.state.bot_manager = get_bot_manager()
+    app.state.scoring_config_service = scoring_config_service
+    app.state.question_engine = question_engine
+    app.state.scoring_engine = scoring_engine
     
     print("🚀 FastAPI Web Server started successfully!")
     print(f"📊 Dashboard: http://localhost:8009/dashboard")
@@ -69,15 +75,14 @@ app = FastAPI(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-# Make database service available to routers BEFORE including them
-import routers.dashboard as dashboard_module
-dashboard_module.db_service = db_service
-dashboard_module.shared_db_service = db_service
-
 # Include routers
-app.include_router(interviews.router, prefix="/api/interviews", tags=["interviews"])
+# Dashboard (no versioning - UI routes)
 app.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
-app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
+
+# API v1 routes
+app.include_router(interviews.router, prefix="/api/v1/interviews", tags=["interviews-v1"])
+app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["feedback-v1"])
+app.include_router(bots.router, prefix="/api/v1/bots", tags=["bots-v1"])
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
@@ -85,25 +90,29 @@ async def root(request: Request):
     return RedirectResponse(url="/dashboard")
 
 @app.get("/health")
-async def health_check():
+async def health_check(request: Request):
     """Health check endpoint"""
-    bot_manager = get_bot_manager()
+    db = request.app.state.db_service
+    bot_manager = request.app.state.bot_manager
+    question_eng = request.app.state.question_engine
+    scoring_eng = request.app.state.scoring_engine
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "services": {
-            "database": db_service.health_check(),
-            "question_engine": question_engine.health_check(),
-            "scoring_engine": scoring_engine.health_check(),
+            "database": await db.health_check(),
+            "question_engine": question_eng.health_check(),
+            "scoring_engine": scoring_eng.health_check(),
             "bot_queue": bot_manager.health_check()
         }
     }
 
 @app.get("/debug/interviews")
-async def debug_interviews():
+async def debug_interviews(request: Request):
     """Debug endpoint to check stored interviews"""
     try:
-        interviews = await db_service.get_interviews()
+        db = request.app.state.db_service
+        interviews = await db.get_interviews()
         return {
             "count": len(interviews),
             "interviews": interviews
@@ -112,11 +121,13 @@ async def debug_interviews():
         return {"error": str(e)}
 
 @app.get("/debug/dashboard-test")
-async def debug_dashboard_test():
+async def debug_dashboard_test(request: Request):
     """Debug endpoint to test dashboard data flow"""
     try:
+        # Get db_service from app state
+        db = request.app.state.db_service
         # Test the same logic as dashboard route
-        interviews = await db_service.get_interviews()
+        interviews = await db.get_interviews()
         print(f"🔍 DEBUG: Retrieved {len(interviews)} interviews from database")
         
         # Transform data for template (same as dashboard route)
@@ -143,13 +154,19 @@ async def debug_dashboard_test():
         return {"error": str(e)}
 
 @app.get("/api/dashboard/interviews")
-async def get_dashboard_interviews(status: Optional[str] = None, page: int = 1):
+async def get_dashboard_interviews(
+    request: Request,
+    status: Optional[str] = None,
+    page: int = 1
+):
     """API endpoint for dashboard to get interview data"""
     try:
+        # Get db_service from app state
+        db = request.app.state.db_service
         per_page = 20
         offset = (page - 1) * per_page
         
-        interviews = await db_service.get_interviews(status=status, limit=per_page, offset=offset)
+        interviews = await db.get_interviews(status=status, limit=per_page, offset=offset)
         
         # Transform data for template
         interview_list = []
@@ -173,16 +190,21 @@ async def get_dashboard_interviews(status: Optional[str] = None, page: int = 1):
     except Exception as e:
         return {"error": str(e)}
 
-@app.post("/api/bot/interview-result")
-async def receive_interview_result(payload: Dict[str, Any]):
-    """Receive interview results from Pipecat bot"""
+@app.post("/api/v1/bot/interview-result")
+async def receive_interview_result(
+    request: Request,
+    payload: Dict[str, Any]
+):
+    """Receive interview results from Pipecat bot (API v1)"""
     try:
+        # Get db_service from app state
+        db = request.app.state.db_service
         interview_id = payload.get("interview_id")
         transcript = payload.get("transcript", "")
         evaluation = payload.get("evaluation", {})
         
         # Store interview results in database
-        result = await db_service.update_interview_result(
+        result = await db.update_interview_result(
             interview_id=interview_id,
             transcript=transcript,
             evaluation=evaluation,
@@ -203,9 +225,9 @@ def _load_json_file(filename: str) -> Dict[str, Any]:
         print(f"❌ Error loading {filename}: {e}")
         return {}
 
-@app.get("/api/bot/interview-config/{interview_id}")
+@app.get("/api/v1/bot/interview-config/{interview_id}")
 async def get_interview_config(interview_id: str, scoring_level: Optional[str] = None):
-    """Provide interview configuration to Pipecat bot (includes scoring config)"""
+    """Provide interview configuration to Pipecat bot (API v1 - includes scoring config)"""
     try:
         # First, try to get interview from database
         interview = await db_service.get_interview_result(interview_id)
@@ -418,72 +440,9 @@ async def create_scoring_config(config_data: Dict[str, Any]):
         raise HTTPException(status_code=500, detail=f"Failed to create config: {str(e)}")
 
 # ============================================================================
-# BOT MANAGEMENT API ENDPOINTS (Sprint 1.2)
+# NOTE: Bot management API endpoints moved to routers/bots.py (Sprint 1.4)
+# Now accessible under /api/v1/bots/*
 # ============================================================================
-
-@app.post("/api/bots/start")
-async def start_bot(interview_id: str, delay: int = 0):
-    """
-    Start an AI bot for an interview
-    
-    This enqueues a job to start the bot process.
-    """
-    try:
-        bot_manager = get_bot_manager()
-        result = bot_manager.schedule_interview(interview_id, delay=delay)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to start bot: {str(e)}")
-
-@app.post("/api/bots/stop/{interview_id}")
-async def stop_bot_endpoint(interview_id: str, force: bool = False):
-    """Stop a running interview bot"""
-    try:
-        bot_manager = get_bot_manager()
-        result = bot_manager.stop_bot(interview_id, force=force)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to stop bot: {str(e)}")
-
-@app.get("/api/bots/status/{interview_id}")
-async def get_bot_status(interview_id: str):
-    """Get status of an interview bot"""
-    try:
-        bot_manager = get_bot_manager()
-        result = bot_manager.get_interview_status(interview_id)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get bot status: {str(e)}")
-
-@app.get("/api/bots/active")
-async def get_active_bots_endpoint():
-    """Get list of currently active bots"""
-    try:
-        bot_manager = get_bot_manager()
-        result = bot_manager.get_active_bots()
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get active bots: {str(e)}")
-
-@app.get("/api/bots/queue")
-async def get_queue_info_endpoint():
-    """Get job queue information"""
-    try:
-        bot_manager = get_bot_manager()
-        result = bot_manager.get_queue_info()
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get queue info: {str(e)}")
-
-@app.delete("/api/bots/job/{job_id}")
-async def cancel_job_endpoint(job_id: str):
-    """Cancel a queued job"""
-    try:
-        bot_manager = get_bot_manager()
-        result = bot_manager.cancel_job(job_id)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to cancel job: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run(

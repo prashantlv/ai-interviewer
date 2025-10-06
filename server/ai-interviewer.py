@@ -62,7 +62,7 @@ INTERVIEW_ID = os.getenv("INTERVIEW_ID", "default_interview")
 async def fetch_interview_config(session: aiohttp.ClientSession, interview_id: str) -> Optional[Dict[str, Any]]:
     """Fetch interview configuration from web server"""
     try:
-        url = f"{WEB_SERVER_URL}/api/bot/interview-config/{interview_id}"
+        url = f"{WEB_SERVER_URL}/api/v1/bot/interview-config/{interview_id}"
         logger.info(f"Fetching interview config from: {url}")
         
         async with session.get(url) as response:
@@ -85,7 +85,7 @@ async def send_interview_result(
 ) -> bool:
     """Send interview results back to web server"""
     try:
-        url = f"{WEB_SERVER_URL}/api/bot/interview-result"
+        url = f"{WEB_SERVER_URL}/api/v1/bot/interview-result"
         payload = {
             "interview_id": interview_id,
             "transcript": transcript,
