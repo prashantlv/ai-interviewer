@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title }} - AI Interviewer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/dashboard/">
+                <i class="fas fa-robot"></i> AI Interviewer
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/dashboard/">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/dashboard/interviews">Interviews</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/dashboard/schedule">Schedule</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/dashboard/analytics">Analytics</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/dashboard/tavus-replicas">Tavus Replicas</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/dashboard/system-health">System Health</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <h1><i class="fas fa-user-astronaut"></i> Tavus Replica Management</h1>
+                <p class="text-muted">Manage AI avatar replicas for video interviews</p>
+            </div>
+            <div class="col-md-4 text-end">
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createReplicaModal">
+                    <i class="fas fa-plus"></i> Create New Replica
+                </button>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> 
+                    <strong>Total Replicas:</strong> {{ total_count }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Replicas Table -->
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-list"></i> All Replicas</h5>
+            </div>
+            <div class="card-body">
+                {% if replicas %}
+                <div class="table-responsive">
+                    <table class="table table-hover" id="replicasTable">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Replica ID</th>
+                                <th>Status</th>
+                                <th>Training Progress</th>
+                                <th>Type</th>
+                                <th>Created At</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for replica in replicas %}
+                            <tr id="replica-{{ replica.replica_id }}">
+                                <td>
+                                    <strong>{{ replica.replica_name }}</strong>
+                                </td>
+                                <td>
+                                    <code>{{ replica.replica_id }}</code>
+                                </td>
+                                <td>
+                                    {% if replica.status == 'completed' %}
+                                        <span class="badge bg-success">{{ replica.status }}</span>
+                                    {% elif replica.status == 'started' %}
+                                        <span class="badge bg-warning">{{ replica.status }}</span>
+                                    {% elif replica.status == 'error' %}
+                                        <span class="badge bg-danger">{{ replica.status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ replica.status }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {{ replica.training_progress or 'N/A' }}
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">{{ replica.replica_type or 'N/A' }}</span>
+                                </td>
+                                <td>
+                                    {{ replica.created_at or 'N/A' }}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" 
+                                                onclick="viewReplica('{{ replica.replica_id }}')"
+                                                title="View Details">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="btn btn-outline-warning" 
+                                                onclick="showRenameModal('{{ replica.replica_id }}', '{{ replica.replica_name }}')"
+                                                title="Rename">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-outline-danger" 
+                                                onclick="confirmDelete('{{ replica.replica_id }}', '{{ replica.replica_name }}')"
+                                                title="Delete">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No replicas found. Create your first replica to get started!</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Replica Modal -->
+    <div class="modal fade" id="createReplicaModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Replica</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createReplicaForm">
+                        <div class="mb-3">
+                            <label class="form-label">Replica Name *</label>
+                            <input type="text" class="form-control" id="replicaName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Training Video URL *</label>
+                            <input type="url" class="form-control" id="trainVideoUrl" required
+                                   placeholder="https://example.com/training-video.mp4">
+                            <small class="text-muted">Public URL to training video</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Consent Video URL</label>
+                            <input type="url" class="form-control" id="consentVideoUrl"
+                                   placeholder="https://example.com/consent-video.mp4">
+                            <small class="text-muted">Required for personal replicas</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Callback URL</label>
+                            <input type="url" class="form-control" id="callbackUrl"
+                                   placeholder="https://yourwebsite.com/webhook">
+                            <small class="text-muted">Optional webhook for training completion</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Model Version</label>
+                            <select class="form-control" id="modelName">
+                                <option value="phoenix-3" selected>phoenix-3 (Latest)</option>
+                                <option value="phoenix-2">phoenix-2 (Legacy)</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="createReplica()">
+                        <i class="fas fa-plus"></i> Create Replica
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rename Replica Modal -->
+    <div class="modal fade" id="renameReplicaModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Rename Replica</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="renameReplicaForm">
+                        <input type="hidden" id="renameReplicaId">
+                        <div class="mb-3">
+                            <label class="form-label">New Name</label>
+                            <input type="text" class="form-control" id="newReplicaName" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-warning" onclick="renameReplica()">
+                        <i class="fas fa-save"></i> Save Changes
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Replica Modal -->
+    <div class="modal fade" id="viewReplicaModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Replica Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="replicaDetailsContent">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Create Replica
+        async function createReplica() {
+            const name = document.getElementById('replicaName').value;
+            const trainUrl = document.getElementById('trainVideoUrl').value;
+            const consentUrl = document.getElementById('consentVideoUrl').value;
+            const callbackUrl = document.getElementById('callbackUrl').value;
+            const modelName = document.getElementById('modelName').value;
+
+            if (!name || !trainUrl) {
+                alert('Replica name and training video URL are required!');
+                return;
+            }
+
+            const payload = {
+                replica_name: name,
+                train_video_url: trainUrl,
+                model_name: modelName
+            };
+
+            if (consentUrl) payload.consent_video_url = consentUrl;
+            if (callbackUrl) payload.callback_url = callbackUrl;
+
+            try {
+                const response = await fetch('/api/v1/tavus/replicas', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('Replica created successfully! ID: ' + result.data.replica_id);
+                    location.reload();
+                } else {
+                    alert('Failed to create replica: ' + (result.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error creating replica: ' + error.message);
+            }
+        }
+
+        // View Replica
+        async function viewReplica(replicaId) {
+            const modal = new bootstrap.Modal(document.getElementById('viewReplicaModal'));
+            modal.show();
+
+            try {
+                const response = await fetch(`/api/v1/tavus/replicas/${replicaId}?verbose=true`);
+                const result = await response.json();
+
+                if (result.success) {
+                    const replica = result.data;
+                    document.getElementById('replicaDetailsContent').innerHTML = `
+                        <dl class="row">
+                            <dt class="col-sm-4">Replica ID:</dt>
+                            <dd class="col-sm-8"><code>${replica.replica_id}</code></dd>
+                            
+                            <dt class="col-sm-4">Name:</dt>
+                            <dd class="col-sm-8">${replica.replica_name}</dd>
+                            
+                            <dt class="col-sm-4">Status:</dt>
+                            <dd class="col-sm-8"><span class="badge bg-${replica.status === 'completed' ? 'success' : 'warning'}">${replica.status}</span></dd>
+                            
+                            <dt class="col-sm-4">Training Progress:</dt>
+                            <dd class="col-sm-8">${replica.training_progress || 'N/A'}</dd>
+                            
+                            <dt class="col-sm-4">Replica Type:</dt>
+                            <dd class="col-sm-8">${replica.replica_type || 'N/A'}</dd>
+                            
+                            <dt class="col-sm-4">Created:</dt>
+                            <dd class="col-sm-8">${replica.created_at || 'N/A'}</dd>
+                            
+                            <dt class="col-sm-4">Updated:</dt>
+                            <dd class="col-sm-8">${replica.updated_at || 'N/A'}</dd>
+                            
+                            ${replica.error_message ? `
+                            <dt class="col-sm-4">Error:</dt>
+                            <dd class="col-sm-8"><span class="text-danger">${replica.error_message}</span></dd>
+                            ` : ''}
+                        </dl>
+                    `;
+                } else {
+                    document.getElementById('replicaDetailsContent').innerHTML = 
+                        '<p class="text-danger">Failed to load replica details</p>';
+                }
+            } catch (error) {
+                document.getElementById('replicaDetailsContent').innerHTML = 
+                    '<p class="text-danger">Error: ' + error.message + '</p>';
+            }
+        }
+
+        // Show Rename Modal
+        function showRenameModal(replicaId, currentName) {
+            document.getElementById('renameReplicaId').value = replicaId;
+            document.getElementById('newReplicaName').value = currentName;
+            const modal = new bootstrap.Modal(document.getElementById('renameReplicaModal'));
+            modal.show();
+        }
+
+        // Rename Replica
+        async function renameReplica() {
+            const replicaId = document.getElementById('renameReplicaId').value;
+            const newName = document.getElementById('newReplicaName').value;
+
+            if (!newName) {
+                alert('Please enter a new name!');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/v1/tavus/replicas/${replicaId}`, {
+                    method: 'PATCH',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({replica_name: newName})
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('Replica renamed successfully!');
+                    location.reload();
+                } else {
+                    alert('Failed to rename replica: ' + (result.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error renaming replica: ' + error.message);
+            }
+        }
+
+        // Confirm Delete
+        function confirmDelete(replicaId, replicaName) {
+            if (confirm(`Are you sure you want to delete replica "${replicaName}"?\n\nThis will be a soft delete (replica can be recovered).`)) {
+                deleteReplica(replicaId, false);
+            }
+        }
+
+        // Delete Replica
+        async function deleteReplica(replicaId, hardDelete = false) {
+            try {
+                const response = await fetch(`/api/v1/tavus/replicas/${replicaId}?hard=${hardDelete}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('Replica deleted successfully!');
+                    location.reload();
+                } else {
+                    alert('Failed to delete replica: ' + (result.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error deleting replica: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
+
