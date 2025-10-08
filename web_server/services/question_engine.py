@@ -4,10 +4,10 @@ Question Engine - Dynamic question generation based on JD and Resume
 
 import openai
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import json
 from datetime import datetime
-from .static_data import get_static_job_description, get_static_resume_data
+from loguru import logger
 
 class QuestionEngine:
     def __init__(self):

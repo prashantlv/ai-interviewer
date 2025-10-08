@@ -251,21 +251,27 @@ async def get_interview_config(interview_id: str, scoring_level: Optional[str] =
             position = evaluation.get("position", "Unknown Position")
             company = evaluation.get("company", "Hire2Inspire Tech Solutions")
             
-            print(f"🔍 Loaded from DB - Candidate: {candidate_name}, Position: {position}")
+            # NEW: Get parsed JD and Resume from database
+            parsed_jd = evaluation.get("job_description_parsed", {})
+            parsed_resume = evaluation.get("candidate_resume_parsed", {})
             
-            # Build candidate info from database
+            print(f"🔍 Loaded from DB - Candidate: {candidate_name}, Position: {position}")
+            print(f"📄 Parsed JD skills: {', '.join(parsed_jd.get('skills_required', [])[:5])}")
+            print(f"👤 Parsed Resume skills: {', '.join(parsed_resume.get('skills', [])[:5])}")
+            
+            # Build candidate info from database (use parsed data if available)
             candidate_info = {
-                "name": candidate_name,
-                "email": candidate_email
+                "name": parsed_resume.get("name") or candidate_name,
+                "email": parsed_resume.get("email") or candidate_email
             }
             
-            # Build job description from database
-            job_description_data = {
+            # Build job description from database (use parsed data if available)
+            job_description_data = parsed_jd if parsed_jd else {
                 "title": position,
                 "company": company,
                 "location": "Remote / Bangalore, India",
                 "difficulty_level": "medium",
-                "required_skills": ["Python", "FastAPI", "MongoDB"]  # TODO: Get from DB
+                "skills_required": ["Python", "FastAPI", "MongoDB"]
             }
         else:
             # Fallback to JSON files for testing/development
@@ -285,13 +291,30 @@ async def get_interview_config(interview_id: str, scoring_level: Optional[str] =
         # For DB-loaded interviews, create compatible structure
         if interview and interview.get("evaluation"):
             job_description = job_description_data
-            candidate_resume = {
-                "personal_info": candidate_info,
-                "experience": {
-                    "current_role": evaluation.get("interview_type", "Developer"),
-                    "total_years": 6
+            # Use parsed resume data if available
+            if parsed_resume and parsed_resume.get("skills"):
+                candidate_resume = {
+                    "personal_info": candidate_info,
+                    "experience": {
+                        "current_role": parsed_resume.get("previous_roles", ["Developer"])[0] if parsed_resume.get("previous_roles") else "Developer",
+                        "total_years": parsed_resume.get("experience_years", 0)
+                    },
+                    "skills": parsed_resume.get("skills", []),
+                    "education": parsed_resume.get("education", []),
+                    "previous_roles": parsed_resume.get("previous_roles", [])
                 }
-            }
+            else:
+                # Fallback structure
+                candidate_resume = {
+                    "personal_info": candidate_info,
+                    "experience": {
+                        "current_role": evaluation.get("interview_type", "Developer"),
+                        "total_years": 0
+                    },
+                    "skills": [],
+                    "education": [],
+                    "previous_roles": []
+                }
         
         # Create interview config
         interview_config = {
