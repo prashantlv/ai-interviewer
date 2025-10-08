@@ -336,11 +336,15 @@ async def create_interview(
     interview_type: str = Form("technical"),
     scoring_level: str = Form("intermediate"),
     notes: str = Form(""),
-    auto_start: bool = Form(False)  # Sprint 1.2: Auto-start bot option
+    auto_start: bool = Form(False),  # Sprint 1.2: Auto-start bot option
+    job_description: str = Form(...),  # NEW: JD text for GPT parsing
+    candidate_resume: str = Form(...)  # NEW: Resume text for GPT parsing
 ):
     """Create a new interview"""
     import uuid
     from datetime import datetime
+    from services.resume_parser import ResumeParser
+    from services.jd_parser import JDParser
     
     # Validate db service is available
     if db is None:
@@ -348,6 +352,20 @@ async def create_interview(
     
     # Generate unique interview ID
     interview_id = f"interview_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
+    
+    # Parse JD and Resume using GPT
+    print(f"🤖 Parsing job description and resume with GPT...")
+    jd_parser = JDParser()
+    resume_parser = ResumeParser()
+    
+    # Parse in parallel for speed
+    parsed_jd = await jd_parser.parse_job_description(job_description, position)
+    parsed_resume = await resume_parser.parse_resume(candidate_resume)
+    
+    print(f"✅ JD parsed: {len(parsed_jd.get('skills_required', []))} skills required")
+    print(f"✅ Resume parsed: {len(parsed_resume.get('skills', []))} skills found, {parsed_resume.get('experience_years', 0)} years exp")
+    print(f"   Required skills: {', '.join(parsed_jd.get('skills_required', [])[:5])}")
+    print(f"   Candidate skills: {', '.join(parsed_resume.get('skills', [])[:5])}")
     
     # Create unique Daily.co room for this interview
     room_data = await daily_service.create_interview_room(
@@ -385,7 +403,12 @@ async def create_interview(
         "created_at": datetime.now(),
         "room_url": room_data["room_url"],
         "room_name": room_data["room_name"],
-        "candidate_join_url": candidate_join_url
+        "candidate_join_url": candidate_join_url,
+        # NEW: Store raw and parsed JD/Resume data
+        "job_description_raw": job_description,
+        "candidate_resume_raw": candidate_resume,
+        "job_description_parsed": parsed_jd,
+        "candidate_resume_parsed": parsed_resume
     }
     
     try:
@@ -415,7 +438,12 @@ async def create_interview(
                     "problem_solving": 0
                 },
                 "questions_asked": [],
-                "notes": notes
+                "notes": notes,
+                # NEW: Store parsed JD and Resume for question generation
+                "job_description_parsed": parsed_jd,
+                "candidate_resume_parsed": parsed_resume,
+                "job_description_raw": job_description,
+                "candidate_resume_raw": candidate_resume
             },
             status="scheduled"
         )

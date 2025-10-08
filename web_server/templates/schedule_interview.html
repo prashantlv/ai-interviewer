@@ -118,9 +118,60 @@
                             </div>
                         </div>
 
+                        <!-- Job Description & Resume (GPT Parsing) -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="job_description" class="form-label">
+                                    📄 Job Description *
+                                    <span class="badge bg-primary">AI Powered</span>
+                                </label>
+                                <textarea class="form-control font-monospace" id="job_description" name="job_description" 
+                                          rows="8" required
+                                          placeholder="Paste the job description here...
+
+We are looking for a Senior Python Developer with 5+ years of experience.
+
+Required Skills:
+- Python, Django, FastAPI
+- AWS, Docker, Kubernetes
+- PostgreSQL, Redis
+- REST APIs, Microservices
+
+Responsibilities:
+- Design and implement scalable backend systems
+- Lead technical discussions..."></textarea>
+                                <small class="text-muted">
+                                    <i class="bi bi-magic"></i> AI will extract: skills, experience level, responsibilities
+                                </small>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="candidate_resume" class="form-label">
+                                    👤 Candidate Resume/Profile *
+                                    <span class="badge bg-primary">AI Powered</span>
+                                </label>
+                                <textarea class="form-control font-monospace" id="candidate_resume" name="candidate_resume" 
+                                          rows="8" required
+                                          placeholder="Paste candidate's resume or LinkedIn profile here...
+
+John Doe
+john@example.com | +1-234-567-8900
+
+EXPERIENCE:
+Software Engineer at TechCorp (3 years)
+- Built REST APIs using Python/Django
+- Worked with AWS, Docker, PostgreSQL
+
+SKILLS:
+Python, Django, JavaScript, React, Docker, AWS..."></textarea>
+                                <small class="text-muted">
+                                    <i class="bi bi-magic"></i> AI will extract: skills, experience, education, previous roles
+                                </small>
+                            </div>
+                        </div>
+
                         <div class="mb-3">
-                            <label for="notes" class="form-label">Additional Notes</label>
-                            <textarea class="form-control" id="notes" name="notes" rows="3" 
+                            <label for="notes" class="form-label">Additional Notes (Optional)</label>
+                            <textarea class="form-control" id="notes" name="notes" rows="2" 
                                       placeholder="Any specific requirements or notes for this interview..."></textarea>
                         </div>
 
