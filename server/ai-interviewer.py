@@ -325,7 +325,7 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
         stt = OpenAISTTService(api_key=os.getenv("OPENAI_API_KEY"))
         tts = OpenAITTSService(
             api_key=os.getenv("OPENAI_API_KEY"),
-            voice="alloy",  # Options: alloy, echo, fable, onyx, nova, shimmer
+            voice="onyx",  # Options: alloy, echo, fable, onyx, nova, shimmer (onyx is deep male)
         )
         llm = OpenAILLMService(
             api_key=os.getenv("OPENAI_API_KEY"),
