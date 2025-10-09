@@ -134,6 +134,43 @@ ai-interviewer/
 | Python | 3.11+ | 3.11+ | Runtime |
 
 ---
+### 2.5 Real-time Interview Pipeline (As Implemented)
+
+This section documents the exact, production-tested pipeline currently used during a live interview. It clarifies the roles of Daily.co, Tavus, OpenAI services, and the current (non)role of ElevenLabs.
+
+```
+Candidate Browser (Daily.co) ── WebRTC ─▶ Daily Room (hi2inspire.daily.co)
+                                                │
+                                                ▼
+                                     Bot (Pipecat Pipeline)
+                                     ─────────────────────────────────────────
+                                     1) Audio In: DailyTransport.input()
+                                     2) STT: OpenAI Whisper → Text
+                                     3) LLM: OpenAI GPT-4o-mini → Response Text
+                                     4) TTS: OpenAI TTS (voice="onyx") → Audio
+                                     5) Video: TavusVideoService (lip‑sync) → Frames
+                                     6) Output: DailyTransport.output() → Candidate sees/hears bot
+```
+
+- Meeting room service: Daily.co (room creation and tokens managed by `web_server/services/daily_service.py`).
+- Video avatar: Tavus replica via `TavusVideoService` for video frames only (lip‑sync from our audio).
+- Audio stack:
+  - STT: OpenAI Whisper
+  - LLM: OpenAI GPT‑4o‑mini
+  - TTS: OpenAI TTS with `voice="onyx"` (male; chosen to match Tavus male avatar)
+- Transport: DailyTransport streams audio/video into the Daily.co room in real‑time.
+
+Important clarifications:
+- We are NOT using Tavus Conversational API. Tavus is used strictly for video rendering (replica lip‑sync) from our own audio.
+- Tavus billing impact is for video rendering/streaming minutes, not “conversational minutes.”
+- ElevenLabs is NOT currently used in the pipeline. It’s optional for future TTS; today we use OpenAI TTS.
+
+Implications:
+- Maximum control and modularity (we own STT/LLM/TTS choices).
+- Predictable costs: OpenAI (STT/LLM/TTS) + Tavus (video frames) + Daily (room/recording).
+- Easy to swap voice (OpenAI TTS voice) without touching Tavus replicas.
+
+---
 
 ## 3. Identified Issues
 
