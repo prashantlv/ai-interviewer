@@ -571,7 +571,6 @@ async def analytics_page(
     """Analytics page with charts and insights"""
     from datetime import datetime, timedelta
     from collections import defaultdict
-    import httpx
     
     # Set default date range (last 30 days)
     if not date_to:
@@ -779,7 +778,6 @@ async def system_health_page(
     """System health monitoring page"""
     import sys
     import os
-    import httpx
     from datetime import datetime
     
     # Check database status

@@ -10,14 +10,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### To Do
-- Database dependency injection fix (Sprint 1.3)
 - API versioning (Sprint 1.4)
 - Frontend separation (React/Next.js)
 - Authentication & authorization
 
 ### Recently Completed
+- ✅ Database dependency injection improvements (Sprint 1.3 - Oct 9, 2025)
 - ✅ Automated bot job queue system (Sprint 1.2 - Oct 6, 2025)
 - ✅ Real LLM-based scoring engine (Sprint 1.1 - Oct 6, 2025)
+
+---
+
+## [0.1.3] - 2025-10-09
+
+### Sprint 1.3: Database Dependency Injection
+
+**Branch:** `feature/sprint-1.3-database-di`
+
+### Added
+- ✅ MongoDB connection pooling with configurable pool size
+  - Min pool size: 10 connections (configurable via `MONGODB_MIN_POOL_SIZE`)
+  - Max pool size: 100 connections (configurable via `MONGODB_MAX_POOL_SIZE`)
+  - Max idle time: 45 seconds (configurable via `MONGODB_MAX_IDLE_TIME_MS`)
+- ✅ Enhanced health check endpoint with detailed statistics
+  - `/health` - Basic health check
+  - `/api/v1/health` - Detailed health with connection pool stats, database metrics
+- ✅ Proper dependency injection in all routers
+  - `interviews.py` - Now uses `DbServiceDep` instead of mock data
+  - `feedback.py` - Now uses `DbServiceDep` for data persistence
+  - All routers properly use FastAPI `Depends()` pattern
+
+### Changed
+- 🔄 Database service health check now returns detailed metrics
+  - Server version
+  - Connection pool configuration
+  - Database statistics (collections, size, indexes)
+- 🔄 Removed unused `httpx` imports from dashboard router
+- 🔄 Health endpoints now use proper dependency injection
+
+### Improved
+- ⚡ Better connection pooling for MongoDB (10-100 connections)
+- ⚡ Timeout configurations for better reliability
+  - Server selection: 5 seconds
+  - Connection timeout: 10 seconds
+  - Socket timeout: 20 seconds
+- 📊 Comprehensive health monitoring with service status
+- 🏗️ Cleaner architecture following FastAPI best practices
+
+### Technical Details
+- All routers now use `DbServiceDep` from `dependencies.py`
+- Database connection pooling configured via environment variables
+- Health check returns structured JSON with service details
+- Removed all internal HTTP calls (previous workaround)
+
+### Files Modified
+- `web_server/services/database.py` - Added connection pooling and enhanced health check
+- `web_server/routers/dashboard.py` - Removed unused httpx imports
+- `web_server/routers/interviews.py` - Migrated from mock data to database service
+- `web_server/routers/feedback.py` - Added database integration
+- `web_server/main.py` - Enhanced health endpoints with DI
+- `web_server/dependencies.py` - (Already had proper DI setup)
+
+### Migration Notes
+- Legacy mock endpoints kept for backward compatibility:
+  - `/api/interviews/mock` - Mock interviews endpoint
+  - `/api/interviews/mock/{id}` - Mock interview details
+- Set environment variables for connection pool tuning:
+  ```env
+  MONGODB_MAX_POOL_SIZE=100
+  MONGODB_MIN_POOL_SIZE=10
+  MONGODB_MAX_IDLE_TIME_MS=45000
+  ```
 
 ---
 

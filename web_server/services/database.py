@@ -6,6 +6,7 @@ PLACEHOLDER: Waiting for ATS MongoDB schema from user
 from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional, Dict, Any, List
 import os
+import json
 from datetime import datetime
 
 class DatabaseService:
@@ -17,16 +18,30 @@ class DatabaseService:
         self.mongodb_url = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
         self.database_name = os.getenv("DATABASE_NAME", "ai_interviewer")
         
+        # Connection pool settings
+        self.max_pool_size = int(os.getenv("MONGODB_MAX_POOL_SIZE", "100"))
+        self.min_pool_size = int(os.getenv("MONGODB_MIN_POOL_SIZE", "10"))
+        self.max_idle_time_ms = int(os.getenv("MONGODB_MAX_IDLE_TIME_MS", "45000"))
+        
     async def connect(self):
-        """Connect to MongoDB"""
+        """Connect to MongoDB with connection pooling"""
         try:
-            # Connect to real MongoDB
-            self.client = AsyncIOMotorClient(self.mongodb_url)
+            # Connect to real MongoDB with connection pooling
+            self.client = AsyncIOMotorClient(
+                self.mongodb_url,
+                maxPoolSize=self.max_pool_size,
+                minPoolSize=self.min_pool_size,
+                maxIdleTimeMS=self.max_idle_time_ms,
+                serverSelectionTimeoutMS=5000,  # 5 second timeout
+                connectTimeoutMS=10000,  # 10 second connection timeout
+                socketTimeoutMS=20000,   # 20 second socket timeout
+            )
             self.database = self.client[self.database_name]
             
             # Test connection
             await self.client.admin.command('ping')
             print(f"✅ Connected to MongoDB: {self.database_name}")
+            print(f"   Pool size: {self.min_pool_size}-{self.max_pool_size} connections")
             
             # Initialize collections and indexes
             await self._initialize_collections()
@@ -47,16 +62,45 @@ class DatabaseService:
         else:
             print("🔌 Mock mode shutdown complete")
     
-    async def health_check(self) -> str:
-        """Check database health"""
+    async def health_check(self) -> Dict[str, Any]:
+        """Check database health with detailed statistics"""
         if self.client:
             try:
+                # Ping database
                 await self.client.admin.command('ping')
-                return "connected"
-            except:
-                return "disconnected"
+                
+                # Get server info
+                server_info = await self.client.server_info()
+                
+                # Get database stats
+                db_stats = await self.database.command("dbStats")
+                
+                return {
+                    "status": "connected",
+                    "database": self.database_name,
+                    "server_version": server_info.get("version", "unknown"),
+                    "connection_pool": {
+                        "max_pool_size": self.max_pool_size,
+                        "min_pool_size": self.min_pool_size,
+                        "max_idle_time_ms": self.max_idle_time_ms
+                    },
+                    "database_stats": {
+                        "collections": db_stats.get("collections", 0),
+                        "data_size": db_stats.get("dataSize", 0),
+                        "storage_size": db_stats.get("storageSize", 0),
+                        "indexes": db_stats.get("indexes", 0)
+                    }
+                }
+            except Exception as e:
+                return {
+                    "status": "disconnected",
+                    "error": str(e)
+                }
         else:
-            return "mock_mode"
+            return {
+                "status": "mock_mode",
+                "message": "Running without database connection"
+            }
     
     async def _initialize_collections(self):
         """Initialize MongoDB collections and indexes"""
