@@ -10,14 +10,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### To Do
-- API versioning (Sprint 1.4)
 - Frontend separation (React/Next.js)
 - Authentication & authorization
 
 ### Recently Completed
+- ✅ API versioning complete (Sprint 1.4 - Oct 9, 2025)
 - ✅ Database dependency injection improvements (Sprint 1.3 - Oct 9, 2025)
 - ✅ Automated bot job queue system (Sprint 1.2 - Oct 6, 2025)
 - ✅ Real LLM-based scoring engine (Sprint 1.1 - Oct 6, 2025)
+
+---
+
+## [0.1.4] - 2025-10-09
+
+### Sprint 1.4: API Versioning
+
+**Branch:** `feature/sprint-1.4-api-versioning`
+
+### Added
+- ✅ Complete API versioning under `/api/v1/` namespace
+  - All 37 API endpoints now properly versioned
+  - Scoring configs: `/api/v1/scoring-configs/*`
+  - Dashboard API: `/api/v1/dashboard/interviews`
+  - Tavus API: `/api/v1/tavus/*` (already had versioning)
+
+### Changed
+- 🔄 Moved scoring configuration endpoints to `/api/v1/scoring-configs/*`
+- 🔄 Moved dashboard API to `/api/v1/dashboard/interviews`
+- 🔄 All API routes now follow `/api/v1/` pattern
+
+### Benefits
+- ✅ Future-proof API structure
+- ✅ Can introduce `/api/v2/` without breaking v1 clients
+- ✅ Production-ready API versioning
+- ✅ Industry standard REST API structure
+
+### API Routes Summary
+**Total API Endpoints:** 37 (all under `/api/v1/`)
+- Interviews: 9 endpoints
+- Feedback: 5 endpoints  
+- Bots: 6 endpoints
+- Tavus: 6 endpoints
+- Scoring Configs: 6 endpoints
+- Bot Integration: 2 endpoints
+- Health: 2 endpoints
+- Dashboard: 1 endpoint
+
+### Files Modified
+- `web_server/main.py` - Updated all unversioned endpoints to `/api/v1/`
 
 ---
 

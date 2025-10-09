@@ -85,6 +85,8 @@ app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["feedback-v
 app.include_router(bots.router, prefix="/api/v1/bots", tags=["bots-v1"])
 
 # Tavus routes (includes both dashboard and API)
+# Dashboard: /dashboard/tavus-replicas
+# API: /api/v1/tavus/* (already versioned in router)
 app.include_router(tavus.router, tags=["tavus"])
 
 @app.get("/", response_class=HTMLResponse)
@@ -193,7 +195,7 @@ async def debug_dashboard_test(request: Request):
     except Exception as e:
         return {"error": str(e)}
 
-@app.get("/api/dashboard/interviews")
+@app.get("/api/v1/dashboard/interviews")
 async def get_dashboard_interviews(
     request: Request,
     status: Optional[str] = None,
@@ -400,7 +402,7 @@ async def get_interview_config(interview_id: str, scoring_level: Optional[str] =
 # SCORING CONFIGURATION API ENDPOINTS
 # ============================================================================
 
-@app.get("/api/scoring-configs")
+@app.get("/api/v1/scoring-configs")
 async def get_scoring_configs():
     """Get all active scoring configurations"""
     try:
@@ -413,7 +415,7 @@ async def get_scoring_configs():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get scoring configs: {str(e)}")
 
-@app.get("/api/scoring-configs/default")
+@app.get("/api/v1/scoring-configs/default")
 async def get_default_scoring_config():
     """Get the default scoring configuration"""
     try:
@@ -430,7 +432,7 @@ async def get_default_scoring_config():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get default config: {str(e)}")
 
-@app.get("/api/scoring-configs/level/{level}")
+@app.get("/api/v1/scoring-configs/level/{level}")
 async def get_scoring_config_by_level(level: str):
     """Get scoring configuration by level (easy/intermediate/strict)"""
     try:
@@ -450,7 +452,7 @@ async def get_scoring_config_by_level(level: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get config: {str(e)}")
 
-@app.get("/api/scoring-configs/{config_id}")
+@app.get("/api/v1/scoring-configs/{config_id}")
 async def get_scoring_config_by_id(config_id: str):
     """Get scoring configuration by ID"""
     try:
@@ -467,7 +469,7 @@ async def get_scoring_config_by_id(config_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get config: {str(e)}")
 
-@app.put("/api/scoring-configs/{config_id}")
+@app.put("/api/v1/scoring-configs/{config_id}")
 async def update_scoring_config(config_id: str, updates: Dict[str, Any]):
     """Update a scoring configuration"""
     try:
@@ -484,7 +486,7 @@ async def update_scoring_config(config_id: str, updates: Dict[str, Any]):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update config: {str(e)}")
 
-@app.post("/api/scoring-configs")
+@app.post("/api/v1/scoring-configs")
 async def create_scoring_config(config_data: Dict[str, Any]):
     """Create a new custom scoring configuration"""
     try:
