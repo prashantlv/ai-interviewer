@@ -8,7 +8,7 @@ Handles dashboard, interview management, and reporting
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, Request, Form, HTTPException
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -94,19 +94,56 @@ async def root(request: Request):
 
 @app.get("/health")
 async def health_check(request: Request):
-    """Health check endpoint"""
-    db = request.app.state.db_service
-    bot_manager = request.app.state.bot_manager
-    question_eng = request.app.state.question_engine
-    scoring_eng = request.app.state.scoring_engine
+    """Health check endpoint - Basic status"""
+    from dependencies import DbServiceDep, BotManagerDep
+    db: DbServiceDep = request.app.state.db_service
+    bot_manager: BotManagerDep = request.app.state.bot_manager
+    
+    db_health = await db.health_check()
     return {
-        "status": "healthy",
+        "status": "healthy" if db_health.get("status") == "connected" else "degraded",
+        "timestamp": datetime.now().isoformat(),
+        "database": db_health.get("status", "unknown"),
+        "bot_queue": bot_manager.health_check().get("status", "unknown")
+    }
+
+@app.get("/api/v1/health")
+async def health_check_detailed(request: Request):
+    """Detailed health check endpoint with full statistics"""
+    from dependencies import DbServiceDep, BotManagerDep, QuestionEngineDep, ScoringEngineDep
+    
+    db: DbServiceDep = request.app.state.db_service
+    bot_manager: BotManagerDep = request.app.state.bot_manager
+    question_eng: QuestionEngineDep = request.app.state.question_engine
+    scoring_eng: ScoringEngineDep = request.app.state.scoring_engine
+    
+    # Get detailed health for each service
+    db_health = await db.health_check()
+    bot_health = bot_manager.health_check()
+    question_health = question_eng.health_check()
+    scoring_health = scoring_eng.health_check()
+    
+    # Calculate overall status
+    services_up = sum([
+        db_health.get("status") == "connected",
+        bot_health.get("status") == "operational",
+        question_health.get("status") == "operational",
+        scoring_health.get("status") == "operational"
+    ])
+    total_services = 4
+    health_percentage = (services_up / total_services) * 100
+    
+    overall_status = "healthy" if health_percentage >= 75 else "degraded" if health_percentage >= 50 else "critical"
+    
+    return {
+        "status": overall_status,
+        "health_percentage": health_percentage,
         "timestamp": datetime.now().isoformat(),
         "services": {
-            "database": await db.health_check(),
-            "question_engine": question_eng.health_check(),
-            "scoring_engine": scoring_eng.health_check(),
-            "bot_queue": bot_manager.health_check()
+            "database": db_health,
+            "bot_queue": bot_health,
+            "question_engine": question_health,
+            "scoring_engine": scoring_health
         }
     }
 

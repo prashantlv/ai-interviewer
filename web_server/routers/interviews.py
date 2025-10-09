@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+from dependencies import DbServiceDep
 
 router = APIRouter()
 
@@ -37,13 +38,47 @@ class InterviewUpdate(BaseModel):
 
 @router.get("/", response_model=List[InterviewResponse])
 async def get_interviews(
+    db: DbServiceDep,
     status: Optional[str] = Query(None, description="Filter by status"),
     limit: int = Query(50, description="Number of interviews to return"),
     offset: int = Query(0, description="Number of interviews to skip")
 ):
     """Get list of interviews with optional filtering"""
-    # TODO: Implement database query
-    # For now, return mock data
+    try:
+        # Use database service with dependency injection
+        interviews = await db.get_interviews(status=status, limit=limit, offset=offset)
+        
+        # If no interviews found, return empty list (not mock data)
+        if not interviews:
+            return []
+        
+        # Format for API response
+        formatted_interviews = []
+        for interview in interviews:
+            formatted_interviews.append({
+                "id": interview.get("id", "unknown"),
+                "candidate_name": interview.get("candidate_name", "Unknown"),
+                "candidate_email": interview.get("candidate_email", "unknown@example.com"),
+                "position": interview.get("position", "Unknown Position"),
+                "status": interview.get("status", "unknown"),
+                "score": interview.get("score"),
+                "scheduled_date": interview.get("scheduled_date", datetime.now()),
+                "created_at": interview.get("created_at", datetime.now())
+            })
+        
+        return formatted_interviews
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve interviews: {str(e)}")
+
+# Legacy mock endpoint (kept for backward compatibility during migration)
+@router.get("/mock", response_model=List[InterviewResponse])
+async def get_interviews_mock(
+    status: Optional[str] = Query(None, description="Filter by status"),
+    limit: int = Query(50, description="Number of interviews to return"),
+    offset: int = Query(0, description="Number of interviews to skip")
+):
+    """Get mock interviews (deprecated - use / endpoint instead)"""
     mock_interviews = [
         {
             "id": "int_001",
@@ -75,33 +110,84 @@ async def get_interviews(
     return mock_interviews[offset:offset + limit]
 
 @router.post("/", response_model=InterviewResponse)
-async def create_interview(interview: InterviewCreate):
+async def create_interview(interview: InterviewCreate, db: DbServiceDep):
     """Create a new interview"""
-    # TODO: Implement database creation
-    # TODO: Generate questions based on JD and resume
-    # TODO: Send email notification to candidate
-    
-    # Mock creation
-    interview_id = f"int_{hash(interview.candidate_email) % 100000:05d}"
-    
-    response_data = {
-        "id": interview_id,
-        "candidate_name": interview.candidate_name,
-        "candidate_email": interview.candidate_email,
-        "position": interview.position,
-        "status": "scheduled",
-        "score": None,
-        "scheduled_date": interview.scheduled_date,
-        "created_at": datetime.now()
-    }
-    
-    return response_data
+    try:
+        # Create interview data dict
+        interview_data = {
+            "candidate_name": interview.candidate_name,
+            "candidate_email": interview.candidate_email,
+            "position": interview.position,
+            "job_description_id": interview.job_description_id,
+            "resume_data_id": interview.resume_data_id,
+            "scheduled_date": interview.scheduled_date,
+            "config": interview.config or {},
+            "status": "scheduled",
+            "created_at": datetime.now()
+        }
+        
+        # Create in database
+        interview_id = await db.create_interview(interview_data)
+        
+        # TODO: Generate questions based on JD and resume
+        # TODO: Send email notification to candidate
+        
+        response_data = {
+            "id": interview_id,
+            "candidate_name": interview.candidate_name,
+            "candidate_email": interview.candidate_email,
+            "position": interview.position,
+            "status": "scheduled",
+            "score": None,
+            "scheduled_date": interview.scheduled_date,
+            "created_at": datetime.now()
+        }
+        
+        return response_data
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create interview: {str(e)}")
 
 @router.get("/{interview_id}")
-async def get_interview(interview_id: str):
+async def get_interview(interview_id: str, db: DbServiceDep):
     """Get detailed interview information"""
-    # TODO: Implement database query
-    # Mock detailed interview data
+    try:
+        # Get from database first
+        interview = await db.get_interview(interview_id)
+        
+        if not interview:
+            raise HTTPException(status_code=404, detail="Interview not found")
+        
+        # Get result data if available
+        result = await db.get_interview_result(interview_id)
+        
+        # Combine interview and result data
+        response = {
+            "id": interview_id,
+            "status": interview.get("status", "unknown"),
+            "job_description": interview.get("job_description", {}),
+            "resume_data": interview.get("resume_data", {}),
+            "config": interview.get("config", {})
+        }
+        
+        if result:
+            response.update({
+                "transcript": result.get("transcript", ""),
+                "evaluation": result.get("evaluation", {}),
+                "completed_at": result.get("completed_at")
+            })
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve interview: {str(e)}")
+
+# Legacy mock endpoint for testing
+@router.get("/mock/{interview_id}")
+async def get_interview_mock(interview_id: str):
+    """Get mock interview (deprecated)"""
     if interview_id == "int_001":
         return {
             "id": interview_id,

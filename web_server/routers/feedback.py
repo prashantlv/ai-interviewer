@@ -2,10 +2,11 @@
 Feedback Router - Recruiter feedback collection for AI tuning
 """
 
-from fastapi import APIRouter, Form, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Dict, Any, List
+from typing import Dict, Any
 from datetime import datetime
+from dependencies import DbServiceDep
 
 router = APIRouter()
 
@@ -26,28 +27,57 @@ class TuningParameters(BaseModel):
     scoring_weights: Dict[str, float]
 
 @router.post("/submit")
-async def submit_feedback(feedback: FeedbackSubmission):
+async def submit_feedback(feedback: FeedbackSubmission, db: DbServiceDep):
     """Submit recruiter feedback for an interview"""
-    # TODO: Store feedback in database
-    # TODO: Update AI tuning parameters based on feedback
-    
-    feedback_id = f"fb_{hash(feedback.interview_id + str(datetime.now().timestamp())) % 100000:05d}"
-    
-    # Process feedback for AI tuning
-    tuning_suggestions = await process_feedback_for_tuning(feedback)
-    
-    return {
-        "success": True,
-        "feedback_id": feedback_id,
-        "interview_id": feedback.interview_id,
-        "tuning_suggestions": tuning_suggestions
-    }
+    try:
+        # Store feedback in database
+        feedback_data = {
+            "interview_id": feedback.interview_id,
+            "recruiter_id": feedback.recruiter_id,
+            "overall_rating": feedback.overall_rating,
+            "ai_accuracy": feedback.ai_accuracy,
+            "question_quality": feedback.question_quality,
+            "scoring_accuracy": feedback.scoring_accuracy,
+            "suggested_improvements": feedback.suggested_improvements,
+            "specific_feedback": feedback.specific_feedback,
+            "created_at": datetime.now()
+        }
+        
+        feedback_id = await db.store_feedback(feedback_data)
+        
+        # Process feedback for AI tuning
+        tuning_suggestions = await process_feedback_for_tuning(feedback)
+        
+        return {
+            "success": True,
+            "feedback_id": feedback_id,
+            "interview_id": feedback.interview_id,
+            "tuning_suggestions": tuning_suggestions
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to submit feedback: {str(e)}")
 
 @router.get("/form/{interview_id}")
-async def get_feedback_form_data(interview_id: str):
+async def get_feedback_form_data(interview_id: str, db: DbServiceDep):
     """Get data needed for feedback form"""
-    # TODO: Get interview details from database
-    # Mock interview data
+    try:
+        # Get interview details from database
+        interview = await db.get_interview(interview_id)
+        result = await db.get_interview_result(interview_id)
+        
+        if not interview:
+            raise HTTPException(status_code=404, detail="Interview not found")
+        
+        return {
+            "interview_id": interview_id,
+            "interview": interview,
+            "result": result or {}
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Fallback to mock data for development
+        print(f"⚠️ Failed to get interview data: {e}, using mock data")
     interview_data = {
         "id": interview_id,
         "candidate_name": "John Doe",
