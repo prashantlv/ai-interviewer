@@ -173,27 +173,54 @@ class DatabaseService:
         status: str
     ) -> bool:
         """Update interview with results"""
+        # Check if this interview already exists
+        existing_interview = None
+        if self.database is not None:
+            try:
+                existing_interview = await self.database.interview_results.find_one(
+                    {"interview_id": interview_id}
+                )
+            except Exception as e:
+                print(f"⚠️ Error checking existing interview: {e}")
+        
+        # Build result data
         result_data = {
             "interview_id": interview_id,
             "transcript": transcript,
             "evaluation": evaluation,
             "status": status,
-            "completed_at": datetime.now(),
-            "created_at": datetime.now()
         }
+        
+        # Set created_at only if this is a new interview
+        if existing_interview:
+            # Preserve existing created_at
+            result_data["created_at"] = existing_interview.get("created_at", datetime.now())
+        else:
+            # New interview - set created_at
+            result_data["created_at"] = datetime.now()
+        
+        # Set completed_at only if status is "completed"
+        if status == "completed":
+            result_data["completed_at"] = datetime.now()
+        elif existing_interview:
+            # Preserve existing completed_at if interview isn't being marked as completed
+            if "completed_at" in existing_interview:
+                result_data["completed_at"] = existing_interview["completed_at"]
         
         if self.database is not None:
             try:
-                # Store in MongoDB
+                # Store in MongoDB using upsert
                 await self.database.interview_results.replace_one(
                     {"interview_id": interview_id},
                     result_data,
                     upsert=True
                 )
-                print(f"✅ Stored interview result: {interview_id}")
+                print(f"✅ Stored interview result: {interview_id} (status: {status})")
                 return True
             except Exception as e:
                 print(f"❌ Error storing interview result: {e}")
+                import traceback
+                traceback.print_exc()
         
         # Fallback: return success even in mock mode
         return True
@@ -229,7 +256,12 @@ class DatabaseService:
                 if status:
                     query["status"] = status
                 
-                cursor = self.database.interview_results.find(query).limit(limit).skip(offset)
+                # Sort by date (most recent first) BEFORE pagination
+                # Use completed_at if available, otherwise created_at
+                cursor = self.database.interview_results.find(query).sort(
+                    [("completed_at", -1), ("created_at", -1)]
+                ).limit(limit).skip(offset)
+                
                 results = []
                 
                 async for doc in cursor:
@@ -239,21 +271,30 @@ class DatabaseService:
                     # Extract candidate info from evaluation
                     evaluation = doc.get("evaluation", {})
                     
-                    date_value = doc.get("completed_at", doc.get("created_at"))
+                    # Get date value - prefer completed_at, fallback to created_at
+                    date_value = doc.get("completed_at") or doc.get("created_at")
+                    
+                    # Handle datetime objects
+                    if date_value and hasattr(date_value, 'isoformat'):
+                        date_value = date_value.isoformat()
+                    
                     results.append({
                         "id": doc.get("interview_id", "unknown"),
                         "candidate_name": evaluation.get("candidate_name", "Unknown"),
+                        "candidate_email": evaluation.get("candidate_email", "N/A"),
                         "position": evaluation.get("position", "Unknown Position"),
                         "status": doc.get("status", "unknown"),
                         "score": evaluation.get("overall_score", 0),
                         "created_at": date_value,
                         "scheduled_date": date_value,  # Alias for compatibility
-                        "transcript_available": bool(doc.get("transcript"))
+                        "transcript_available": bool(doc.get("transcript") and doc.get("transcript") != "Interview scheduled - waiting for completion")
                     })
                 
                 return results
             except Exception as e:
                 print(f"❌ Error retrieving interviews: {e}")
+                import traceback
+                traceback.print_exc()
         
         # Fallback: Return empty list if database unavailable
         return []

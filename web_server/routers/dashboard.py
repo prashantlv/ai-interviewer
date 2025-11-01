@@ -26,11 +26,12 @@ async def dashboard_home(
         
         # Use dependency-injected db service
         if db and db.database is not None:
-            interviews = await db.get_interviews()
+            # Get ALL interviews for dashboard stats (use large limit)
+            interviews = await db.get_interviews(limit=1000, offset=0)
         else:
             print("⚠️ Database service not available")
             interviews = []
-        
+    
         # Sort interviews by date (most recent first) - FIX #1
         # Handle both datetime objects and strings
         def get_sort_date(interview):
@@ -150,14 +151,18 @@ async def interviews_page(
     all_interviews = []  # Initialize early to avoid NameError
     try:
         if db and db.database is not None:
-            all_interviews = await db.get_interviews()
+            # Get ALL interviews (use large limit to get everything)
+            # The database query is already sorted, so we get them in order
+            all_interviews = await db.get_interviews(limit=1000, offset=0)
             print(f"🔍 DEBUG: Retrieved {len(all_interviews)} interviews from database")
         else:
             print("⚠️ Database service not available for interviews page")
             all_interviews = []
-        
-        # Sort by date - most recent first - FIX #2
-        all_interviews.sort(key=lambda x: x.get("scheduled_date", ""), reverse=True)
+    
+        # Sort by date - most recent first (already sorted by DB, but ensure)
+        all_interviews.sort(key=lambda x: (
+            x.get("scheduled_date") or x.get("created_at") or ""
+        ), reverse=True)
         
         # Apply pagination
         start_idx = offset
