@@ -8,6 +8,7 @@ Sprint 1.2 - Job Queue System
 """
 
 import os
+import sys
 import subprocess
 import time
 from typing import Dict, Any, Optional
@@ -137,13 +138,41 @@ def _build_bot_command(interview_id: str, room_url: str = None) -> list:
     # Path to the bot script
     bot_script = "ai-interviewer.py"
     
-    # Use conda python explicitly
-    # Get python path from conda environment
-    conda_python = os.path.expanduser("~/miniconda3/envs/pipecat-env/bin/python")
+    # Determine Python executable to use
+    # In Docker, use the current Python interpreter (sys.executable)
+    # In local dev, try conda environment first, then fall back to sys.executable
+    python_executable = None
+    
+    # Check if we're in Docker (common indicators)
+    is_docker = False
+    if os.path.exists("/.dockerenv"):
+        is_docker = True
+    elif os.path.exists("/proc/self/cgroup"):
+        try:
+            with open("/proc/self/cgroup", "r") as f:
+                if "docker" in f.read():
+                    is_docker = True
+        except:
+            pass
+    
+    if is_docker:
+        # In Docker, use the current Python interpreter
+        python_executable = sys.executable
+        logger.info(f"🐳 Docker detected, using: {python_executable}")
+    else:
+        # Local development: try conda environment first
+        conda_python = os.path.expanduser("~/miniconda3/envs/pipecat-env/bin/python")
+        if os.path.exists(conda_python):
+            python_executable = conda_python
+            logger.info(f"💻 Using conda environment: {python_executable}")
+        else:
+            # Fall back to current Python
+            python_executable = sys.executable
+            logger.info(f"💻 Using system Python: {python_executable}")
     
     # Build command
     command = [
-        conda_python,  # Use conda env python explicitly
+        python_executable,
         bot_script,
     ]
     

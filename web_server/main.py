@@ -45,7 +45,23 @@ async def lifespan(app: FastAPI):
     await scoring_config_service.initialize_default_configs()
     
     # Initialize bot manager with Redis
-    initialize_bot_manager()
+    # Parse REDIS_URL if provided, otherwise use defaults
+    redis_url = os.getenv("REDIS_URL", "")
+    if redis_url:
+        # Parse redis://host:port or redis://host:port/db
+        import re
+        match = re.match(r"redis://([^:/]+)(?::(\d+))?(?:/(\d+))?", redis_url)
+        if match:
+            redis_host = match.group(1)
+            redis_port = int(match.group(2)) if match.group(2) else 6379
+            initialize_bot_manager(redis_host=redis_host, redis_port=redis_port)
+        else:
+            initialize_bot_manager()
+    else:
+        # Try individual env vars
+        redis_host = os.getenv("REDIS_HOST", "localhost")
+        redis_port = int(os.getenv("REDIS_PORT", "6379"))
+        initialize_bot_manager(redis_host=redis_host, redis_port=redis_port)
     
     # Store services in app state for dependency injection
     app.state.db_service = db_service

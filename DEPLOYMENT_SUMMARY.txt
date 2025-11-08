@@ -1,0 +1,115 @@
+================================================================================
+AI INTERVIEWER - DEPLOYMENT SUMMARY FOR DEPLOYMENT TEAM
+================================================================================
+
+APPLICATION NAME: AI Interviewer
+APPLICATION TYPE: Python FastAPI Web Application
+
+================================================================================
+ENDPOINTS
+================================================================================
+
+Main Application: http://<host>:8009/dashboard
+API Documentation: http://<host>:8009/docs
+Health Check: http://<host>:8009/health
+API Base: http://<host>:8009/api/v1/
+
+PORT: 8009 (HTTP)
+
+================================================================================
+DOCKER IMAGES
+================================================================================
+
+1. Web Server (Dockerfile.web)
+   - Image: ai-interviewer-web:latest
+   - Port: 8009
+   - Health Check: GET /health
+
+2. Worker (Dockerfile.worker)  
+   - Image: ai-interviewer-worker:latest
+   - No exposed ports (background processor)
+   - Run 2-3 instances for better throughput
+
+================================================================================
+REQUIRED ENVIRONMENT VARIABLES
+================================================================================
+
+MONGODB_URL          - MongoDB connection string
+DATABASE_NAME        - Database name (default: ai_interviewer)
+REDIS_URL            - Redis connection string
+OPENAI_API_KEY       - OpenAI API key
+DAILY_API_KEY        - Daily.co API key
+
+OPTIONAL:
+VIDEO_SERVICE        - tavus, heygen, or none (default: none)
+TAVUS_API_KEY        - If using Tavus video service
+TAVUS_REPLICA_ID     - If using Tavus video service
+HEYGEN_API_KEY       - If using HeyGen video service
+HEYGEN_AVATAR_ID     - If using HeyGen video service
+
+================================================================================
+EXTERNAL DEPENDENCIES
+================================================================================
+
+1. MongoDB - Database (can use MongoDB Atlas)
+2. Redis - Job queue (required for background workers)
+
+================================================================================
+DEPLOYMENT COMMANDS
+================================================================================
+
+# Build images
+docker build -f Dockerfile.web -t ai-interviewer-web:latest .
+docker build -f Dockerfile.worker -t ai-interviewer-worker:latest .
+
+# Run web server
+docker run -d --name ai-interviewer-web -p 8009:8009 \
+  -e MONGODB_URL="..." \
+  -e DATABASE_NAME="ai_interviewer" \
+  -e REDIS_URL="..." \
+  -e OPENAI_API_KEY="..." \
+  -e DAILY_API_KEY="..." \
+  ai-interviewer-web:latest
+
+# Run worker (run 2-3 instances)
+docker run -d --name ai-interviewer-worker-1 \
+  -e MONGODB_URL="..." \
+  -e REDIS_URL="..." \
+  -e WEB_SERVER_URL="http://ai-interviewer-web:8009" \
+  -e OPENAI_API_KEY="..." \
+  -e DAILY_API_KEY="..." \
+  ai-interviewer-worker:latest
+
+================================================================================
+HEALTH CHECK
+================================================================================
+
+Endpoint: GET http://<host>:8009/health
+
+Expected Response:
+{
+  "status": "healthy",
+  "database": "connected",
+  "bot_queue": "healthy"
+}
+
+================================================================================
+RESOURCE REQUIREMENTS
+================================================================================
+
+Web Server: 1-2 CPU cores, 1-2 GB RAM
+Worker: 1-2 CPU cores, 1-2 GB RAM (per instance)
+Recommended: 1 web server + 2-3 workers
+
+================================================================================
+NOTES
+================================================================================
+
+- Application is stateless (no local file storage)
+- All configuration via environment variables
+- Workers automatically process jobs from Redis queue
+- Health check endpoint available for monitoring
+- See DEPLOYMENT_GUIDE.md for detailed instructions
+
+================================================================================
+
