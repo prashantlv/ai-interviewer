@@ -20,8 +20,13 @@ class Hire2InspireService:
         self.base_url = "https://api.hire2inspire.com/api"
         self.email = os.getenv("H2I_EMAIL", "hire2inspireh2i@gmail.com")
         self.password = os.getenv("H2I_PASSWORD", "Sant@1506")
-        self.token: Optional[str] = None
+        # Use pre-existing token if available (for testing/development)
+        self.token: Optional[str] = os.getenv("H2I_ACCESS_TOKEN")
         self.token_expiry: Optional[datetime] = None
+        if self.token:
+            # Token valid for 24 hours from now if manually provided
+            self.token_expiry = datetime.now() + timedelta(hours=24)
+            logger.info("✅ Using pre-configured access token")
         
     async def _ensure_token(self) -> str:
         """Ensure we have a valid token, refresh if needed"""
@@ -50,8 +55,32 @@ class Hire2InspireService:
                         "Content-Type": "application/json"
                     }
                 )
-                response.raise_for_status()
+                
                 data = response.json()
+                
+                # Check if already logged in
+                if data.get("error") and "already logged In" in data.get("message", ""):
+                    logger.warning("⚠️ Already logged in - need to logout first")
+                    # Try to logout and login again
+                    await self._logout()
+                    # Retry login
+                    response = await client.post(
+                        f"{self.base_url}/agency/login",
+                        json={
+                            "email": self.email,
+                            "password": self.password,
+                            "system": "Linux",
+                            "browser_type": "Chrome",
+                            "login_time": datetime.now().isoformat()
+                        },
+                        headers={
+                            "Accept": "application/json",
+                            "Content-Type": "application/json"
+                        }
+                    )
+                    data = response.json()
+                
+                response.raise_for_status()
                 
                 # Extract token from response
                 if "data" in data and "accessToken" in data["data"]:
@@ -66,6 +95,24 @@ class Hire2InspireService:
         except Exception as e:
             logger.error(f"❌ Hire2Inspire login failed: {e}")
             raise
+    
+    async def _logout(self):
+        """Logout from Hire2Inspire"""
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{self.base_url}/agency/logout",
+                    json={
+                        "email": self.email
+                    },
+                    headers={
+                        "Accept": "application/json",
+                        "Content-Type": "application/json"
+                    }
+                )
+                logger.info("✅ Logged out successfully")
+        except Exception as e:
+            logger.warning(f"⚠️ Logout failed: {e}")
     
     async def get_all_jobs(self) -> List[Dict[str, Any]]:
         """Get all job descriptions for the agency"""
@@ -114,7 +161,7 @@ class Hire2InspireService:
                         "limit": limit,
                         "candidatePage": 1,
                         "candidateLimit": limit,
-                        "job_hash_id": job_hash_id
+                        "jd_hash_id": job_hash_id
                     },
                     headers={
                         "Authorization": f"Bearer {token}",

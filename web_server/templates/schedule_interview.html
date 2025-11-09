@@ -237,6 +237,7 @@ Python, Django, JavaScript, React, Docker, AWS..."></textarea>
         </div>
     </div>
 </div>
+{% endblock %}
 
 {% block extra_js %}
 <script>
@@ -251,22 +252,23 @@ async function loadJobs() {
         const data = await response.json();
         
         if (data.success && data.jobs.length > 0) {
-            jobsData = data.jobs;
+            // Filter jobs to only include those with jd_hash_id
+            jobsData = data.jobs.filter(job => job.jd_hash_id);
             const jobSelect = document.getElementById('h2i_job');
             
             // Clear existing options except first
             jobSelect.innerHTML = '<option value="">-- Load from database --</option>';
             
-            // Add job options
-            data.jobs.forEach(job => {
+            // Add job options (only jobs with jd_hash_id)
+            jobsData.forEach(job => {
                 const option = document.createElement('option');
-                option.value = job.hash_id || job._id;
-                option.textContent = `${job.job_title || job.position || 'Untitled'} - ${job.company_name || 'Company'}`;
+                option.value = job.jd_hash_id;  // Only use jd_hash_id
+                option.textContent = `${job.job_title || job.position || 'Untitled'} - ${job.min_work_exp ? job.min_work_exp + '-' + job.max_work_exp + ' years' : ''}`;
                 option.dataset.job = JSON.stringify(job);
                 jobSelect.appendChild(option);
             });
             
-            console.log(`✅ Loaded ${data.jobs.length} jobs from Hire2Inspire`);
+            console.log(`✅ Loaded ${jobsData.length} jobs with jd_hash_id (filtered from ${data.jobs.length} total)`);
         }
     } catch (error) {
         console.error('❌ Failed to load jobs:', error);
