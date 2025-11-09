@@ -1,0 +1,78 @@
+================================================
+EC2 SETUP COMMANDS - Copy and paste on EC2
+================================================
+
+# 1. Create server/.env
+cat > ~/ai-interviewer/server/.env << 'ENVEOF'
+VIDEO_SERVICE=tavus #tavus
+# Core API Keys
+DAILY_SAMPLE_ROOM_URL=https://hi2inspire.daily.co/hi2inspire
+DAILY_API_KEY=3c9c92366e246c8ade2f7ecd211419a3cd75d507f7757c0efa833ece1d039992
+OPENAI_API_KEY=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
+GOOGLE_API_KEY=AIza...
+ELEVENLABS_API_KEY=sk_fc792205525e0788307801b1ae68ac52450a6b59f8e4fe09
+
+# Bot Configuration
+BOT_IMPLEMENTATION=openai # gemini
+
+# Tavus Avatar Configuration  
+TAVUS_API_KEY=16c329a4c5c64fe2b4d9e972e39b8df0 #0c5549cd455c4c7983c6b20d53f52aba
+TAVUS_REPLICA_ID=rd6128611cf9 #rd6128611cf9 #r92debe21318
+TAVUS_PERSONA_ID=pe13ed370726
+
+# Simli Avatar Configuration
+SIMLI_API_KEY=3fj43o53gdc0he8m3hxc1if
+SIMLI_FACE_ID=dd10cb5a-d31d-4f12-b69f-6db3383c006e
+
+# HeyGen Avatar Configuration
+HEYGEN_API_KEY=sk_V2_hgu_kOVBbriVRmK_j8D36pzxlKvUGtH9gFzWG40sIe7FRWa2 #ZmRmOTQwYjM1MDkwNGYzZmI5YzY0M2E4YTRkZDc2YzYtMTc1NzY5MzM2OA==
+HEYGEN_AVATAR_ID=Shawn_Therapist_public#1a864edf1d254bd68ebf0f9daf2ac95b #Shawn_Therapist_public
+
+
+# Web Server Integration
+WEB_SERVER_URL=http://localhost:8009
+# INTERVIEW_ID=test_interview_001
+
+# MongoDB Configuration
+MONGODB_URL=mongodb+srv://root:XejrWinDai6SUHJc@cluster0.1rbkzbp.mongodb.net/
+DATABASE_NAME=hire2inspire_dev_db
+ENVEOF
+
+# 2. Create web_server/.env
+cat > ~/ai-interviewer/web_server/.env << 'ENVEOF'
+VIDEO_SERVICE=tavus # heygen
+# Core API Keys
+DAILY_SAMPLE_ROOM_URL=https://hi2inspire.daily.co/hi2inspire
+DAILY_API_KEY=3c9c92366e246c8ade2f7ecd211419a3cd75d507f7757c0efa833ece1d039992
+GOOGLE_API_KEY=AIza...
+ELEVENLABS_API_KEY=sk_fc792205525e0788307801b1ae68ac52450a6b59f8e4fe09
+
+# Bot Configuration
+BOT_IMPLEMENTATION=openai # gemini
+
+# Tavus Avatar Configuration  
+TAVUS_API_KEY=16c329a4c5c64fe2b4d9e972e39b8df0 #0c5549cd455c4c7983c6b20d53f52aba
+TAVUS_REPLICA_ID=r92debe21318#rd6128611cf9 #r92debe21318
+TAVUS_PERSONA_ID=pe13ed370726
+
+# Simli Avatar Configuration
+SIMLI_API_KEY=3fj43o53gdc0he8m3hxc1if
+SIMLI_FACE_ID=dd10cb5a-d31d-4f12-b69f-6db3383c006e
+
+# HeyGen Avatar Configuration
+HEYGEN_API_KEY=sk_V2_hgu_kOVBbriVRmK_j8D36pzxlKvUGtH9gFzWG40sIe7FRWa2#ZmRmOTQwYjM1MDkwNGYzZmI5YzY0M2E4YTRkZDc2YzYtMTc1NzY5MzM2OA==
+HEYGEN_AVATAR_ID=Shawn_Therapist_public#1a864edf1d254bd68ebf0f9daf2ac95b #Shawn_Therapist_public
+
+
+# MongoDB Configuration
+MONGODB_URL=mongodb+srv://root:XejrWinDai6SUHJc@cluster0.1rbkzbp.mongodb.net/
+DATABASE_NAME=hire2inspire_dev_db
+OPENAI_API_KEY=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
+ENVEOF
+
+# 3. Verify files created
+ls -lh ~/ai-interviewer/server/.env ~/ai-interviewer/web_server/.env
+
+================================================
+Copy the above commands and run on EC2!
+================================================

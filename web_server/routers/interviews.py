@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from dependencies import DbServiceDep
+from services.hire2inspire_service import hire2inspire_service
 
 router = APIRouter()
 
@@ -272,3 +273,33 @@ async def complete_interview(
         "final_score": evaluation.get("overall_score"),
         "report_url": f"/dashboard/interview/{interview_id}"
     }
+
+
+# Hire2Inspire Integration Endpoints
+@router.get("/h2i/jobs")
+async def get_h2i_jobs():
+    """Get all job descriptions from Hire2Inspire"""
+    try:
+        jobs = await hire2inspire_service.get_all_jobs()
+        return {
+            "success": True,
+            "count": len(jobs),
+            "jobs": jobs
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/h2i/candidates/{job_hash_id}")
+async def get_h2i_candidates(job_hash_id: str):
+    """Get shortlisted candidates for a specific job"""
+    try:
+        candidates = await hire2inspire_service.get_shortlisted_candidates(job_hash_id)
+        return {
+            "success": True,
+            "job_hash_id": job_hash_id,
+            "count": len(candidates),
+            "candidates": candidates
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

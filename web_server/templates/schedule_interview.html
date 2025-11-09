@@ -31,6 +31,46 @@
                 </div>
                 <div class="card-body">
                     <form method="POST" action="/dashboard/schedule">
+                        <!-- Hire2Inspire Integration -->
+                        <div class="card border-info mb-4">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="mb-0">
+                                    <i class="bi bi-cloud-download"></i> Import from Hire2Inspire
+                                    <span class="badge bg-light text-info">Optional</span>
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="h2i_job" class="form-label">
+                                            Select Job Description
+                                        </label>
+                                        <select class="form-select" id="h2i_job" name="h2i_job">
+                                            <option value="">-- Load from database --</option>
+                                        </select>
+                                        <small class="text-muted">
+                                            <i class="bi bi-info-circle"></i> Jobs from Hire2Inspire platform
+                                        </small>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="h2i_candidate" class="form-label">
+                                            Select Candidate/Resume
+                                        </label>
+                                        <select class="form-select" id="h2i_candidate" name="h2i_candidate" disabled>
+                                            <option value="">-- Select a job first --</option>
+                                        </select>
+                                        <small class="text-muted">
+                                            <i class="bi bi-info-circle"></i> Shortlisted candidates for selected job
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="alert alert-info mb-0">
+                                    <i class="bi bi-lightbulb"></i> 
+                                    <strong>Tip:</strong> Select a job and candidate from the database, or manually enter details below
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="candidate_name" class="form-label">Candidate Name *</label>
@@ -197,4 +237,135 @@ Python, Django, JavaScript, React, Docker, AWS..."></textarea>
         </div>
     </div>
 </div>
+
+{% block extra_js %}
+<script>
+// Hire2Inspire Integration JavaScript
+let jobsData = [];
+let candidatesData = [];
+
+// Load jobs on page load
+async function loadJobs() {
+    try {
+        const response = await fetch('/api/v1/interviews/h2i/jobs');
+        const data = await response.json();
+        
+        if (data.success && data.jobs.length > 0) {
+            jobsData = data.jobs;
+            const jobSelect = document.getElementById('h2i_job');
+            
+            // Clear existing options except first
+            jobSelect.innerHTML = '<option value="">-- Load from database --</option>';
+            
+            // Add job options
+            data.jobs.forEach(job => {
+                const option = document.createElement('option');
+                option.value = job.hash_id || job._id;
+                option.textContent = `${job.job_title || job.position || 'Untitled'} - ${job.company_name || 'Company'}`;
+                option.dataset.job = JSON.stringify(job);
+                jobSelect.appendChild(option);
+            });
+            
+            console.log(`✅ Loaded ${data.jobs.length} jobs from Hire2Inspire`);
+        }
+    } catch (error) {
+        console.error('❌ Failed to load jobs:', error);
+    }
+}
+
+// Load candidates when job is selected
+async function loadCandidates(jobHashId) {
+    const candidateSelect = document.getElementById('h2i_candidate');
+    candidateSelect.innerHTML = '<option value="">Loading candidates...</option>';
+    candidateSelect.disabled = true;
+    
+    try {
+        const response = await fetch(`/api/v1/interviews/h2i/candidates/${jobHashId}`);
+        const data = await response.json();
+        
+        if (data.success && data.candidates.length > 0) {
+            candidatesData = data.candidates;
+            candidateSelect.innerHTML = '<option value="">-- Select candidate --</option>';
+            
+            // Add candidate options
+            data.candidates.forEach(candidate => {
+                const option = document.createElement('option');
+                option.value = candidate._id || candidate.hash_id;
+                const candidateName = candidate.candidate_name || candidate.name || 'Unknown';
+                const candidateEmail = candidate.email || '';
+                option.textContent = `${candidateName}${candidateEmail ? ' (' + candidateEmail + ')' : ''}`;
+                option.dataset.candidate = JSON.stringify(candidate);
+                candidateSelect.appendChild(option);
+            });
+            
+            candidateSelect.disabled = false;
+            console.log(`✅ Loaded ${data.candidates.length} candidates`);
+        } else {
+            candidateSelect.innerHTML = '<option value="">No candidates found</option>';
+        }
+    } catch (error) {
+        console.error('❌ Failed to load candidates:', error);
+        candidateSelect.innerHTML = '<option value="">Error loading candidates</option>';
+    }
+}
+
+// Auto-fill form when job is selected
+document.getElementById('h2i_job').addEventListener('change', function() {
+    const jobHashId = this.value;
+    const candidateSelect = document.getElementById('h2i_candidate');
+    
+    if (jobHashId) {
+        // Get selected job data
+        const selectedOption = this.options[this.selectedIndex];
+        const jobData = JSON.parse(selectedOption.dataset.job || '{}');
+        
+        // Auto-fill position
+        if (jobData.job_title || jobData.position) {
+            document.getElementById('position').value = jobData.job_title || jobData.position;
+        }
+        
+        // Auto-fill job description if available
+        if (jobData.job_description || jobData.description) {
+            document.getElementById('job_description').value = jobData.job_description || jobData.description;
+        }
+        
+        // Load candidates for this job
+        loadCandidates(jobHashId);
+    } else {
+        // Reset candidate dropdown
+        candidateSelect.innerHTML = '<option value="">-- Select a job first --</option>';
+        candidateSelect.disabled = true;
+    }
+});
+
+// Auto-fill form when candidate is selected
+document.getElementById('h2i_candidate').addEventListener('change', function() {
+    const candidateId = this.value;
+    
+    if (candidateId) {
+        const selectedOption = this.options[this.selectedIndex];
+        const candidateData = JSON.parse(selectedOption.dataset.candidate || '{}');
+        
+        // Auto-fill candidate name
+        if (candidateData.candidate_name || candidateData.name) {
+            document.getElementById('candidate_name').value = candidateData.candidate_name || candidateData.name;
+        }
+        
+        // Auto-fill candidate email
+        if (candidateData.email || candidateData.candidate_email) {
+            document.getElementById('candidate_email').value = candidateData.email || candidateData.candidate_email;
+        }
+        
+        // Auto-fill resume if available
+        if (candidateData.resume || candidateData.profile) {
+            document.getElementById('candidate_resume').value = candidateData.resume || candidateData.profile;
+        }
+    }
+});
+
+// Load jobs on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadJobs();
+});
+</script>
 {% endblock %}
