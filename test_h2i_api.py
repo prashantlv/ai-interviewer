@@ -18,7 +18,7 @@ async def test_api():
         try:
             logout_response = await client.patch(
                 f"{BASE_URL}/agency/update-logout",
-                json={"email": EMAIL},
+                json={"corporate_email": EMAIL},
                 headers={
                     "Accept": "application/json, text/plain, */*",
                     "Content-Type": "application/json",

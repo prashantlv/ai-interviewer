@@ -106,7 +106,7 @@ class Hire2InspireService:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.patch(
                     f"{self.base_url}/agency/update-logout",
-                    json={"email": self.email},
+                    json={"corporate_email": self.email},
                     headers={
                         "Accept": "application/json, text/plain, */*",
                         "Content-Type": "application/json",
