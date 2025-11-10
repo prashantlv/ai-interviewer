@@ -58,27 +58,10 @@ class Hire2InspireService:
                 
                 data = response.json()
                 
-                # Check if already logged in
+                # Check if already logged in (cannot logout without token, so just fail)
                 if data.get("error") and "already logged In" in data.get("message", ""):
-                    logger.warning("⚠️ Already logged in - need to logout first")
-                    # Try to logout and login again
-                    await self._logout()
-                    # Retry login
-                    response = await client.post(
-                        f"{self.base_url}/agency/login",
-                        json={
-                            "email": self.email,
-                            "password": self.password,
-                            "system": "Linux",
-                            "browser_type": "Chrome",
-                            "login_time": datetime.now().isoformat()
-                        },
-                        headers={
-                            "Accept": "application/json",
-                            "Content-Type": "application/json"
-                        }
-                    )
-                    data = response.json()
+                    logger.error("❌ Already logged in from another session. Please logout from all other sessions first.")
+                    raise Exception("Account already logged in from another location")
                 
                 response.raise_for_status()
                 
@@ -99,17 +82,23 @@ class Hire2InspireService:
     async def _logout(self):
         """Logout from Hire2Inspire"""
         try:
+            # Need token to logout, but if we don't have one, skip
+            if not self.token:
+                logger.info("⚠️ No token available for logout")
+                return
+                
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     f"{self.base_url}/agency/logout",
-                    json={"email": self.email},
                     headers={
-                        "Accept": "application/json",
-                        "Content-Type": "application/json"
+                        "Authorization": f"Bearer {self.token}",
+                        "Accept": "application/json"
                     }
                 )
                 if response.status_code < 400:
                     logger.info("✅ Logged out successfully")
+                    self.token = None
+                    self.token_expiry = None
                 else:
                     logger.warning(f"⚠️ Logout returned status {response.status_code}")
         except Exception as e:
