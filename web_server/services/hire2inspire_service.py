@@ -161,7 +161,7 @@ class Hire2InspireService:
                         "limit": limit,
                         "candidatePage": 1,
                         "candidateLimit": limit,
-                        "jd_hash_id": job_hash_id
+                        "job_hash_id": job_hash_id  # API expects job_hash_id even though response has jd_hash_id
                     },
                     headers={
                         "Authorization": f"Bearer {token}",
