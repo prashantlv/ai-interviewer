@@ -27,8 +27,12 @@ async def test_api():
                 }
             )
             print(f"   Logout status: {logout_response.status_code}")
+            logout_data = logout_response.json()
+            print(f"   Logout response: {logout_data}")
             if logout_response.status_code < 400:
                 print("   ✅ Logged out from all sessions")
+                print("   ⏳ Waiting 10 seconds for logout to propagate...")
+                await asyncio.sleep(10)
         except Exception as e:
             print(f"   ⚠️ Logout failed: {e}")
         

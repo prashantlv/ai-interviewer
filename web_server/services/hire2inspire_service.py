@@ -6,6 +6,7 @@ Handles authentication and data fetching from Hire2Inspire platform
 
 import httpx
 import os
+import asyncio
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 import logging
@@ -63,6 +64,9 @@ class Hire2InspireService:
                     logger.warning("⚠️ Already logged in - need to logout first")
                     # Try to logout and login again
                     await self._logout()
+                    # Wait for logout to complete on server side
+                    await asyncio.sleep(3)
+                    logger.info("⏳ Waited 3s for logout to complete, retrying login...")
                     # Retry login
                     response = await client.post(
                         f"{self.base_url}/agency/login",
