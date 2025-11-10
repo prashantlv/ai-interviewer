@@ -364,13 +364,16 @@ document.getElementById('h2i_job').addEventListener('change', function() {
 
 // Auto-fill form when candidate is selected
 document.getElementById('h2i_candidate').addEventListener('change', function() {
+    console.log('🎯 Candidate dropdown changed!');
     const candidateId = this.value;
+    console.log('Selected candidate ID:', candidateId);
     
     if (candidateId) {
         const selectedOption = this.options[this.selectedIndex];
+        console.log('Selected option:', selectedOption);
         const candidateData = JSON.parse(selectedOption.dataset.candidate || '{}');
         
-        console.log('Selected candidate data:', candidateData);
+        console.log('📋 Full candidate data:', candidateData);
         
         // Auto-fill candidate name - try multiple fields
         const name = candidateData.candidate_name || 
