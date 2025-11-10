@@ -302,16 +302,18 @@ async function loadCandidates(jobHashId) {
                 
                 option.value = candidate._id || resume._id;
                 
-                // Try multiple field variations for name
-                const candidateName = resume.candidate_name || 
+                // Try multiple field variations for name (camelCase and snake_case)
+                const candidateName = resume.fullName ||           // Hire2Inspire uses this
+                                     resume.candidate_name || 
                                      resume.name || 
                                      resume.full_name || 
                                      resume.firstName || 
                                      (resume.first_name && resume.last_name ? `${resume.first_name} ${resume.last_name}` : null) ||
                                      'Unknown Candidate';
                 
-                // Try multiple field variations for email
-                const candidateEmail = resume.email || 
+                // Try multiple field variations for email (camelCase and snake_case)
+                const candidateEmail = resume.emailAddress ||      // Hire2Inspire uses this
+                                      resume.email || 
                                       resume.candidate_email || 
                                       resume.emailId || 
                                       '';
@@ -375,8 +377,9 @@ document.getElementById('h2i_candidate').addEventListener('change', function() {
         
         console.log('📋 Full candidate data:', candidateData);
         
-        // Auto-fill candidate name - try multiple fields
-        const name = candidateData.candidate_name || 
+        // Auto-fill candidate name - try multiple fields (camelCase and snake_case)
+        const name = candidateData.fullName ||              // Hire2Inspire uses this
+                    candidateData.candidate_name || 
                     candidateData.name || 
                     candidateData.full_name || 
                     candidateData.firstName ||
@@ -387,8 +390,9 @@ document.getElementById('h2i_candidate').addEventListener('change', function() {
             document.getElementById('candidate_name').value = name;
         }
         
-        // Auto-fill candidate email - try multiple fields
-        const email = candidateData.email || 
+        // Auto-fill candidate email - try multiple fields (camelCase and snake_case)
+        const email = candidateData.emailAddress ||         // Hire2Inspire uses this
+                     candidateData.email || 
                      candidateData.candidate_email || 
                      candidateData.emailId || 
                      '';
@@ -404,25 +408,67 @@ document.getElementById('h2i_candidate').addEventListener('change', function() {
         if (candidateData.resume_text || candidateData.profile_summary || candidateData.summary) {
             resumeText = candidateData.resume_text || candidateData.profile_summary || candidateData.summary;
         } else {
-            // Build resume from available fields
+            // Build resume from available fields (Hire2Inspire format)
             if (name) resumeText += `${name}\n`;
             if (email) resumeText += `${email}\n`;
-            if (candidateData.phone || candidateData.mobile) resumeText += `${candidateData.phone || candidateData.mobile}\n`;
+            
+            // Try phone variations (camelCase and snake_case)
+            const phone = candidateData.phoneNumber || candidateData.phone || candidateData.mobile;
+            if (phone) resumeText += `${phone}\n`;
+            
+            // Job title and experience
+            if (candidateData.jobTitle) resumeText += `${candidateData.jobTitle}\n`;
+            if (candidateData.totalYearsExperience) resumeText += `${candidateData.totalYearsExperience} years experience\n`;
             resumeText += '\n';
             
-            if (candidateData.work_experience || candidateData.experience || candidateData.workExperience) {
+            // Summary/Profile
+            if (candidateData.summary) {
+                resumeText += `SUMMARY:\n${candidateData.summary}\n\n`;
+            }
+            
+            // Skills - try multiple formats
+            if (candidateData.skillsRaw && Array.isArray(candidateData.skillsRaw)) {
+                resumeText += `SKILLS:\n${candidateData.skillsRaw.join(', ')}\n\n`;
+            } else if (candidateData.skills) {
+                const skills = candidateData.skills;
+                resumeText += `SKILLS:\n${Array.isArray(skills) ? skills.join(', ') : skills}\n\n`;
+            } else if (candidateData.technical_skills) {
+                resumeText += `SKILLS:\n${candidateData.technical_skills}\n\n`;
+            }
+            
+            // Experience details (Hire2Inspire format)
+            if (candidateData.experienceDetails && Array.isArray(candidateData.experienceDetails)) {
+                resumeText += `WORK EXPERIENCE:\n`;
+                candidateData.experienceDetails.forEach(exp => {
+                    resumeText += `\n${exp.title || 'N/A'} at ${exp.company || 'N/A'}\n`;
+                    if (exp.startDate || exp.endDate || exp.isCurrent) {
+                        const start = exp.startDate || 'N/A';
+                        const end = exp.isCurrent ? 'Present' : (exp.endDate || 'N/A');
+                        resumeText += `${start} - ${end}\n`;
+                    }
+                    if (exp.description) resumeText += `${exp.description}\n`;
+                });
+                resumeText += '\n';
+            } else if (candidateData.work_experience || candidateData.experience || candidateData.workExperience) {
                 const exp = candidateData.work_experience || candidateData.experience || candidateData.workExperience;
                 resumeText += `EXPERIENCE:\n${typeof exp === 'string' ? exp : JSON.stringify(exp, null, 2)}\n\n`;
             }
             
-            if (candidateData.education || candidateData.educationDetails) {
-                const edu = candidateData.education || candidateData.educationDetails;
-                resumeText += `EDUCATION:\n${typeof edu === 'string' ? edu : JSON.stringify(edu, null, 2)}\n\n`;
-            }
-            
-            if (candidateData.skills || candidateData.technical_skills) {
-                const skills = candidateData.skills || candidateData.technical_skills;
-                resumeText += `SKILLS:\n${Array.isArray(skills) ? skills.join(', ') : skills}\n`;
+            // Education details (Hire2Inspire format)
+            if (candidateData.educationDetails && Array.isArray(candidateData.educationDetails)) {
+                resumeText += `EDUCATION:\n`;
+                candidateData.educationDetails.forEach(edu => {
+                    resumeText += `${edu.degree || 'N/A'}`;
+                    if (edu.fieldOfStudy) resumeText += ` in ${edu.fieldOfStudy}`;
+                    if (edu.school) resumeText += ` - ${edu.school}`;
+                    if (edu.graduationYear) resumeText += ` (${edu.graduationYear})`;
+                    resumeText += '\n';
+                });
+            } else if (candidateData.degreesRaw && Array.isArray(candidateData.degreesRaw)) {
+                resumeText += `EDUCATION:\n${candidateData.degreesRaw.join(', ')}\n`;
+            } else if (candidateData.education) {
+                const edu = candidateData.education;
+                resumeText += `EDUCATION:\n${typeof edu === 'string' ? edu : JSON.stringify(edu, null, 2)}\n`;
             }
         }
         
