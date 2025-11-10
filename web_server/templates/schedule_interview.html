@@ -290,12 +290,32 @@ async function loadCandidates(jobHashId) {
             candidateSelect.innerHTML = '<option value="">-- Select candidate --</option>';
             
             // Add candidate options
-            data.candidates.forEach(candidate => {
+            data.candidates.forEach((candidate, index) => {
                 const option = document.createElement('option');
                 const resume = candidate.resume || candidate;
+                
+                // Debug: log first candidate structure
+                if (index === 0) {
+                    console.log('Sample candidate:', candidate);
+                    console.log('Sample resume:', resume);
+                }
+                
                 option.value = candidate._id || resume._id;
-                const candidateName = resume.candidate_name || resume.name || 'Unknown';
-                const candidateEmail = resume.email || resume.candidate_email || '';
+                
+                // Try multiple field variations for name
+                const candidateName = resume.candidate_name || 
+                                     resume.name || 
+                                     resume.full_name || 
+                                     resume.firstName || 
+                                     (resume.first_name && resume.last_name ? `${resume.first_name} ${resume.last_name}` : null) ||
+                                     'Unknown Candidate';
+                
+                // Try multiple field variations for email
+                const candidateEmail = resume.email || 
+                                      resume.candidate_email || 
+                                      resume.emailId || 
+                                      '';
+                
                 const matchScore = candidate.overall_match ? ` - ${Math.round(candidate.overall_match)}% match` : '';
                 option.textContent = `${candidateName}${candidateEmail ? ' (' + candidateEmail + ')' : ''}${matchScore}`;
                 option.dataset.candidate = JSON.stringify({...candidate, ...resume});
@@ -350,30 +370,60 @@ document.getElementById('h2i_candidate').addEventListener('change', function() {
         const selectedOption = this.options[this.selectedIndex];
         const candidateData = JSON.parse(selectedOption.dataset.candidate || '{}');
         
-        // Auto-fill candidate name
-        if (candidateData.candidate_name || candidateData.name) {
-            document.getElementById('candidate_name').value = candidateData.candidate_name || candidateData.name;
+        console.log('Selected candidate data:', candidateData);
+        
+        // Auto-fill candidate name - try multiple fields
+        const name = candidateData.candidate_name || 
+                    candidateData.name || 
+                    candidateData.full_name || 
+                    candidateData.firstName ||
+                    (candidateData.first_name && candidateData.last_name ? 
+                        `${candidateData.first_name} ${candidateData.last_name}` : '');
+        
+        if (name) {
+            document.getElementById('candidate_name').value = name;
         }
         
-        // Auto-fill candidate email
-        if (candidateData.email || candidateData.candidate_email) {
-            document.getElementById('candidate_email').value = candidateData.email || candidateData.candidate_email;
+        // Auto-fill candidate email - try multiple fields
+        const email = candidateData.email || 
+                     candidateData.candidate_email || 
+                     candidateData.emailId || 
+                     '';
+        
+        if (email) {
+            document.getElementById('candidate_email').value = email;
         }
         
         // Auto-fill resume - try multiple fields
         let resumeText = '';
-        if (candidateData.resume_text || candidateData.profile_summary) {
-            resumeText = candidateData.resume_text || candidateData.profile_summary;
-        } else if (candidateData.work_experience || candidateData.education) {
+        
+        // Try direct resume text fields
+        if (candidateData.resume_text || candidateData.profile_summary || candidateData.summary) {
+            resumeText = candidateData.resume_text || candidateData.profile_summary || candidateData.summary;
+        } else {
             // Build resume from available fields
-            if (candidateData.candidate_name) resumeText += `${candidateData.candidate_name}\n`;
-            if (candidateData.email) resumeText += `${candidateData.email}\n\n`;
-            if (candidateData.work_experience) resumeText += `EXPERIENCE:\n${candidateData.work_experience}\n\n`;
-            if (candidateData.education) resumeText += `EDUCATION:\n${candidateData.education}\n\n`;
-            if (candidateData.skills) resumeText += `SKILLS:\n${Array.isArray(candidateData.skills) ? candidateData.skills.join(', ') : candidateData.skills}`;
+            if (name) resumeText += `${name}\n`;
+            if (email) resumeText += `${email}\n`;
+            if (candidateData.phone || candidateData.mobile) resumeText += `${candidateData.phone || candidateData.mobile}\n`;
+            resumeText += '\n';
+            
+            if (candidateData.work_experience || candidateData.experience || candidateData.workExperience) {
+                const exp = candidateData.work_experience || candidateData.experience || candidateData.workExperience;
+                resumeText += `EXPERIENCE:\n${typeof exp === 'string' ? exp : JSON.stringify(exp, null, 2)}\n\n`;
+            }
+            
+            if (candidateData.education || candidateData.educationDetails) {
+                const edu = candidateData.education || candidateData.educationDetails;
+                resumeText += `EDUCATION:\n${typeof edu === 'string' ? edu : JSON.stringify(edu, null, 2)}\n\n`;
+            }
+            
+            if (candidateData.skills || candidateData.technical_skills) {
+                const skills = candidateData.skills || candidateData.technical_skills;
+                resumeText += `SKILLS:\n${Array.isArray(skills) ? skills.join(', ') : skills}\n`;
+            }
         }
         
-        if (resumeText) {
+        if (resumeText.trim()) {
             document.getElementById('candidate_resume').value = resumeText;
         }
     }
