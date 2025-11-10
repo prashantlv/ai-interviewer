@@ -13,41 +13,23 @@ BASE_URL = "https://api.hire2inspire.com/api"
 async def test_api():
     async with httpx.AsyncClient(timeout=30.0) as client:
         
-        # Step 1: Login first to get token, then logout
-        print("1️⃣ Attempting to get existing session token...")
+        # Step 1: Logout from all sessions first
+        print("1️⃣ Logging out from all sessions...")
         try:
-            # Try to login to get token (will fail if already logged in, but that's ok)
-            temp_response = await client.post(
-                f"{BASE_URL}/agency/login",
-                json={
-                    "email": EMAIL,
-                    "password": PASSWORD,
-                    "system": "Linux",
-                    "browser_type": "Chrome",
-                    "login_time": datetime.now().isoformat()
-                },
+            logout_response = await client.patch(
+                f"{BASE_URL}/agency/update-logout",
+                json={"email": EMAIL},
                 headers={
-                    "Accept": "application/json",
-                    "Content-Type": "application/json"
+                    "Accept": "application/json, text/plain, */*",
+                    "Content-Type": "application/json",
+                    "Referer": "https://app.hire2inspire.com/",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                 }
             )
-            temp_data = temp_response.json()
-            if "data" in temp_data and "accessToken" in temp_data["data"]:
-                existing_token = temp_data["data"]["accessToken"]
-                print(f"   Got token, now logging out...")
-                
-                logout_response = await client.post(
-                    f"{BASE_URL}/agency/logout",
-                    headers={
-                        "Authorization": f"Bearer {existing_token}",
-                        "Accept": "application/json"
-                    }
-                )
-                print(f"   Logout status: {logout_response.status_code}")
-            else:
-                print("   Already logged in elsewhere, continuing...")
-        except:
-            print("   Skip logout (not logged in)")
+            print(f"   Logout status: {logout_response.status_code}")
+            print(f"   Response: {logout_response.json()}")
+        except Exception as e:
+            print(f"   Logout failed: {e}")
         
         # Step 2: Login
         print("\n2️⃣ Logging in...")
