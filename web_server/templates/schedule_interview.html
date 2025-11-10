@@ -445,9 +445,9 @@ document.getElementById('h2i_candidate').addEventListener('change', function() {
                     (candidateData.first_name && candidateData.last_name ? 
                         `${candidateData.first_name} ${candidateData.last_name}` : '');
         
-        if (name) {
-            document.getElementById('candidate_name').value = name;
-        }
+        // Always update name field (even if empty, to clear previous value)
+        document.getElementById('candidate_name').value = name || '';
+        console.log('✅ Set candidate name:', name || '(empty)');
         
         // Auto-fill candidate email - try multiple fields (camelCase and snake_case)
         const email = candidateData.emailAddress ||         // Hire2Inspire uses this
@@ -456,9 +456,9 @@ document.getElementById('h2i_candidate').addEventListener('change', function() {
                      candidateData.emailId || 
                      '';
         
-        if (email) {
-            document.getElementById('candidate_email').value = email;
-        }
+        // Always update email field (even if empty, to clear previous value)
+        document.getElementById('candidate_email').value = email || '';
+        console.log('✅ Set candidate email:', email || '(empty)');
         
         // Auto-fill resume - try multiple fields
         let resumeText = '';
