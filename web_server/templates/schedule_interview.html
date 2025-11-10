@@ -404,11 +404,13 @@ document.getElementById('h2i_candidate').addEventListener('change', function() {
         // Auto-fill resume - try multiple fields
         let resumeText = '';
         
-        // Try direct resume text fields
-        if (candidateData.resume_text || candidateData.profile_summary || candidateData.summary) {
-            resumeText = candidateData.resume_text || candidateData.profile_summary || candidateData.summary;
+        // For Hire2Inspire structured data, always build full resume
+        // Only use direct resume_text if it's a plain text resume (not H2I structured data)
+        if (candidateData.resume_text && !candidateData.skillsRaw && !candidateData.experienceDetails) {
+            // Plain text resume (not from Hire2Inspire)
+            resumeText = candidateData.resume_text;
         } else {
-            // Build resume from available fields (Hire2Inspire format)
+            // Build resume from available fields (Hire2Inspire format or structured data)
             if (name) resumeText += `${name}\n`;
             if (email) resumeText += `${email}\n`;
             
