@@ -337,6 +337,7 @@ async function loadCandidates(jobHashId) {
 
 // Auto-fill form when job is selected
 document.getElementById('h2i_job').addEventListener('change', function() {
+    console.log('📝 Job dropdown changed!');
     const jobHashId = this.value;
     const candidateSelect = document.getElementById('h2i_candidate');
     
@@ -345,14 +346,72 @@ document.getElementById('h2i_job').addEventListener('change', function() {
         const selectedOption = this.options[this.selectedIndex];
         const jobData = JSON.parse(selectedOption.dataset.job || '{}');
         
+        console.log('📋 Job data:', jobData);
+        
         // Auto-fill position
-        if (jobData.job_title || jobData.position) {
-            document.getElementById('position').value = jobData.job_title || jobData.position;
+        const jobTitle = jobData.job_title || jobData.position || 'Untitled Position';
+        document.getElementById('position').value = jobTitle;
+        
+        // Build full job description from Hire2Inspire structured data
+        let jdText = '';
+        
+        // Check if we have a direct job_description field
+        if (jobData.job_description || jobData.description) {
+            jdText = jobData.job_description || jobData.description;
+        } else {
+            // Build JD from structured fields (Hire2Inspire format)
+            jdText += `Position: ${jobTitle}\n\n`;
+            
+            // Experience requirement
+            if (jobData.min_work_exp || jobData.max_work_exp) {
+                jdText += `Experience Required: `;
+                if (jobData.min_work_exp && jobData.max_work_exp) {
+                    jdText += `${jobData.min_work_exp}-${jobData.max_work_exp} years\n\n`;
+                } else if (jobData.min_work_exp) {
+                    jdText += `${jobData.min_work_exp}+ years\n\n`;
+                } else {
+                    jdText += `Up to ${jobData.max_work_exp} years\n\n`;
+                }
+            }
+            
+            // Must-have skills
+            if (jobData.must_have_skills && Array.isArray(jobData.must_have_skills) && jobData.must_have_skills.length > 0) {
+                jdText += `MUST-HAVE SKILLS:\n`;
+                jobData.must_have_skills.forEach(skill => {
+                    jdText += `• ${skill}\n`;
+                });
+                jdText += '\n';
+            }
+            
+            // Good-to-have skills
+            if (jobData.good_to_have_skills && Array.isArray(jobData.good_to_have_skills) && jobData.good_to_have_skills.length > 0) {
+                jdText += `GOOD-TO-HAVE SKILLS:\n`;
+                jobData.good_to_have_skills.forEach(skill => {
+                    jdText += `• ${skill}\n`;
+                });
+                jdText += '\n';
+            }
+            
+            // Educational qualification
+            if (jobData.educational_qualification && Array.isArray(jobData.educational_qualification) && jobData.educational_qualification.length > 0) {
+                jdText += `EDUCATIONAL QUALIFICATION:\n`;
+                jobData.educational_qualification.forEach(qual => {
+                    jdText += `• ${qual}\n`;
+                });
+                jdText += '\n';
+            }
+            
+            // Preferred locations
+            if (jobData.preferred_locations && Array.isArray(jobData.preferred_locations) && jobData.preferred_locations.length > 0) {
+                jdText += `PREFERRED LOCATIONS:\n`;
+                jdText += jobData.preferred_locations.join(', ') + '\n';
+            }
         }
         
-        // Auto-fill job description if available
-        if (jobData.job_description || jobData.description) {
-            document.getElementById('job_description').value = jobData.job_description || jobData.description;
+        // Auto-fill the job description field
+        if (jdText.trim()) {
+            document.getElementById('job_description').value = jdText;
+            console.log('✅ Auto-filled JD with', jdText.length, 'characters');
         }
         
         // Load candidates for this job
