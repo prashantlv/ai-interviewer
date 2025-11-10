@@ -13,7 +13,7 @@ BASE_URL = "https://api.hire2inspire.com/api"
 async def test_api():
     async with httpx.AsyncClient(timeout=30.0) as client:
         
-        # Step 1: Logout from all sessions first
+        # Step 1: Logout first (from ALL sessions)
         print("1️⃣ Logging out from all sessions...")
         try:
             logout_response = await client.patch(
@@ -23,13 +23,14 @@ async def test_api():
                     "Accept": "application/json, text/plain, */*",
                     "Content-Type": "application/json",
                     "Referer": "https://app.hire2inspire.com/",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
                 }
             )
             print(f"   Logout status: {logout_response.status_code}")
-            print(f"   Response: {logout_response.json()}")
+            if logout_response.status_code < 400:
+                print("   ✅ Logged out from all sessions")
         except Exception as e:
-            print(f"   Logout failed: {e}")
+            print(f"   ⚠️ Logout failed: {e}")
         
         # Step 2: Login
         print("\n2️⃣ Logging in...")
