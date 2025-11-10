@@ -175,13 +175,16 @@ class Hire2InspireService:
                 data = response.json()
                 
                 # Extract candidates from response
-                if "data" in data and "shortlist_candidate" in data["data"]:
-                    candidates = data["data"]["shortlist_candidate"]
-                    logger.info(f"✅ Fetched {len(candidates)} candidates for job {job_hash_id}")
-                    return candidates
-                else:
-                    logger.warning(f"⚠️ No candidates found for job {job_hash_id}")
-                    return []
+                # API returns: {"data": [{"shortlisted_candidates": [...]}]}
+                if "data" in data and len(data["data"]) > 0:
+                    job_data = data["data"][0]
+                    if "shortlisted_candidates" in job_data:
+                        candidates = job_data["shortlisted_candidates"]
+                        logger.info(f"✅ Fetched {len(candidates)} candidates for job {job_hash_id}")
+                        return candidates
+                
+                logger.warning(f"⚠️ No candidates found for job {job_hash_id}")
+                return []
                     
         except Exception as e:
             logger.error(f"❌ Failed to fetch candidates: {e}")

@@ -292,11 +292,13 @@ async function loadCandidates(jobHashId) {
             // Add candidate options
             data.candidates.forEach(candidate => {
                 const option = document.createElement('option');
-                option.value = candidate._id || candidate.hash_id;
-                const candidateName = candidate.candidate_name || candidate.name || 'Unknown';
-                const candidateEmail = candidate.email || '';
-                option.textContent = `${candidateName}${candidateEmail ? ' (' + candidateEmail + ')' : ''}`;
-                option.dataset.candidate = JSON.stringify(candidate);
+                const resume = candidate.resume || candidate;
+                option.value = candidate._id || resume._id;
+                const candidateName = resume.candidate_name || resume.name || 'Unknown';
+                const candidateEmail = resume.email || resume.candidate_email || '';
+                const matchScore = candidate.overall_match ? ` - ${Math.round(candidate.overall_match)}% match` : '';
+                option.textContent = `${candidateName}${candidateEmail ? ' (' + candidateEmail + ')' : ''}${matchScore}`;
+                option.dataset.candidate = JSON.stringify({...candidate, ...resume});
                 candidateSelect.appendChild(option);
             });
             
@@ -358,9 +360,21 @@ document.getElementById('h2i_candidate').addEventListener('change', function() {
             document.getElementById('candidate_email').value = candidateData.email || candidateData.candidate_email;
         }
         
-        // Auto-fill resume if available
-        if (candidateData.resume || candidateData.profile) {
-            document.getElementById('candidate_resume').value = candidateData.resume || candidateData.profile;
+        // Auto-fill resume - try multiple fields
+        let resumeText = '';
+        if (candidateData.resume_text || candidateData.profile_summary) {
+            resumeText = candidateData.resume_text || candidateData.profile_summary;
+        } else if (candidateData.work_experience || candidateData.education) {
+            // Build resume from available fields
+            if (candidateData.candidate_name) resumeText += `${candidateData.candidate_name}\n`;
+            if (candidateData.email) resumeText += `${candidateData.email}\n\n`;
+            if (candidateData.work_experience) resumeText += `EXPERIENCE:\n${candidateData.work_experience}\n\n`;
+            if (candidateData.education) resumeText += `EDUCATION:\n${candidateData.education}\n\n`;
+            if (candidateData.skills) resumeText += `SKILLS:\n${Array.isArray(candidateData.skills) ? candidateData.skills.join(', ') : candidateData.skills}`;
+        }
+        
+        if (resumeText) {
+            document.getElementById('candidate_resume').value = resumeText;
         }
     }
 });
