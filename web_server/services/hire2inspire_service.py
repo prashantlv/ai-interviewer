@@ -100,14 +100,12 @@ class Hire2InspireService:
         """Logout from Hire2Inspire"""
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.patch(
-                    f"{self.base_url}/agency/update-logout",
+                response = await client.post(
+                    f"{self.base_url}/agency/logout",
                     json={"email": self.email},
                     headers={
-                        "Accept": "application/json, text/plain, */*",
-                        "Content-Type": "application/json",
-                        "Referer": "https://app.hire2inspire.com/",
-                        "User-Agent": "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36"
+                        "Accept": "application/json",
+                        "Content-Type": "application/json"
                     }
                 )
                 if response.status_code < 400:
