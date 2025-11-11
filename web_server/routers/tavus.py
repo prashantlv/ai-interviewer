@@ -38,12 +38,12 @@ class RenameReplicaRequest(BaseModel):
 # Dashboard Page Endpoints
 # ============================================================================
 
-@router.get("/dashboard/tavus-replicas", response_class=HTMLResponse)
-async def tavus_replicas_page(request: Request):
+@router.get("/dashboard/replicas", response_class=HTMLResponse)
+async def replicas_page(request: Request):
     """
-    Tavus Replica Management dashboard page
+    Replica Management dashboard page
     
-    Displays UI for managing Tavus replicas (list, create, rename, delete)
+    Displays UI for managing avatar replicas (list, create, rename, delete)
     """
     try:
         # Fetch all replicas
@@ -62,7 +62,7 @@ async def tavus_replicas_page(request: Request):
                 "request": request,
                 "replicas": replicas,
                 "total_count": total_count,
-                "page_title": "Tavus Replicas"
+                "page_title": "Replicas"
             }
         )
     except Exception as e:
