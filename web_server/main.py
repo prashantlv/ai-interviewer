@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 
 # Import our modules
-from routers import interviews, dashboard, feedback, bots, tavus
+from routers import interviews, dashboard, feedback, bots  # tavus removed from dashboard
 from services.database import DatabaseService
 from services.question_engine import QuestionEngine
 from services.scoring_engine import ScoringEngine
@@ -100,10 +100,10 @@ app.include_router(interviews.router, prefix="/api/v1/interviews", tags=["interv
 app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["feedback-v1"])
 app.include_router(bots.router, prefix="/api/v1/bots", tags=["bots-v1"])
 
-# Tavus routes (includes both dashboard and API)
-# Dashboard: /dashboard/tavus-replicas
-# API: /api/v1/tavus/* (already versioned in router)
-app.include_router(tavus.router, tags=["tavus"])
+# Tavus routes removed from dashboard UI
+# Note: Tavus service still works in backend, just not exposed in UI
+# If you need Tavus API, uncomment the line below:
+# app.include_router(tavus.router, tags=["tavus"])
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
