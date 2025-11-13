@@ -10,7 +10,7 @@ from typing import AsyncGenerator
 from loguru import logger
 
 from pipecat.frames.frames import Frame, AudioRawFrame, ErrorFrame
-from pipecat.services.ai_services import TTSService
+from pipecat.services.tts_service import TTSService
 
 
 class CartesiaTTSService(TTSService):
