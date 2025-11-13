@@ -1,1 +1,2 @@
 pipecat-ai[daily,elevenlabs,openai,silero,google,runner,tavus,simli,heygen]>=0.0.84
+cartesia>=1.0.0
