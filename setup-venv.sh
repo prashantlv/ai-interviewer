@@ -36,18 +36,22 @@ if command -v python3.12 &> /dev/null; then
     PYTHON_CMD="python3.12"
     print_success "Found Python 3.12: $(python3.12 --version)"
 elif command -v python3 &> /dev/null; then
-    PYTHON_VERSION=$(python3 --version | cut -d' ' -f2 | cut -d'.' -f1,2)
-    if [[ "$PYTHON_VERSION" == "3.12" ]] || [[ "$PYTHON_VERSION" == "3.11" ]] || [[ "$PYTHON_VERSION" == "3.10" ]]; then
+    PYTHON_VERSION=$(python3 --version | cut -d' ' -f2)
+    MAJOR=$(echo $PYTHON_VERSION | cut -d'.' -f1)
+    MINOR=$(echo $PYTHON_VERSION | cut -d'.' -f2)
+    
+    # Check if Python 3.10 or higher
+    if [[ "$MAJOR" -eq 3 ]] && [[ "$MINOR" -ge 10 ]]; then
         PYTHON_CMD="python3"
         print_success "Found Python: $(python3 --version)"
     else
-        print_error "Python 3.10+ required. Found: $(python3 --version)"
-        echo "Please install Python 3.12 from: https://www.python.org/downloads/"
+        print_error "Python 3.10+ required. Found: Python $PYTHON_VERSION"
+        echo "Please install Python 3.10 or higher from: https://www.python.org/downloads/"
         exit 1
     fi
 else
     print_error "Python 3 not found!"
-    echo "Please install Python 3.12 from: https://www.python.org/downloads/"
+    echo "Please install Python 3.10 or higher from: https://www.python.org/downloads/"
     exit 1
 fi
 
