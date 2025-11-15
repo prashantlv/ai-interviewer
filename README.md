@@ -1,402 +1,461 @@
-# 🤖 AI Interviewer System
+# AI Interviewer
 
-**Automated AI-powered technical interview platform**
+AI-powered interview platform with real-time video/audio communication using Daily.co, intelligent conversation with OpenAI, and Cartesia TTS.
 
-[![Status](https://img.shields.io/badge/status-active%20development-green)]()
-[![Version](https://img.shields.io/badge/version-0.1.0-blue)]()
-[![License](https://img.shields.io/badge/license-MIT-blue)]()
+## 🚀 Quick Start (Pure Pip - No Conda!)
 
----
-
-## 📖 Overview
-
-AI Interviewer is an intelligent system that conducts voice-based technical interviews, evaluates candidates in real-time, and provides detailed feedback through a comprehensive web dashboard.
-
-### Key Features
-
-- 🎤 **Voice-Based Interviews** - Natural conversation using AI
-- 📊 **Real-Time Evaluation** - LLM-powered scoring (coming soon)
-- 📈 **Dashboard Analytics** - Track interview metrics
-- 🤖 **Automated Process** - From scheduling to results
-- 🎯 **Custom Questions** - Tailored to job requirements
-- 📝 **Detailed Feedback** - Comprehensive candidate assessment
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Python 3.11+
-- MongoDB 6.0+
-- OpenAI API Key
-- Daily.co Account (for video/audio)
-
-### Installation
+### **New Machine Setup:**
 
 ```bash
-# Clone repository
-git clone <repo-url>
+# 1. Clone the repository
+git clone <repository-url>
 cd ai-interviewer
 
-# Install dependencies
-cd web_server
-pip install -r requirements.txt
+# 2. Setup Python virtual environment
+./setup-venv.sh
 
-cd ../server
-pip install -r requirements.txt
+# 3. Configure environment variables
+# Edit server/.env and web_server/.env with your API keys
 
-# Set up environment
-cp web_server/.env.example web_server/.env
-cp server/.env.example server/.env
-
-# Edit .env files with your API keys
-nano web_server/.env
-nano server/.env
-
-# Start MongoDB
-mongod --dbpath /path/to/data
-
-# Start web server
-cd web_server
-python main.py
+# 4. Start the application
+./start.sh
 ```
 
-### Access
+### **Daily Development:**
 
-- **Dashboard:** http://localhost:8009/dashboard
-- **API Docs:** http://localhost:8009/docs
-- **Health Check:** http://localhost:8009/health
+```bash
+# Just run this:
+./start.sh
 
----
-
-## 📚 Documentation
-
-> **👉 Start here if you're new to the project!**
-
-| Document | Description | Audience |
-|----------|-------------|----------|
-| **[ARCHITECTURE.md](./ARCHITECTURE.md)** | Complete system architecture, issues, and solutions | Developers, Architects |
-| **[ROADMAP.md](./ROADMAP.md)** | Development roadmap and sprint plans | Team, Managers |
-| **[DEVELOPMENT.md](./DEVELOPMENT.md)** | Day-to-day development guide | Developers |
-| **[API.md](./API.md)** | API documentation (coming soon) | Frontend, Integrations |
-
-### Quick Links
-
-- 🏗️ **Understanding the System?** → Read [ARCHITECTURE.md](./ARCHITECTURE.md)
-- 📅 **What's Next?** → Check [ROADMAP.md](./ROADMAP.md)
-- 💻 **Starting Development?** → Follow [DEVELOPMENT.md](./DEVELOPMENT.md)
-- 🐛 **Found a Bug?** → See [DEVELOPMENT.md#reporting-bugs](./DEVELOPMENT.md#reporting-bugs)
+# Access dashboard at:
+# http://localhost:8009/dashboard
+```
 
 ---
 
-## 🎯 Current Status
+## 📦 Requirements
 
-**Version:** 0.1.0 (MVP)  
-**Status:** Active Development  
-**Architecture Grade:** 6.5/10
-
-### ✅ What's Working
-- Web dashboard with interview management
-- AI-powered voice interviews via Daily.co
-- MongoDB data persistence
-- Interview result visualization
-
-### ⚠️ Known Issues
-- Manual bot process management (requires manual start)
-- Mock scoring system (not real LLM-based yet)
-- Monolithic architecture (needs refactoring)
-
-**See [ARCHITECTURE.md](./ARCHITECTURE.md#identified-issues) for full list**
+- **Python 3.10+** (3.12 recommended)
+- **Docker** (for Redis)
+- **API Keys:**
+  - OpenAI API key
+  - Daily.co API key
+  - Cartesia API key
+  - MongoDB Atlas connection string
+  - Hire2Inspire credentials (optional)
 
 ---
 
 ## 🏗️ Architecture
 
-### High-Level Overview
-
 ```
-┌─────────────┐
-│  Dashboard  │ ← User schedules interview
-└──────┬──────┘
-       │
-┌──────▼──────┐
-│ Web Server  │ ← FastAPI (Port 8009)
-└──────┬──────┘
-       │
-   ┌───┴───┐
-   ▼       ▼
-┌────────┐ ┌─────────┐
-│MongoDB │ │ AI Bot  │ ← Pipecat
-└────────┘ └────┬────┘
-                │
-           ┌────▼────┐
-           │Daily.co │ ← WebRTC
-           └─────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    AI Interviewer Stack                      │
+└─────────────────────────────────────────────────────────────┘
+
+┌──────────────┐      ┌──────────────┐      ┌──────────────┐
+│    Redis     │◄─────┤  RQ Worker   │◄─────┤ Web Server   │
+│  (Docker)    │      │  (Python)    │      │   (FastAPI)  │
+│  Port: 6379  │      │              │      │  Port: 8009  │
+└──────────────┘      └──────────────┘      └──────────────┘
+                              │
+                              ▼
+                      ┌──────────────┐
+                      │  AI Bot      │
+                      │  (Pipecat)   │
+                      │  + Cartesia  │
+                      └──────────────┘
+                              │
+                              ▼
+                      ┌──────────────┐
+                      │  Daily.co    │
+                      │  (Video)     │
+                      └──────────────┘
 ```
 
-**See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed architecture**
+### **Key Components:**
+
+1. **Web Server (FastAPI)**
+   - Interview scheduling and management
+   - Dashboard UI
+   - API endpoints
+   - Job queue management
+
+2. **RQ Worker**
+   - Processes interview jobs
+   - Spawns AI bot processes
+   - Handles job lifecycle
+
+3. **AI Bot (Pipecat)**
+   - Real-time conversation
+   - Speech-to-Text (OpenAI Whisper)
+   - LLM (OpenAI GPT-4)
+   - Text-to-Speech (Cartesia)
+   - Video (Tavus/Simli)
+
+4. **Redis**
+   - Job queue
+   - Task scheduling
+   - State management
 
 ---
 
-## 🛠️ Tech Stack
-
-### Backend
-- **Framework:** FastAPI (async Python web framework)
-- **Database:** MongoDB (NoSQL for flexible schemas)
-- **AI Framework:** Pipecat (voice AI pipelines)
-
-### AI & ML
-- **LLM:** OpenAI GPT-4 (conversation & scoring)
-- **STT:** Deepgram (speech-to-text)
-- **TTS:** Cartesia (text-to-speech)
-
-### Infrastructure
-- **Video/Audio:** Daily.co (WebRTC)
-- **Deployment:** Docker (coming soon)
-
----
-
-## 📦 Project Structure
+## 📁 Project Structure
 
 ```
 ai-interviewer/
-├── docs/                       # 📚 Documentation
-│   ├── ARCHITECTURE.md         # System design & issues
-│   ├── ROADMAP.md              # Development plan
-│   └── DEVELOPMENT.md          # Dev guide
+├── server/                     # AI Bot (Pipecat)
+│   ├── ai-interviewer.py      # Main bot script
+│   ├── services/              # TTS services
+│   ├── requirements.txt       # Bot dependencies
+│   └── .env                   # Bot configuration
 │
-├── web_server/                 # 🌐 Web Server (FastAPI)
-│   ├── main.py                 # Entry point
-│   ├── routers/                # HTTP routes
-│   ├── services/               # Business logic
-│   ├── templates/              # HTML (Jinja2)
-│   └── static/                 # CSS, JS
+├── web_server/                # FastAPI Web Server
+│   ├── main.py               # FastAPI application
+│   ├── routers/              # API endpoints
+│   ├── services/             # Business logic
+│   ├── templates/            # Jinja2 templates
+│   ├── workers/              # RQ worker
+│   ├── requirements.txt      # Web dependencies
+│   └── .env                  # Web configuration
 │
-├── server/                     # 🤖 AI Bot (Pipecat)
-│   ├── ai-interviewer.py       # Main bot
-│   └── requirements.txt
-│
-└── client/                     # 📱 Client apps
-    ├── javascript/
-    ├── react/
-    └── react-native/
+├── venv/                     # Python virtual environment
+├── start.sh                  # Start all services
+├── setup-venv.sh            # Setup virtual environment
+├── test-docker.sh           # Test Docker locally
+└── deploy.sh                # Deploy to EC2
 ```
 
 ---
 
-## 🎬 Usage
+## 🔧 Configuration
 
-### 1. Schedule Interview
+### **Environment Variables:**
 
+#### **server/.env** (AI Bot):
 ```bash
-# Via dashboard
-http://localhost:8009/dashboard/schedule
+# OpenAI
+OPENAI_API_KEY=sk-...
 
-# Or via API
-curl -X POST http://localhost:8009/api/interviews \
-  -H "Content-Type: application/json" \
-  -d '{
-    "candidate_name": "John Doe",
-    "position": "Senior Developer",
-    "scheduled_date": "2025-10-10"
-  }'
+# TTS Service (cartesia, elevenlabs, openai)
+TTS_SERVICE=cartesia
+CARTESIA_API_KEY=...
+CARTESIA_VOICE_ID=...
+
+# Daily.co
+DAILY_API_KEY=...
+
+# Video Service (tavus, simli, none)
+VIDEO_SERVICE=none  # or tavus, simli
+TAVUS_API_KEY=...
+TAVUS_REPLICA_ID=...
+
+# Web Server URL
+WEB_SERVER_URL=http://localhost:8009
 ```
 
-### 2. Start AI Bot
-
+#### **web_server/.env** (Web Server):
 ```bash
-cd server
-INTERVIEW_ID=interview_xxx \
-WEB_SERVER_URL=http://localhost:8009 \
-python ai-interviewer.py --transport daily
+# MongoDB
+MONGODB_URL=mongodb+srv://...
+MONGODB_DB_NAME=ai_interviewer
+
+# Redis
+REDIS_URL=redis://localhost:6379
+# or
+REDIS_HOST=localhost
+REDIS_PORT=6379
+
+# Daily.co
+DAILY_API_KEY=...
+
+# Hire2Inspire (Optional)
+H2I_BASE_URL=https://api.hire2inspire.com
+H2I_EMAIL=...
+H2I_PASSWORD=...
 ```
-
-### 3. Candidate Joins
-
-- Candidate opens: `https://hi2inspire.daily.co/hi2inspire`
-- AI greets and starts interview
-- Conversation happens naturally
-
-### 4. View Results
-
-- Dashboard: `http://localhost:8009/dashboard/interviews`
-- Results appear automatically after interview ends
 
 ---
 
-## 🧪 Testing
+## 🎯 Features
 
-### Manual Testing
+### **Interview Management**
+- ✅ Schedule interviews
+- ✅ Real-time video/audio calls
+- ✅ AI-powered conversation
+- ✅ Automatic transcription
+- ✅ Interview reports & analytics
+
+### **AI Capabilities**
+- ✅ Natural conversation flow
+- ✅ Context-aware questions
+- ✅ Multiple TTS providers (Cartesia, ElevenLabs, OpenAI)
+- ✅ Video avatars (Tavus, Simli)
+- ✅ Custom voice cloning
+
+### **Integrations**
+- ✅ Daily.co for video calls
+- ✅ OpenAI for LLM & STT
+- ✅ Cartesia for TTS
+- ✅ MongoDB for data storage
+- ✅ Hire2Inspire for candidate data
+
+---
+
+## 🛠️ Development
+
+### **Local Development:**
 
 ```bash
-# Test web server
+# Start all services
+./start.sh
+
+# View logs
+tail -f /tmp/web_server.log
+tail -f /tmp/rq_worker.log
+
+# Stop services
+Ctrl+C
+```
+
+### **Manual Startup (for debugging):**
+
+**Terminal 1 - Redis:**
+```bash
+docker run -d --name redis-ai-interviewer -p 6379:6379 redis:latest
+```
+
+**Terminal 2 - RQ Worker:**
+```bash
+source venv/bin/activate
+cd web_server
+rq worker ai_bots --with-scheduler
+```
+
+**Terminal 3 - Web Server:**
+```bash
+source venv/bin/activate
+cd web_server
+python main.py
+```
+
+### **Testing:**
+
+```bash
+# Test Docker images
+./test-docker.sh
+
+# Access dashboard
+open http://localhost:8009/dashboard
+
+# Check health
 curl http://localhost:8009/health
-
-# Test database connection
-curl http://localhost:8009/debug/interviews
-
-# Test complete flow
-1. Schedule interview via dashboard
-2. Start bot with interview ID
-3. Join as candidate
-4. Complete interview
-5. Check results
 ```
 
-### Automated Testing (Coming Soon)
+---
+
+## 🐳 Docker Deployment
+
+### **Build Images:**
 
 ```bash
-# Unit tests
-pytest tests/unit/
+# Build web server
+docker build -f Dockerfile.web -t ai-interviewer-web:latest .
 
-# Integration tests
-pytest tests/integration/
+# Build worker
+docker build -f Dockerfile.worker -t ai-interviewer-worker:latest .
+```
 
-# E2E tests
-pytest tests/e2e/
+### **Run Containers:**
+
+```bash
+# Redis
+docker run -d --name redis-ai-interviewer -p 6379:6379 redis:latest
+
+# Web server
+docker run -d --name ai-interviewer-web \
+  --network host \
+  --env-file web_server/.env \
+  ai-interviewer-web:latest
+
+# Worker
+docker run -d --name ai-interviewer-worker \
+  --network host \
+  --env-file server/.env \
+  --env-file web_server/.env \
+  ai-interviewer-worker:latest
 ```
 
 ---
 
-## 📅 Development Roadmap
+## 🚀 EC2 Deployment
 
-### Phase 1: Foundation (Weeks 1-3) ⏳
-- [ ] Real LLM-based scoring engine
-- [ ] Automated bot job queue
-- [ ] Database dependency injection
-- [ ] API versioning
+### **On EC2 Instance:**
 
-### Phase 2: Architecture (Weeks 4-8) ⏳
-- [ ] Separate React frontend
-- [ ] Proper engine layer
-- [ ] Service layer refactoring
-- [ ] Authentication system
+```bash
+# 1. Clone repository
+git clone <repository-url>
+cd ai-interviewer
 
-### Phase 3: Production (Weeks 9-12) ⏳
-- [ ] Caching with Redis
-- [ ] Monitoring & logging
-- [ ] Infrastructure & deployment
-- [ ] Comprehensive testing
+# 2. Configure environment
+cp server/env.example server/.env
+cp web_server/env.example web_server/.env
+# Edit .env files with production credentials
 
-**See [ROADMAP.md](./ROADMAP.md) for detailed timeline**
+# 3. Deploy
+./deploy.sh
+```
 
----
+### **HTTPS Setup:**
 
-## 🤝 Contributing
+The application uses Nginx as a reverse proxy with Let's Encrypt SSL certificates.
 
-We welcome contributions! Here's how:
-
-1. **Read Documentation**
-   - Start with [ARCHITECTURE.md](./ARCHITECTURE.md)
-   - Check current sprint in [ROADMAP.md](./ROADMAP.md)
-
-2. **Set Up Development**
-   - Follow [DEVELOPMENT.md](./DEVELOPMENT.md)
-
-3. **Create Feature Branch**
-   ```bash
-   git checkout -b feature/sprint-X.X-description
-   ```
-
-4. **Make Changes**
-   - Follow code style guide in [DEVELOPMENT.md](./DEVELOPMENT.md#code-style-guide)
-   - Add tests
-   - Update documentation
-
-5. **Submit PR**
-   - Create PR to `develop` branch
-   - Add clear description
-   - Request review
-
-**See [DEVELOPMENT.md#contributing](./DEVELOPMENT.md#contributing) for details**
+**Access:**
+- Dashboard: https://api.human2intelligence.com/dashboard
+- API Docs: https://api.human2intelligence.com/docs
 
 ---
 
-## 🐛 Known Issues
+## 📚 Documentation
 
-1. **Manual Bot Start** - Bots must be started manually for each interview
-2. **Mock Scoring** - Scoring uses hardcoded values, not real LLM
-3. **Monolithic Server** - API and UI are tightly coupled
-
-**See [ARCHITECTURE.md#identified-issues](./ARCHITECTURE.md#identified-issues) for full list and solutions**
-
----
-
-## 📊 Metrics
-
-- **Interviews Conducted:** 6+ (as of Oct 6, 2025)
-- **Average Score:** 54.6/100
-- **System Uptime:** 99%+
-- **Test Coverage:** 0% (coming in Phase 3)
+- **`LOCAL_DEVELOPMENT.md`** - Local development guide
+- **`ENVIRONMENT_MANAGEMENT_GUIDE.md`** - Package management
+- **`PACKAGE_COMPARISON.md`** - Local vs Docker comparison
+- **`DEPLOYMENT_GUIDE.md`** - EC2 deployment details
+- **`CARTESIA_DEPLOYMENT.md`** - Cartesia TTS setup
 
 ---
 
-## 🔒 Security
+## 🐛 Troubleshooting
 
-- API keys stored in `.env` files (never commit!)
-- MongoDB access controlled
-- Interview data encrypted in transit
-- No PII stored without consent
+### **Issue: Virtual environment not found**
+```bash
+./setup-venv.sh
+```
 
-**See [ARCHITECTURE.md#security](./ARCHITECTURE.md) for details**
+### **Issue: Port 8009 already in use**
+```bash
+lsof -ti:8009 | xargs kill -9
+./start.sh
+```
+
+### **Issue: Redis connection failed**
+```bash
+docker restart redis-ai-interviewer
+```
+
+### **Issue: AI bot not joining**
+Check logs:
+```bash
+tail -f /tmp/rq_worker.log
+```
+
+Common causes:
+- Missing API keys in `.env`
+- Tavus payment required (set `VIDEO_SERVICE=none`)
+- Invalid Daily.co room URL
+
+### **Issue: Import errors**
+```bash
+source venv/bin/activate
+pip install --upgrade -r server/requirements.txt -r web_server/requirements.txt
+```
+
+---
+
+## 🔄 Updating Dependencies
+
+```bash
+# Activate venv
+source venv/bin/activate
+
+# Upgrade packages
+pip install --upgrade pipecat-ai openai cartesia fastapi
+
+# Update lock file
+pip freeze > requirements-all.lock
+
+# Commit changes
+git add requirements-all.lock
+git commit -m "Update dependencies"
+```
+
+---
+
+## 📊 Monitoring
+
+### **Health Checks:**
+- Web Server: http://localhost:8009/health
+- System Health: http://localhost:8009/dashboard/system-health
+
+### **Logs:**
+- Web Server: `/tmp/web_server.log`
+- RQ Worker: `/tmp/rq_worker.log`
+
+### **Redis:**
+```bash
+redis-cli ping
+redis-cli INFO
+```
+
+### **RQ Worker:**
+```bash
+source venv/bin/activate
+cd web_server
+rq info
+```
+
+---
+
+## 🎓 Best Practices
+
+1. ✅ Always use virtual environment (`source venv/bin/activate`)
+2. ✅ Never commit `.env` files
+3. ✅ Use `requirements-all.lock` for exact versions
+4. ✅ Test in Docker before deploying
+5. ✅ Monitor logs regularly
+6. ✅ Keep dependencies updated
+7. ✅ Use environment variables for configuration
 
 ---
 
 ## 📝 License
 
-MIT License - See [LICENSE](./LICENSE) file
+[Your License Here]
+
+---
+
+## 🤝 Contributing
+
+[Your Contributing Guidelines Here]
 
 ---
 
 ## 📞 Support
 
-### Questions?
-1. Check [DEVELOPMENT.md](./DEVELOPMENT.md#getting-help)
-2. Read [ARCHITECTURE.md](./ARCHITECTURE.md)
-3. Search existing issues
-4. Create new issue with details
-
-### Bug Reports
-See [DEVELOPMENT.md#reporting-bugs](./DEVELOPMENT.md#reporting-bugs)
+For issues and questions:
+- GitHub Issues: [Your Repo URL]
+- Documentation: See `/docs` directory
+- Email: [Your Email]
 
 ---
 
-## 🙏 Acknowledgments
-
-- **Pipecat** - Voice AI framework
-- **FastAPI** - Web framework
-- **OpenAI** - LLM capabilities
-- **Daily.co** - WebRTC infrastructure
-- **MongoDB** - Database
+**Built with:**
+- [Pipecat](https://github.com/pipecat-ai/pipecat) - Real-time AI conversation framework
+- [FastAPI](https://fastapi.tiangolo.com/) - Modern web framework
+- [Daily.co](https://www.daily.co/) - Video/audio infrastructure
+- [OpenAI](https://openai.com/) - LLM & STT
+- [Cartesia](https://www.cartesia.ai/) - TTS
+- [Redis](https://redis.io/) - Job queue
+- [MongoDB](https://www.mongodb.com/) - Database
 
 ---
 
-## 🎯 Quick Commands
+**Ready to start?**
 
 ```bash
-# Start development
-git checkout develop
-git pull
-git checkout -b feature/my-feature
-
-# Run locally
-cd web_server && python main.py
-
-# Test
-curl http://localhost:8009/health
-
-# Deploy changes
-git add .
-git commit -m "[Sprint X.X] Description"
-git push origin feature/my-feature
+./setup-venv.sh
+./start.sh
 ```
 
----
-
-**Built with ❤️ for better hiring**
-
-**Status:** 🟢 Active Development  
-**Last Updated:** October 6, 2025  
-**Version:** 0.1.0
-
+🎉 **Happy interviewing!**

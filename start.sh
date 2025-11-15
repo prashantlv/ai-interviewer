@@ -1,5 +1,6 @@
 #!/bin/bash
 # AI Interviewer - Start All Services with Live Logs
+# Pure pip/venv approach - NO conda required
 
 echo "🚀 Starting AI Interviewer with Live Logs..."
 echo "============================================"
@@ -21,8 +22,22 @@ cleanup() {
 # Set trap for cleanup
 trap cleanup SIGINT SIGTERM
 
+# Check if virtual environment exists
+if [ ! -d "venv" ]; then
+    echo -e "${RED}❌ Virtual environment not found!${NC}"
+    echo "Please run setup first:"
+    echo "  ./setup-venv.sh"
+    exit 1
+fi
+
+# Activate virtual environment
+echo -e "${BLUE}🐍 Activating virtual environment...${NC}"
+source venv/bin/activate
+echo -e "   ${GREEN}✅ Using Python: $(which python)${NC}"
+echo -e "   ${GREEN}✅ Version: $(python --version)${NC}"
+
 # 1. Start Redis
-echo -e "${BLUE}1️⃣ Starting Redis...${NC}"
+echo -e "\n${BLUE}1️⃣ Starting Redis...${NC}"
 if docker ps | grep -q redis-ai-interviewer; then
     echo "   ✅ Redis container already running"
 elif docker ps -a | grep -q redis-ai-interviewer; then
@@ -44,31 +59,24 @@ fi
 
 # 2. Start RQ Worker with live logs
 echo -e "\n${BLUE}2️⃣ Starting RQ Worker (with live logs)...${NC}"
-cd /home/prashant/Playground/personal/consult/ai-interviewer/web_server
+cd web_server
 
 # Start RQ worker in background but pipe to tee for live viewing
-(
-    source ~/miniconda3/etc/profile.d/conda.sh
-    conda activate pipecat-env
-    rq worker ai_bots --with-scheduler 2>&1 | tee /tmp/rq_worker.log
-) &
+rq worker ai_bots --with-scheduler 2>&1 | tee /tmp/rq_worker.log &
 RQ_PID=$!
 echo "   Worker PID: $RQ_PID"
 sleep 2
 
 # 3. Start Web Server with live logs
 echo -e "\n${BLUE}3️⃣ Starting Web Server (with live logs)...${NC}"
-cd /home/prashant/Playground/personal/consult/ai-interviewer/web_server
 
 # Start web server in background but pipe to tee for live viewing
-(
-    source ~/miniconda3/etc/profile.d/conda.sh
-    conda activate pipecat-env
-    python main.py 2>&1 | tee /tmp/web_server.log
-) &
+python main.py 2>&1 | tee /tmp/web_server.log &
 WEB_PID=$!
 echo "   Server PID: $WEB_PID"
 sleep 3
+
+cd ..
 
 # 4. Verify services
 echo -e "\n${BLUE}4️⃣ Verifying services...${NC}"
@@ -115,4 +123,3 @@ tail -f /tmp/web_server.log /tmp/rq_worker.log 2>/dev/null || {
         tail -f /tmp/web_server.log /tmp/rq_worker.log
     }
 }
-

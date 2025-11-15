@@ -139,36 +139,27 @@ def _build_bot_command(interview_id: str, room_url: str = None) -> list:
     bot_script = "ai-interviewer.py"
     
     # Determine Python executable to use
-    # In Docker, use the current Python interpreter (sys.executable)
-    # In local dev, try conda environment first, then fall back to sys.executable
-    python_executable = None
+    # Use the current Python interpreter (sys.executable)
+    # This works for both Docker and local venv
+    python_executable = sys.executable
     
-    # Check if we're in Docker (common indicators)
-    is_docker = False
-    if os.path.exists("/.dockerenv"):
-        is_docker = True
-    elif os.path.exists("/proc/self/cgroup"):
-        try:
-            with open("/proc/self/cgroup", "r") as f:
-                if "docker" in f.read():
-                    is_docker = True
-        except:
-            pass
+    # Check if we're in a virtual environment
+    in_venv = hasattr(sys, 'real_prefix') or (
+        hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix
+    )
+    
+    # Check if we're in Docker
+    is_docker = os.path.exists("/.dockerenv") or (
+        os.path.exists("/proc/self/cgroup") and 
+        any("docker" in line for line in open("/proc/self/cgroup").readlines() if line)
+    )
     
     if is_docker:
-        # In Docker, use the current Python interpreter
-        python_executable = sys.executable
-        logger.info(f"🐳 Docker detected, using: {python_executable}")
+        logger.info(f"🐳 Docker environment - using: {python_executable}")
+    elif in_venv:
+        logger.info(f"🐍 Virtual environment - using: {python_executable}")
     else:
-        # Local development: try conda environment first
-        conda_python = os.path.expanduser("~/miniconda3/envs/pipecat-env/bin/python")
-        if os.path.exists(conda_python):
-            python_executable = conda_python
-            logger.info(f"💻 Using conda environment: {python_executable}")
-        else:
-            # Fall back to current Python
-            python_executable = sys.executable
-            logger.info(f"💻 Using system Python: {python_executable}")
+        logger.info(f"💻 System Python - using: {python_executable}")
     
     # Build command
     command = [
