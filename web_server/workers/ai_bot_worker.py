@@ -58,30 +58,14 @@ def start_interview_bot(interview_id: str, config: Optional[Dict[str, Any]] = No
         logger.info(f"📝 Command: {' '.join(command)}")
         
         # Start the bot process
-        # Note: stdout/stderr are captured but we log them for debugging
+        # CRITICAL: Let stdout/stderr inherit from parent so logs show immediately
         process = subprocess.Popen(
             command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=None,  # Inherit stdout - logs go directly to docker logs
+            stderr=None,  # Inherit stderr - errors go directly to docker logs
             env=_get_bot_environment(interview_id),
-            cwd=_get_bot_directory(),
-            text=True,
-            bufsize=1
+            cwd=_get_bot_directory()
         )
-        
-        # Log the first few lines of output for debugging
-        import threading
-        def log_output(pipe, prefix):
-            try:
-                for line in iter(pipe.readline, ''):
-                    if line:
-                        logger.info(f"{prefix} {line.rstrip()}")
-            except Exception:
-                pass  # Silently ignore output reading errors
-        
-        # Start threads to log output (non-blocking)
-        threading.Thread(target=log_output, args=(process.stdout, f"[Bot {interview_id}]"), daemon=True).start()
-        threading.Thread(target=log_output, args=(process.stderr, f"[Bot {interview_id} ERR]"), daemon=True).start()
         
         # Store process info
         ACTIVE_BOTS[interview_id] = {
@@ -186,6 +170,9 @@ def _get_bot_environment(interview_id: str) -> Dict[str, str]:
     
     # Add interview-specific env vars
     env["INTERVIEW_ID"] = interview_id
+    
+    # CRITICAL: Disable Python output buffering for real-time logs
+    env["PYTHONUNBUFFERED"] = "1"
     
     # Ensure these are set (from .env file in bot directory)
     # The bot will load its own .env file, but we can override here if needed

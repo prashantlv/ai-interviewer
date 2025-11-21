@@ -9,7 +9,7 @@ import os
 from typing import AsyncGenerator
 from loguru import logger
 
-from pipecat.frames.frames import Frame, AudioRawFrame, ErrorFrame
+from pipecat.frames.frames import Frame, ErrorFrame, TTSAudioRawFrame
 from pipecat.services.tts_service import TTSService
 
 
@@ -93,19 +93,20 @@ class CartesiaTTSService(TTSService):
                     
                     await self.start_tts_usage_metrics(text)
                     
-                    # Read audio data in chunks
+                    # Read all audio data at once (Cartesia returns complete audio)
                     audio_data = await response.read()
                     
+                    await self.stop_ttfb_metrics()
+                    
                     if audio_data:
-                        # Create audio frame with PCM data
-                        frame = AudioRawFrame(
+                        logger.debug(f"✅ Generated {len(audio_data)} bytes of audio")
+                        
+                        # Yield TTS-specific audio frame - base class adds transport_destination
+                        yield TTSAudioRawFrame(
                             audio=audio_data,
                             sample_rate=self._sample_rate,
                             num_channels=1
                         )
-                        yield frame
-                        await self.stop_ttfb_metrics()
-                        logger.debug(f"✅ Generated {len(audio_data)} bytes of audio")
                     else:
                         logger.warning("⚠️ No audio data received from Cartesia")
                     
