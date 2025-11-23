@@ -178,8 +178,8 @@ else:
 
 # Import TTS services based on configuration
 if TTS_SERVICE == "cartesia":
-    from services.cartesia_tts import CartesiaTTSService
-    logger.info("🎤 Using Cartesia TTS")
+    from pipecat.services.cartesia.tts import CartesiaTTSService
+    logger.info("🎤 Using Cartesia TTS (WebSocket Streaming)")
 
 # Import video services based on configuration
 if VIDEO_SERVICE == "tavus":
@@ -335,13 +335,15 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
             if not os.getenv("CARTESIA_API_KEY"):
                 logger.error("CARTESIA_API_KEY is required when TTS_SERVICE=cartesia")
                 sys.exit(1)
+            
+            # Use Pipecat's built-in Cartesia with WebSocket streaming for low latency
             tts = CartesiaTTSService(
                 api_key=os.getenv("CARTESIA_API_KEY"),
                 voice_id=os.getenv("CARTESIA_VOICE_ID", "a0e99841-438c-4a64-b679-ae501e7d6091"),
                 model=os.getenv("CARTESIA_MODEL", "sonic-english"),
-                language=os.getenv("CARTESIA_LANGUAGE", "en"),
+                sample_rate=16000,  # Match audio pipeline
             )
-            logger.info(f"✅ Initialized Cartesia TTS with voice: {os.getenv('CARTESIA_VOICE_ID', 'default')}")
+            logger.info(f"✅ Initialized Cartesia TTS (WebSocket) with voice: {os.getenv('CARTESIA_VOICE_ID', 'default')}")
         else:
             # Default to OpenAI TTS
             tts = OpenAITTSService(
