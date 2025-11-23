@@ -227,7 +227,7 @@ Python, Django, JavaScript, React, Docker, AWS..."></textarea>
 
                         <div class="d-flex justify-content-between">
                             <a href="/dashboard/" class="btn btn-outline-secondary">Cancel</a>
-                            <button type="submit" class="btn btn-primary">
+                            <button type="submit" class="btn btn-primary" id="scheduleBtn">
                                 <i class="bi bi-calendar-plus"></i> Schedule Interview
                             </button>
                         </div>
@@ -542,6 +542,18 @@ document.getElementById('h2i_candidate').addEventListener('change', function() {
 // Load jobs on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadJobs();
+    
+    // Add loading state to form submission
+    const form = document.querySelector('form');
+    const submitBtn = document.getElementById('scheduleBtn');
+    
+    form.addEventListener('submit', function(e) {
+        // Disable button and show loading state
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Scheduling...';
+        
+        // Form will submit normally, but button is disabled to prevent double-clicks
+    });
 });
 </script>
 {% endblock %}

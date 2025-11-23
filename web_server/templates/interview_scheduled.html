@@ -79,7 +79,7 @@
                             <i class="bi bi-list"></i> View All Interviews
                         </a>
                         <div>
-                            <button class="btn btn-success me-2" onclick="copyInterviewLink()">
+                            <button class="btn btn-success me-2" onclick="copyInterviewLink(event)">
                                 <i class="bi bi-copy"></i> Copy Interview Link
                             </button>
                             <a href="/dashboard/schedule" class="btn btn-primary">
@@ -94,21 +94,37 @@
 </div>
 
 <script>
-function copyInterviewLink() {
+function copyInterviewLink(event) {
     const link = "{{ interview.join_url }}";
+    const btn = event.currentTarget;  // Use currentTarget for proper button reference
+    const originalHTML = btn.innerHTML;
+    
     navigator.clipboard.writeText(link).then(function() {
         // Show success message
-        const btn = event.target;
-        const originalText = btn.innerHTML;
         btn.innerHTML = '<i class="bi bi-check"></i> Copied!';
         btn.classList.remove('btn-success');
         btn.classList.add('btn-outline-success');
+        btn.disabled = true;
         
         setTimeout(function() {
-            btn.innerHTML = originalText;
+            btn.innerHTML = originalHTML;
             btn.classList.remove('btn-outline-success');
             btn.classList.add('btn-success');
+            btn.disabled = false;
         }, 2000);
+    }).catch(function(err) {
+        // Show error message
+        btn.innerHTML = '<i class="bi bi-x-circle"></i> Failed!';
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-danger');
+        
+        setTimeout(function() {
+            btn.innerHTML = originalHTML;
+            btn.classList.remove('btn-danger');
+            btn.classList.add('btn-success');
+        }, 2000);
+        
+        console.error('Failed to copy link:', err);
     });
 }
 </script>

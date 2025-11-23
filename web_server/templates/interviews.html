@@ -116,9 +116,12 @@
                                                     👁️ View Results
                                                 </a>
                                             {% elif interview.status == 'scheduled' %}
-                                                <button class="btn btn-outline-success">▶️ Start</button>
+                                                <button class="btn btn-outline-success" onclick="showInterviewLink('{{ interview.join_url }}', '{{ interview.interview_id }}')">
+                                                    ▶️ Start
+                                                </button>
                                             {% endif %}
-                                            <button class="btn btn-outline-secondary">✏️ Edit</button>
+                                            <!-- Edit button temporarily disabled - will be implemented in future -->
+                                            <!-- <button class="btn btn-outline-secondary">✏️ Edit</button> -->
                                         </div>
                                     </td>
                                 </tr>
@@ -171,4 +174,76 @@
         </div>
     </div>
 </div>
+
+<!-- Modal for Interview Link -->
+<div class="modal fade" id="interviewLinkModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-link-45deg"></i> Interview Link Ready
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-3"><strong>Interview ID:</strong> <code id="modal-interview-id"></code></p>
+                <div class="alert alert-info mb-3">
+                    <strong>Interview Link:</strong>
+                    <div class="input-group mt-2">
+                        <input type="text" class="form-control" id="modal-interview-link" readonly>
+                        <button class="btn btn-outline-success" type="button" onclick="copyLinkFromModal()">
+                            <i class="bi bi-copy"></i> Copy
+                        </button>
+                    </div>
+                </div>
+                <p class="text-muted small mb-0">
+                    <i class="bi bi-info-circle"></i> Share this link with the candidate to start the interview
+                </p>
+            </div>
+            <div class="modal-footer">
+                <a id="modal-open-link" href="#" target="_blank" class="btn btn-primary me-auto">
+                    <i class="bi bi-box-arrow-up-right"></i> Open in New Tab
+                </a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function showInterviewLink(joinUrl, interviewId) {
+    // Set modal content
+    document.getElementById('modal-interview-id').textContent = interviewId;
+    document.getElementById('modal-interview-link').value = joinUrl;
+    document.getElementById('modal-open-link').href = joinUrl;
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('interviewLinkModal'));
+    modal.show();
+}
+
+function copyLinkFromModal() {
+    const linkInput = document.getElementById('modal-interview-link');
+    const copyBtn = event.target.closest('button');
+    
+    // Copy to clipboard
+    navigator.clipboard.writeText(linkInput.value).then(function() {
+        // Show success feedback
+        const originalHTML = copyBtn.innerHTML;
+        copyBtn.innerHTML = '<i class="bi bi-check"></i> Copied!';
+        copyBtn.classList.remove('btn-outline-success');
+        copyBtn.classList.add('btn-success');
+        
+        setTimeout(function() {
+            copyBtn.innerHTML = originalHTML;
+            copyBtn.classList.remove('btn-success');
+            copyBtn.classList.add('btn-outline-success');
+        }, 2000);
+    }).catch(function(err) {
+        alert('Failed to copy link: ' + err);
+    });
+}
+</script>
 {% endblock %}
