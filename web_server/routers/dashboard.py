@@ -3,7 +3,7 @@ Dashboard Router - Recruiter dashboard endpoints
 """
 
 from fastapi import APIRouter, Request, Form, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from typing import Optional
 from datetime import datetime, timedelta
@@ -895,3 +895,66 @@ async def system_health_page(
         "has_openai_key": has_openai_key,
         "has_daily_room": has_daily_room
     })
+
+
+@router.post("/api/v1/interviews/{interview_id}/generate-link")
+async def generate_interview_link(interview_id: str, db: DbServiceDep):
+    """Generate a fresh join link with token for an interview"""
+    try:
+        # Get interview from database
+        if not db or not db.database:
+            raise HTTPException(status_code=500, detail="Database not available")
+        
+        # Find interview by interview_id
+        interview = await db.database.interview_results.find_one({"interview_id": interview_id})
+        
+        if not interview:
+            raise HTTPException(status_code=404, detail="Interview not found")
+        
+        # Check if interview has room_url and room_name
+        room_url = interview.get("room_url")
+        room_name = interview.get("room_name")
+        candidate_name = interview.get("candidate_name", "Candidate")
+        
+        if not room_url:
+            # Construct room URL if missing
+            if room_name:
+                room_url = f"https://hi2inspire.daily.co/{room_name}"
+            else:
+                room_url = f"https://hi2inspire.daily.co/interview-{interview_id}"
+                room_name = f"interview-{interview_id}"
+        
+        # Extract room_name from room_url if not stored
+        if not room_name and room_url:
+            room_name = room_url.split("/")[-1]
+        
+        # Generate fresh token for this room
+        try:
+            candidate_token = await daily_service.create_candidate_token(
+                room_name=room_name,
+                candidate_name=candidate_name,
+                expires_in_minutes=90  # Token valid for 1.5 hours
+            )
+            
+            if candidate_token:
+                join_url = f"{room_url}?t={candidate_token}"
+            else:
+                # Fallback: try without token (will work for public rooms)
+                join_url = room_url
+                
+        except Exception as e:
+            print(f"⚠️ Failed to generate token: {e}")
+            # Fallback: return room URL without token
+            join_url = room_url
+        
+        return JSONResponse({
+            "success": True,
+            "join_url": join_url,
+            "interview_id": interview_id
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error generating interview link: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

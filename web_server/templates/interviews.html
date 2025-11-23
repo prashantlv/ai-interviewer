@@ -213,15 +213,45 @@
 
 {% block extra_js %}
 <script>
-function showInterviewLink(joinUrl, interviewId) {
-    // Set modal content
-    document.getElementById('modal-interview-id').textContent = interviewId;
-    document.getElementById('modal-interview-link').value = joinUrl;
-    document.getElementById('modal-open-link').href = joinUrl;
-    
-    // Show modal
+async function showInterviewLink(joinUrl, interviewId) {
+    // Show modal with loading state
     const modal = new bootstrap.Modal(document.getElementById('interviewLinkModal'));
+    const linkInput = document.getElementById('modal-interview-link');
+    const openLink = document.getElementById('modal-open-link');
+    
+    document.getElementById('modal-interview-id').textContent = interviewId;
+    linkInput.value = 'Generating fresh link...';
+    linkInput.disabled = true;
+    openLink.href = '#';
+    
     modal.show();
+    
+    try {
+        // Generate fresh link with token from backend
+        const response = await fetch(`/dashboard/api/v1/interviews/${interviewId}/generate-link`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            linkInput.value = data.join_url;
+            openLink.href = data.join_url;
+        } else {
+            // Fallback to original URL if API fails
+            linkInput.value = joinUrl || 'Failed to generate link';
+            openLink.href = joinUrl || '#';
+        }
+    } catch (error) {
+        console.error('Failed to generate interview link:', error);
+        // Fallback to original URL
+        linkInput.value = joinUrl || 'Failed to generate link';
+        openLink.href = joinUrl || '#';
+    } finally {
+        linkInput.disabled = false;
+    }
 }
 
 function copyLinkFromModal() {
