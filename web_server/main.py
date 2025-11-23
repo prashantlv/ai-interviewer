@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 
 # Import our modules
-from routers import interviews, dashboard, feedback, bots, tavus
+from routers import interviews, dashboard, feedback, bots, tavus, voices
 from services.database import DatabaseService
 from services.question_engine import QuestionEngine
 from services.scoring_engine import ScoringEngine
@@ -99,6 +99,7 @@ app.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 app.include_router(interviews.router, prefix="/api/v1/interviews", tags=["interviews-v1"])
 app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["feedback-v1"])
 app.include_router(bots.router, prefix="/api/v1/bots", tags=["bots-v1"])
+app.include_router(voices.router, prefix="/api/v1/voices", tags=["voices-v1"])
 
 # Replica management routes (includes both dashboard and API)
 # Dashboard: /dashboard/replicas

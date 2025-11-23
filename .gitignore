@@ -101,3 +101,12 @@ dump.rdb
 # Don't ignore example env files
 !.env.example
 !*.env.example
+
+# Voice samples (audio files - keep private)
+server/voice_samples/*.wav
+server/voice_samples/*.mp3
+server/voice_samples/*.flac
+server/voice_samples/*.ogg
+server/voice_samples/*.m4a
+# But keep the README
+!server/voice_samples/README.md

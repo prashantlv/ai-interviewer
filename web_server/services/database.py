@@ -134,6 +134,13 @@ class DatabaseService:
             await self.database.create_collection("interview_results")
             await self.database.interview_results.create_index("interview_id", unique=True)
             print("✅ Created 'interview_results' collection with indexes")
+        
+        if "cloned_voices" not in collections:
+            await self.database.create_collection("cloned_voices")
+            await self.database.cloned_voices.create_index("voice_id", unique=True)
+            await self.database.cloned_voices.create_index("owner_id")
+            await self.database.cloned_voices.create_index("created_at")
+            print("✅ Created 'cloned_voices' collection with indexes")
     
     def _load_json_data(self, filename: str) -> Dict[str, Any]:
         """Load data from JSON file"""
