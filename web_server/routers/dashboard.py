@@ -177,6 +177,7 @@ async def interviews_page(
         for interview in interviews:
             interview_list.append({
                 "id": interview.get("id", "unknown"),
+                "interview_id": interview.get("interview_id", interview.get("id", "unknown")),
                 "candidate_name": interview.get("candidate_name", "Unknown"),
                 "candidate_email": "N/A",  # TODO: Add email to database
                 "position": interview.get("position", "Unknown Position"),
@@ -184,7 +185,8 @@ async def interviews_page(
                 "score": interview.get("score", 0),
                 "scheduled_date": interview.get("created_at", "N/A"),
                 "duration": "N/A",  # TODO: Calculate from transcript
-                "transcript_available": interview.get("transcript_available", False)
+                "transcript_available": interview.get("transcript_available", False),
+                "join_url": interview.get("candidate_join_url", interview.get("join_url", ""))
             })
             
     except Exception as e:
