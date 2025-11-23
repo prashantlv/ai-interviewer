@@ -19,7 +19,7 @@ grep -q "CARTESIA_API_KEY" server/.env || cat >> server/.env << 'EOF'
 # Cartesia TTS Configuration
 TTS_SERVICE=cartesia
 CARTESIA_API_KEY=sk_car_ib5wETe49cRfZX6HMGpArL
-CARTESIA_VOICE_ID=a0e99841-438c-4a64-b679-ae501e7d6091
+CARTESIA_VOICE_ID=c252b73c-8627-4b1d-b9e1-9e03e8550d47
 CARTESIA_MODEL=sonic-english
 CARTESIA_LANGUAGE=en
 EOF
@@ -29,7 +29,7 @@ grep -q "CARTESIA_API_KEY" web_server/.env || cat >> web_server/.env << 'EOF'
 # Cartesia TTS Configuration
 TTS_SERVICE=cartesia
 CARTESIA_API_KEY=sk_car_ib5wETe49cRfZX6HMGpArL
-CARTESIA_VOICE_ID=a0e99841-438c-4a64-b679-ae501e7d6091
+CARTESIA_VOICE_ID=c252b73c-8627-4b1d-b9e1-9e03e8550d47
 CARTESIA_MODEL=sonic-english
 CARTESIA_LANGUAGE=en
 EOF

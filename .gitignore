@@ -110,3 +110,5 @@ server/voice_samples/*.ogg
 server/voice_samples/*.m4a
 # But keep the README
 !server/voice_samples/README.md
+# Allow the default interviewer sample for deployment
+!server/voice_samples/interviewer.wav
