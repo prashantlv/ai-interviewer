@@ -900,21 +900,26 @@ async def system_health_page(
 @router.post("/api/v1/interviews/{interview_id}/generate-link")
 async def generate_interview_link(interview_id: str, db: DbServiceDep):
     """Generate a fresh join link with token for an interview"""
+    print(f"🔍 API called: generate_interview_link for {interview_id}")
     try:
         # Get interview from database
-        if not db or not db.database:
+        if db is None or db.database is None:
+            print(f"❌ Database not available")
             raise HTTPException(status_code=500, detail="Database not available")
         
         # Find interview by interview_id
         interview = await db.database.interview_results.find_one({"interview_id": interview_id})
+        print(f"📊 Interview found: {interview is not None}")
         
         if not interview:
+            print(f"❌ Interview not found: {interview_id}")
             raise HTTPException(status_code=404, detail="Interview not found")
         
         # Check if interview has room_url and room_name
         room_url = interview.get("room_url")
         room_name = interview.get("room_name")
         candidate_name = interview.get("candidate_name", "Candidate")
+        print(f"📋 Interview data: room_url={room_url}, room_name={room_name}, candidate={candidate_name}")
         
         if not room_url:
             # Construct room URL if missing
@@ -930,23 +935,28 @@ async def generate_interview_link(interview_id: str, db: DbServiceDep):
         
         # Generate fresh token for this room
         try:
+            print(f"🔑 Generating token for room: {room_name}")
             candidate_token = await daily_service.create_candidate_token(
                 room_name=room_name,
                 candidate_name=candidate_name,
                 expires_in_minutes=90  # Token valid for 1.5 hours
             )
+            print(f"🎟️ Token generated: {candidate_token[:20] if candidate_token else 'None'}...")
             
             if candidate_token:
                 join_url = f"{room_url}?t={candidate_token}"
+                print(f"✅ Join URL with token: {join_url[:80]}...")
             else:
                 # Fallback: try without token (will work for public rooms)
                 join_url = room_url
+                print(f"⚠️ No token generated, using room URL only")
                 
         except Exception as e:
-            print(f"⚠️ Failed to generate token: {e}")
+            print(f"❌ Failed to generate token: {e}")
             # Fallback: return room URL without token
             join_url = room_url
         
+        print(f"✅ Returning join_url")
         return JSONResponse({
             "success": True,
             "join_url": join_url,

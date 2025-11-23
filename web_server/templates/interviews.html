@@ -214,6 +214,8 @@
 {% block extra_js %}
 <script>
 async function showInterviewLink(joinUrl, interviewId) {
+    console.log('🔍 Start button clicked:', { joinUrl, interviewId });
+    
     // Show modal with loading state
     const modal = new bootstrap.Modal(document.getElementById('interviewLinkModal'));
     const linkInput = document.getElementById('modal-interview-link');
@@ -228,24 +230,32 @@ async function showInterviewLink(joinUrl, interviewId) {
     
     try {
         // Generate fresh link with token from backend
-        const response = await fetch(`/dashboard/api/v1/interviews/${interviewId}/generate-link`, {
+        const apiUrl = `/dashboard/api/v1/interviews/${interviewId}/generate-link`;
+        console.log('📡 Calling API:', apiUrl);
+        
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             }
         });
         
+        console.log('📥 API response status:', response.status);
+        
         if (response.ok) {
             const data = await response.json();
+            console.log('✅ API response data:', data);
             linkInput.value = data.join_url;
             openLink.href = data.join_url;
         } else {
+            const errorText = await response.text();
+            console.error('❌ API error:', response.status, errorText);
             // Fallback to original URL if API fails
             linkInput.value = joinUrl || 'Failed to generate link';
             openLink.href = joinUrl || '#';
         }
     } catch (error) {
-        console.error('Failed to generate interview link:', error);
+        console.error('❌ Failed to generate interview link:', error);
         // Fallback to original URL
         linkInput.value = joinUrl || 'Failed to generate link';
         openLink.href = joinUrl || '#';
