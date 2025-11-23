@@ -175,9 +175,24 @@ async def interviews_page(
         # Transform data for template
         interview_list = []
         for interview in interviews:
+            # Get interview ID for URL construction
+            interview_id = interview.get("interview_id", interview.get("id", "unknown"))
+            
+            # Get join URL with fallbacks
+            join_url = interview.get("candidate_join_url") or interview.get("join_url")
+            
+            # If no join_url, construct from room_url or interview_id
+            if not join_url:
+                room_url = interview.get("room_url")
+                if room_url:
+                    join_url = room_url
+                else:
+                    # Fallback: construct Daily.co URL from interview_id
+                    join_url = f"https://hi2inspire.daily.co/interview-{interview_id}"
+            
             interview_list.append({
                 "id": interview.get("id", "unknown"),
-                "interview_id": interview.get("interview_id", interview.get("id", "unknown")),
+                "interview_id": interview_id,
                 "candidate_name": interview.get("candidate_name", "Unknown"),
                 "candidate_email": "N/A",  # TODO: Add email to database
                 "position": interview.get("position", "Unknown Position"),
@@ -186,7 +201,7 @@ async def interviews_page(
                 "scheduled_date": interview.get("created_at", "N/A"),
                 "duration": "N/A",  # TODO: Calculate from transcript
                 "transcript_available": interview.get("transcript_available", False),
-                "join_url": interview.get("candidate_join_url", interview.get("join_url", ""))
+                "join_url": join_url
             })
             
     except Exception as e:
