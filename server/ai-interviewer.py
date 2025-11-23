@@ -77,6 +77,28 @@ async def fetch_interview_config(session: aiohttp.ClientSession, interview_id: s
         logger.error(f"Error fetching interview config: {e}")
         return None
 
+class ConditionalVideoProcessor(FrameProcessor):
+    """Wrapper that conditionally forwards frames to video service when initialized."""
+    
+    def __init__(self):
+        super().__init__()
+        self._video_service = None
+    
+    def set_video_service(self, video_service):
+        """Set the actual video service to forward frames to."""
+        self._video_service = video_service
+        logger.info("🎬 Video processor now active - forwarding frames to Tavus")
+    
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        """Forward frame to video service if initialized, otherwise pass through."""
+        if self._video_service:
+            # Forward to actual video service
+            await self._video_service.process_frame(frame, direction)
+        else:
+            # Video not ready yet - just pass frame through
+            await self.push_frame(frame, direction)
+
+
 async def send_interview_result(
     session: aiohttp.ClientSession, 
     interview_id: str, 
@@ -399,7 +421,11 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
     rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
     
     # Initialize video service based on configuration
+    # For Tavus: delay initialization until participant joins to save costs
     video_service = None
+    video_processor = None  # Will hold ConditionalVideoProcessor for Tavus
+    tavus_initialized = False  # Track if Tavus has been initialized
+    
     if VIDEO_SERVICE == "tavus":
         if not os.getenv("TAVUS_API_KEY"):
             logger.error("TAVUS_API_KEY is required when VIDEO_SERVICE=tavus")
@@ -407,13 +433,10 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
         if not os.getenv("TAVUS_REPLICA_ID"):
             logger.error("TAVUS_REPLICA_ID is required when VIDEO_SERVICE=tavus")
             sys.exit(1)
-            
-        video_service = TavusVideoService(
-            api_key=os.getenv("TAVUS_API_KEY"),
-            replica_id=os.getenv("TAVUS_REPLICA_ID"),
-            session=session,
-        )
-        logger.info(f"Initialized Tavus with replica: {os.getenv('TAVUS_REPLICA_ID')}")
+        
+        # Create conditional video processor - Tavus will be added when participant joins
+        video_processor = ConditionalVideoProcessor()
+        logger.info(f"⏳ Tavus ready to join (replica: {os.getenv('TAVUS_REPLICA_ID')}) - waiting for candidate...")
         
     elif VIDEO_SERVICE == "simli":
         if not os.getenv("SIMLI_API_KEY"):
@@ -477,9 +500,11 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
         ]
         
         # Add video processing
-        if video_service:
+        if video_processor:  # Conditional processor for lazy-loaded Tavus
+            pipeline_processors.append(video_processor)
+        elif video_service:  # Direct video service (Simli, HeyGen, etc.)
             pipeline_processors.append(video_service)
-        elif ta:
+        elif ta:  # Fallback animation
             pipeline_processors.append(ta)
         
         pipeline_processors.extend([
@@ -497,9 +522,11 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
         ]
         
         # Add video processing (Video services work with Gemini audio)
-        if video_service:
+        if video_processor:  # Conditional processor for lazy-loaded Tavus
+            pipeline_processors.append(video_processor)
+        elif video_service:  # Direct video service (Simli, HeyGen, etc.)
             pipeline_processors.append(video_service)
-        elif ta:
+        elif ta:  # Fallback animation
             pipeline_processors.append(ta)
             
         pipeline_processors.extend([
@@ -534,9 +561,40 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
         logger.info(f"Client connected - AI Interviewer ({BOT_IMPLEMENTATION.upper()}) ready")
         await transport.capture_participant_transcription(participant["id"])
 
+    @transport.event_handler("on_first_participant_joined")
+    async def on_first_participant_joined(transport, participant):
+        """Handle first participant joining - initialize Tavus if configured."""
+        nonlocal video_service, video_processor, tavus_initialized
+        
+        participant_info = participant.get("info", {}) if isinstance(participant, dict) else {}
+        participant_name = participant_info.get("userName", "Candidate")
+        
+        logger.info(f"🎯 First participant joined: {participant_name}")
+        
+        # Initialize Tavus video service now that candidate has joined
+        if VIDEO_SERVICE == "tavus" and not tavus_initialized and video_processor:
+            logger.info("🎬 Initializing Tavus avatar now that candidate is present...")
+            try:
+                tavus_service = TavusVideoService(
+                    api_key=os.getenv("TAVUS_API_KEY"),
+                    replica_id=os.getenv("TAVUS_REPLICA_ID"),
+                    session=session,
+                )
+                # Activate the conditional video processor with Tavus
+                video_processor.set_video_service(tavus_service)
+                video_service = tavus_service  # Store reference
+                tavus_initialized = True
+                logger.info(f"✅ Tavus avatar joined! (replica: {os.getenv('TAVUS_REPLICA_ID')})")
+                logger.info("💰 Tavus billing started - avatar is now active")
+            except Exception as e:
+                logger.error(f"❌ Failed to initialize Tavus: {e}")
+                video_service = None
+
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(_transport, _client):
         logger.info("Client disconnected")
+        if VIDEO_SERVICE == "tavus" and tavus_initialized:
+            logger.info("💰 Tavus billing stopped - avatar session ended")
         
         # Collect transcript
         transcript_text = "\n\n".join([
