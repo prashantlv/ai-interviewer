@@ -60,7 +60,6 @@ class DailyService:
                 "enable_screenshare": False,
                 "enable_emoji_reactions": False,
                 "enable_people_ui": False,
-                "enable_background_effects": False,
                 "enable_pip_ui": False,
                 "enable_noise_cancellation_ui": True,
                 "enable_knocking": False,
