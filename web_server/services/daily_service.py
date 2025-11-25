@@ -11,6 +11,9 @@ from typing import Dict, Any, Optional
 from loguru import logger
 
 
+DEFAULT_ROOM_EXP_SECONDS = int(os.getenv("DAILY_ROOM_EXP_SECONDS", "1800"))
+
+
 class DailyService:
     """Service for interacting with Daily.co API"""
     
@@ -26,7 +29,7 @@ class DailyService:
         self, 
         interview_id: str,
         candidate_name: str = "Candidate",
-        expires_in_minutes: int = 60
+        expires_in_minutes: Optional[int] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Create a unique Daily.co room for an interview
@@ -45,6 +48,7 @@ class DailyService:
         
         # Generate unique room name
         room_name = f"interview-{interview_id}"
+        room_exp_minutes = expires_in_minutes or max(1, DEFAULT_ROOM_EXP_SECONDS // 60)
         
         # Room configuration
         # Reference: https://www.daily.co/blog/intro-to-room-access-control/
@@ -52,10 +56,18 @@ class DailyService:
             "name": room_name,
             "privacy": "private",  # Private room requires tokens to join
             "properties": {
-                "enable_chat": True,
-                "enable_screenshare": True,
+                "enable_chat": False,
+                "enable_screenshare": False,
+                "enable_emoji_reactions": False,
+                "enable_people_ui": False,
+                "enable_background_effects": False,
+                "enable_pip_ui": False,
+                "enable_noise_cancellation_ui": True,
+                "enable_knocking": False,
+                "start_video_off": False,
+                "start_audio_off": False,
                 "enable_recording": "cloud",  # Enable cloud recording
-                "exp": self._calculate_expiry(expires_in_minutes),
+                "exp": self._calculate_expiry(room_exp_minutes),
                 "eject_at_room_exp": True,  # Eject participants when room expires
                 "owner_only_broadcast": False,  # Allow both bot and candidate to speak
                 "enable_prejoin_ui": True,  # Show prejoin UI for candidates
@@ -96,7 +108,7 @@ class DailyService:
     async def create_bot_token(
         self,
         room_name: str,
-        expires_in_minutes: int = 60
+        expires_in_minutes: Optional[int] = None
     ) -> Optional[str]:
         """
         Create a meeting token for the AI bot (owner access)
@@ -114,12 +126,14 @@ class DailyService:
             logger.error("❌ Cannot create token: DAILY_API_KEY not configured")
             return None
         
+        token_exp_minutes = expires_in_minutes or max(1, DEFAULT_ROOM_EXP_SECONDS // 60)
+        
         token_config = {
             "properties": {
                 "room_name": room_name,
                 "is_owner": True,  # Bot needs owner privileges
                 "user_name": "AI Interviewer Bot",
-                "exp": self._calculate_expiry(expires_in_minutes),
+                "exp": self._calculate_expiry(token_exp_minutes),
                 "enable_recording": "cloud"  # Bot can start recording
             }
         }
@@ -153,7 +167,7 @@ class DailyService:
         self,
         room_name: str,
         candidate_name: str,
-        expires_in_minutes: int = 60
+        expires_in_minutes: Optional[int] = None
     ) -> Optional[str]:
         """
         Create a meeting token for the candidate (participant access)
@@ -172,12 +186,14 @@ class DailyService:
             logger.error("❌ Cannot create token: DAILY_API_KEY not configured")
             return None
         
+        token_exp_minutes = expires_in_minutes or max(1, DEFAULT_ROOM_EXP_SECONDS // 60)
+        
         token_config = {
             "properties": {
                 "room_name": room_name,
                 "is_owner": False,  # Candidate is a participant
                 "user_name": candidate_name,
-                "exp": self._calculate_expiry(expires_in_minutes)
+                "exp": self._calculate_expiry(token_exp_minutes)
             }
         }
         

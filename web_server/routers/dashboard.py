@@ -392,8 +392,7 @@ async def create_interview(
     # Create unique Daily.co room for this interview
     room_data = await daily_service.create_interview_room(
         interview_id=interview_id,
-        candidate_name=candidate_name,
-        expires_in_minutes=90  # 1.5 hours
+        candidate_name=candidate_name
     )
     
     if not room_data:
@@ -405,8 +404,7 @@ async def create_interview(
     # Generate candidate token (with their name)
     candidate_token = await daily_service.create_candidate_token(
         room_name=room_data["room_name"],
-        candidate_name=candidate_name,
-        expires_in_minutes=90
+        candidate_name=candidate_name
     )
     
     # Create candidate join URL with token
@@ -483,8 +481,7 @@ async def create_interview(
                     
                     # Create bot token (owner privileges)
                     bot_token = await daily_service.create_bot_token(
-                        room_name=room_data["room_name"],
-                        expires_in_minutes=90
+                        room_name=room_data["room_name"]
                     )
                     
                     # Bot joins with token for owner access
