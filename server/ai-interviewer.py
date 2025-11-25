@@ -162,12 +162,22 @@ async def start_daily_recording(
     if not room_name:
         return None
     
+    payload = {
+        "properties": {
+            "layout": {
+                "preset": "grid",
+                "max_cam_streams": 2,
+                "max_microphone_streams": 2
+            },
+            "audio_only": False
+        }
+    }
     logger.info(f"🎥 Starting Daily recording for room: {room_name}")
     return await daily_api_request(
         session,
         "POST",
         f"/rooms/{room_name}/recordings/start",
-        payload=None,
+        payload=payload,
     )
 
 

@@ -283,6 +283,33 @@ async def interview_detail(
     interview_result = await db.database.interview_results.find_one({"interview_id": interview_id})
     if interview_result:
         interview_result.pop('_id', None)
+        recording_info = interview_result.get("recording")
+        
+        # Attempt to refresh recording metadata if we don't have a valid link yet
+        if recording_info:
+            recording_id = recording_info.get("recording_id")
+            recording_status = (recording_info.get("status") or "").lower()
+            access_link = recording_info.get("access_link")
+            
+            needs_refresh = recording_id and (
+                not access_link or recording_status not in ["completed", "ready", "available", "finished"]
+            )
+            
+            if needs_refresh:
+                latest_recording = await daily_service.fetch_recording_asset(recording_id)
+                if latest_recording:
+                    # Merge latest fields into stored recording data
+                    recording_info.update({k: v for k, v in latest_recording.items() if v is not None})
+                    interview_result["recording"] = recording_info
+                    
+                    # Persist the refreshed data
+                    await db.update_interview_result(
+                        interview_id=interview_id,
+                        transcript=interview_result.get("transcript", ""),
+                        evaluation=interview_result.get("evaluation", {}),
+                        status=interview_result.get("status", "completed"),
+                        recording=recording_info
+                    )
     
     if interview_result:
         # Use real data from database
