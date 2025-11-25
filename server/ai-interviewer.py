@@ -162,22 +162,12 @@ async def start_daily_recording(
     if not room_name:
         return None
     
-    payload = {
-        "properties": {
-            "layout": {
-                "preset": "grid",
-                "max_cam_streams": 2,
-                "max_microphone_streams": 2
-            },
-            "audio_only": False
-        }
-    }
     logger.info(f"🎥 Starting Daily recording for room: {room_name}")
     return await daily_api_request(
         session,
         "POST",
         f"/rooms/{room_name}/recordings/start",
-        payload=payload,
+        payload=None,
     )
 
 
@@ -656,12 +646,35 @@ async def run_bot(
         if recording_context["status"] == "not_started":
             start_resp = await start_daily_recording(session, room_name)
             if start_resp:
-                recording_context["recording_id"] = start_resp.get("id") or recording_context["recording_id"]
+                recording_context["recording_id"] = (
+                    start_resp.get("recordingId")
+                    or start_resp.get("recording_id")
+                    or start_resp.get("id")
+                    or recording_context["recording_id"]
+                )
                 recording_context["status"] = start_resp.get("state", "recording")
                 recording_context["started_at"] = start_resp.get("created_at")
                 recording_context["start_response"] = start_resp
             else:
                 recording_context["status"] = "failed_to_start"
+
+    @transport.event_handler("on_recording_started")
+    async def on_recording_started(_transport, data):
+        rid = data.get("recordingId") or data.get("recording_id")
+        if rid:
+            recording_context["recording_id"] = rid
+        recording_context["status"] = data.get("state", "recording")
+        recording_context["started_at"] = data.get("created_at") or recording_context["started_at"]
+        recording_context["start_response"] = data
+
+    @transport.event_handler("on_recording_stopped")
+    async def on_recording_stopped(_transport, data):
+        rid = data.get("recordingId") or data.get("recording_id")
+        if rid:
+            recording_context["recording_id"] = rid
+        recording_context["status"] = data.get("state", "stopped")
+        recording_context["stopped_at"] = data.get("created_at") or data.get("updated_at")
+        recording_context["stop_response"] = data
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(_transport, _client):
