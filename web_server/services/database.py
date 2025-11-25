@@ -177,7 +177,8 @@ class DatabaseService:
         interview_id: str,
         transcript: str,
         evaluation: Dict[str, Any],
-        status: str
+        status: str,
+        recording: Optional[Dict[str, Any]] = None
     ) -> bool:
         """Update interview with results"""
         # Check if this interview already exists
@@ -205,6 +206,12 @@ class DatabaseService:
         else:
             # New interview - set created_at
             result_data["created_at"] = datetime.now()
+        
+        # Persist recording information
+        if recording:
+            result_data["recording"] = recording
+        elif existing_interview and existing_interview.get("recording"):
+            result_data["recording"] = existing_interview.get("recording")
         
         # Set completed_at only if status is "completed"
         if status == "completed":

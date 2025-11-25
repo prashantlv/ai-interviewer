@@ -221,6 +221,87 @@ class DailyService:
             logger.error(f"❌ Error creating candidate token: {e}")
             return None
     
+    async def get_recording(self, recording_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch metadata for a Daily recording."""
+        if not self.api_key:
+            logger.error("❌ Cannot fetch recording: DAILY_API_KEY not configured")
+            return None
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.api_url}/recordings/{recording_id}",
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    timeout=10.0
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    logger.info(f"✅ Retrieved recording metadata: {recording_id}")
+                    return data
+                else:
+                    logger.error(f"❌ Failed to fetch recording {recording_id}: {response.status_code} - {response.text}")
+                    return None
+        except Exception as e:
+            logger.error(f"❌ Error fetching recording metadata: {e}")
+            return None
+    
+    async def get_recording_access_link(self, recording_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch a temporary download/access link for a Daily recording."""
+        if not self.api_key:
+            logger.error("❌ Cannot fetch recording link: DAILY_API_KEY not configured")
+            return None
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.api_url}/recordings/{recording_id}/access-link",
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    timeout=10.0
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    logger.info(f"✅ Retrieved recording access link: {recording_id}")
+                    return data
+                else:
+                    logger.error(f"❌ Failed to fetch recording link {recording_id}: {response.status_code} - {response.text}")
+                    return None
+        except Exception as e:
+            logger.error(f"❌ Error fetching recording access link: {e}")
+            return None
+    
+    async def fetch_recording_asset(self, recording_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch recording metadata and access link for storage."""
+        if not recording_id:
+            return None
+        
+        metadata = await self.get_recording(recording_id)
+        access_link = await self.get_recording_access_link(recording_id)
+        
+        if not metadata and not access_link:
+            return None
+        
+        asset = {
+            "recording_id": recording_id,
+            "recording": metadata,
+            "status": "unknown"
+        }
+        if metadata:
+            asset["status"] = metadata.get("status") or metadata.get("state") or "unknown"
+        
+        if access_link:
+            asset["access_link"] = access_link.get("access_link") or access_link.get("url")
+            asset["access_link_expires"] = access_link.get("expires") or access_link.get("exp")
+        
+        return asset
+    
     async def delete_room(self, room_name: str) -> bool:
         """
         Delete a Daily.co room after interview completion

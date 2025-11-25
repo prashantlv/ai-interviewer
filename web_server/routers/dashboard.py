@@ -299,6 +299,7 @@ async def interview_detail(
             "scheduled_date": str(interview_result.get("completed_at", "N/A")),
             "duration": "N/A",
             "transcript": interview_result.get("transcript", "No transcript available"),
+            "recording": interview_result.get("recording"),
             "evaluation": {
                 "correctness": individual_scores.get("correctness", 0),
                 "terminology": individual_scores.get("terminology", 0),
@@ -323,6 +324,7 @@ async def interview_detail(
             "scheduled_date": "N/A",
             "duration": "N/A",
             "transcript": f"Interview {interview_id} not found in database",
+            "recording": None,
             "evaluation": {
                 "correctness": 0,
                 "terminology": 0,

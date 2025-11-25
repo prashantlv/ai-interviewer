@@ -24,6 +24,7 @@ import os
 import sys
 import aiohttp
 import json
+from urllib.parse import urlparse
 from typing import Dict, Any, Optional
 
 from dotenv import load_dotenv
@@ -58,6 +59,8 @@ load_dotenv(override=True)
 # Web server integration configuration
 WEB_SERVER_URL = os.getenv("WEB_SERVER_URL", "http://localhost:8009")
 INTERVIEW_ID = os.getenv("INTERVIEW_ID", "default_interview")
+DAILY_API_URL = os.getenv("DAILY_API_URL", "https://api.daily.co/v1")
+DAILY_API_KEY = os.getenv("DAILY_API_KEY")
 
 async def fetch_interview_config(session: aiohttp.ClientSession, interview_id: str) -> Optional[Dict[str, Any]]:
     """Fetch interview configuration from web server"""
@@ -81,7 +84,8 @@ async def send_interview_result(
     session: aiohttp.ClientSession, 
     interview_id: str, 
     transcript: str, 
-    evaluation: Dict[str, Any]
+    evaluation: Dict[str, Any],
+    recording: Optional[Dict[str, Any]] = None
 ) -> bool:
     """Send interview results back to web server"""
     try:
@@ -91,6 +95,8 @@ async def send_interview_result(
             "transcript": transcript,
             "evaluation": evaluation
         }
+        if recording:
+            payload["recording"] = recording
         
         logger.info(f"Sending interview results to: {url}")
         
@@ -104,6 +110,94 @@ async def send_interview_result(
     except Exception as e:
         logger.error(f"Error sending interview results: {e}")
         return False
+
+
+def extract_room_name(room_url: Optional[str]) -> Optional[str]:
+    """Extract the Daily room name from a full URL."""
+    if not room_url:
+        return None
+    try:
+        parsed = urlparse(room_url)
+        return parsed.path.rstrip("/").split("/")[-1]
+    except Exception as exc:
+        logger.warning(f"Unable to parse room name from URL {room_url}: {exc}")
+        return None
+
+
+async def daily_api_request(
+    session: aiohttp.ClientSession,
+    method: str,
+    path: str,
+    payload: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
+    """Generic helper for Daily REST API calls."""
+    if not DAILY_API_KEY:
+        logger.warning("DAILY_API_KEY not configured - skipping Daily API call")
+        return None
+    
+    url = f"{DAILY_API_URL}{path}"
+    headers = {
+        "Authorization": f"Bearer {DAILY_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    
+    try:
+        async with session.request(method, url, headers=headers, json=payload) as response:
+            if response.status in (200, 201, 202):
+                return await response.json()
+            else:
+                error_text = await response.text()
+                logger.error(f"Daily API error ({response.status}) for {path}: {error_text}")
+                return None
+    except Exception as exc:
+        logger.error(f"Daily API request failed for {path}: {exc}")
+        return None
+
+
+async def start_daily_recording(
+    session: aiohttp.ClientSession,
+    room_name: Optional[str]
+) -> Optional[Dict[str, Any]]:
+    """Start Daily cloud recording for a room."""
+    if not room_name:
+        return None
+    
+    logger.info(f"🎥 Starting Daily recording for room: {room_name}")
+    return await daily_api_request(
+        session,
+        "POST",
+        f"/rooms/{room_name}/recordings/start",
+        payload=None,
+    )
+
+
+async def stop_daily_recording(
+    session: aiohttp.ClientSession,
+    room_name: Optional[str]
+) -> Optional[Dict[str, Any]]:
+    """Stop Daily cloud recording for a room."""
+    if not room_name:
+        return None
+    
+    logger.info(f"🛑 Stopping Daily recording for room: {room_name}")
+    return await daily_api_request(
+        session,
+        "POST",
+        f"/rooms/{room_name}/recordings/stop",
+    )
+
+
+def serialize_recording_context(recording_context: Dict[str, Any]) -> Dict[str, Any]:
+    """Prepare recording context for sending to web server."""
+    return {
+        "room_name": recording_context.get("room_name"),
+        "recording_id": recording_context.get("recording_id"),
+        "status": recording_context.get("status"),
+        "started_at": recording_context.get("started_at"),
+        "stopped_at": recording_context.get("stopped_at"),
+        "start_response": recording_context.get("start_response"),
+        "stop_response": recording_context.get("stop_response"),
+    }
 
 def create_dynamic_system_prompt(interview_config: Optional[Dict[str, Any]]) -> str:
     """Create dynamic system prompt based on interview configuration"""
@@ -296,7 +390,11 @@ class TranscriptCollector(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
-async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
+async def run_bot(
+    transport: BaseTransport,
+    session: aiohttp.ClientSession,
+    room_meta: Dict[str, Any],
+):
     """Main bot execution function.
 
     Sets up and runs the bot pipeline including:
@@ -309,6 +407,7 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
     - RTVI event handling
     """
 
+    room_name = room_meta.get("room_name")
     logger.info(f"Starting AI Interviewer with {BOT_IMPLEMENTATION.upper()} backend")
     if VIDEO_SERVICE != "none":
         logger.info(f"{VIDEO_SERVICE.capitalize()} video avatar enabled")
@@ -529,14 +628,44 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
         # Kick off the conversation
         await task.queue_frames([LLMRunFrame()])
 
+    recording_context = {
+        "room_name": room_name,
+        "recording_id": None,
+        "status": "not_started",
+        "started_at": None,
+        "stopped_at": None,
+        "start_response": None,
+        "stop_response": None,
+    }
+
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, participant):
         logger.info(f"Client connected - AI Interviewer ({BOT_IMPLEMENTATION.upper()}) ready")
         await transport.capture_participant_transcription(participant["id"])
+        
+        if recording_context["status"] == "not_started":
+            start_resp = await start_daily_recording(session, room_name)
+            if start_resp:
+                recording_context["recording_id"] = start_resp.get("id") or recording_context["recording_id"]
+                recording_context["status"] = start_resp.get("state", "recording")
+                recording_context["started_at"] = start_resp.get("created_at")
+                recording_context["start_response"] = start_resp
+            else:
+                recording_context["status"] = "failed_to_start"
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(_transport, _client):
         logger.info("Client disconnected")
+        
+        if recording_context["status"] not in ["not_started", "stopped", "failed_to_start"]:
+            stop_resp = await stop_daily_recording(session, room_name)
+            if stop_resp:
+                recording_context["status"] = stop_resp.get("state", "stopped")
+                recording_context["recording_id"] = stop_resp.get("id") or recording_context["recording_id"]
+                recording_context["stopped_at"] = stop_resp.get("created_at") or stop_resp.get("updated_at")
+                recording_context["stop_response"] = stop_resp
+            else:
+                recording_context["status"] = "stop_failed"
         
         # Collect transcript
         transcript_text = "\n\n".join([
@@ -601,7 +730,8 @@ async def run_bot(transport: BaseTransport, session: aiohttp.ClientSession):
         logger.info(f"✅ Scoring complete - Overall: {evaluation['overall_score']}/100 ({evaluation['score_category']})")
         
         # Send results to web server with real transcript and scores
-        await send_interview_result(session, INTERVIEW_ID, transcript_text, evaluation)
+        recording_payload = serialize_recording_context(recording_context)
+        await send_interview_result(session, INTERVIEW_ID, transcript_text, evaluation, recording_payload)
         
         await task.cancel()
 
@@ -643,6 +773,12 @@ async def bot(runner_args: RunnerArguments):
             video_width, video_height = 1024, 576
             video_framerate = 30
         
+        room_url = runner_args.room_url
+        room_meta = {
+            "room_url": room_url,
+            "room_name": extract_room_name(room_url),
+        }
+        
         transport = DailyTransport(
             runner_args.room_url,
             runner_args.token,
@@ -660,7 +796,7 @@ async def bot(runner_args: RunnerArguments):
             ),
         )
 
-        await run_bot(transport, session)
+        await run_bot(transport, session, room_meta)
 
 
 if __name__ == "__main__":
@@ -702,6 +838,11 @@ if __name__ == "__main__":
                     video_width, video_height = 1024, 576
                     video_framerate = 30
                 
+                room_meta = {
+                    "room_url": room_url,
+                    "room_name": extract_room_name(room_url),
+                }
+                
                 # Create Daily transport
                 transport = DailyTransport(
                     room_url,
@@ -727,7 +868,7 @@ if __name__ == "__main__":
                 os.environ["VIDEO_SERVICE"] = "none"
                 
                 try:
-                    await run_bot(transport, session)
+                    await run_bot(transport, session, room_meta)
                 finally:
                     # Restore original video service
                     if original_video_service:

@@ -26,6 +26,7 @@ from services.scoring_engine import ScoringEngine
 from services.scoring_config_service import ScoringConfigService
 from services.bot_manager import initialize_bot_manager, get_bot_manager
 from services.static_data import get_demo_interview_config
+from services.daily_service import daily_service
 import json
 
 # Initialize services
@@ -261,13 +262,21 @@ async def receive_interview_result(
         interview_id = payload.get("interview_id")
         transcript = payload.get("transcript", "")
         evaluation = payload.get("evaluation", {})
+        recording_payload = payload.get("recording")
+        
+        # Enrich recording info with Daily metadata/access link if available
+        if recording_payload and recording_payload.get("recording_id"):
+            enriched = await daily_service.fetch_recording_asset(recording_payload["recording_id"])
+            if enriched:
+                recording_payload.update({k: v for k, v in enriched.items() if v is not None})
         
         # Store interview results in database
         result = await db.update_interview_result(
             interview_id=interview_id,
             transcript=transcript,
             evaluation=evaluation,
-            status="completed"
+            status="completed",
+            recording=recording_payload
         )
         return {"success": True, "interview_id": interview_id}
     except Exception as e:
