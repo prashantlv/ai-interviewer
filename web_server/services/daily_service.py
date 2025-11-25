@@ -269,6 +269,8 @@ class DailyService:
                 if response.status_code == 200:
                     data = response.json()
                     logger.info(f"✅ Retrieved recording access link: {recording_id}")
+                    logger.debug(f"📋 Access link response keys: {list(data.keys()) if isinstance(data, dict) else 'not a dict'}")
+                    logger.debug(f"📋 Access link response: {data}")
                     return data
                 else:
                     logger.error(f"❌ Failed to fetch recording link {recording_id}: {response.status_code} - {response.text}")
@@ -297,8 +299,20 @@ class DailyService:
             asset["status"] = metadata.get("status") or metadata.get("state") or "unknown"
         
         if access_link:
-            asset["access_link"] = access_link.get("access_link") or access_link.get("url")
-            asset["access_link_expires"] = access_link.get("expires") or access_link.get("exp")
+            # Daily API returns download_link per their docs: https://docs.daily.co/reference/rest-api/recordings/get-recording-link
+            asset["access_link"] = (
+                access_link.get("download_link") or  # Primary key per Daily API docs
+                access_link.get("access_link") or 
+                access_link.get("url") or
+                access_link.get("link") or
+                (access_link.get("download_url") if isinstance(access_link.get("download_url"), str) else None)
+            )
+            asset["access_link_expires"] = access_link.get("expires") or access_link.get("exp") or access_link.get("expires_at")
+            
+            # Log if we couldn't extract the link
+            if not asset["access_link"]:
+                logger.warning(f"⚠️ Could not extract access_link from Daily response. Keys: {list(access_link.keys()) if isinstance(access_link, dict) else 'not a dict'}")
+                logger.debug(f"📋 Full access_link response: {access_link}")
         
         return asset
     
