@@ -400,7 +400,6 @@ function validateWeights(level) {
 // Make functions globally accessible
 window.saveWeights = async function(level) {
     console.log('💾 saveWeights called for level:', level);
-    alert('Save button clicked for: ' + level);  // TEST
     
     const panel = document.getElementById(`${level}-panel`);
     if (!panel) {
@@ -507,7 +506,6 @@ window.saveWeights = async function(level) {
 
 window.resetWeights = function(level) {
     console.log('🔄 resetWeights called for level:', level);
-    alert('Reset button clicked for: ' + level);  // TEST
     console.log('Available originalWeights keys:', Object.keys(originalWeights));
     
     if (!confirm('Reset weights to original values? This will discard any unsaved changes.')) {

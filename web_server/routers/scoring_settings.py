@@ -4,13 +4,11 @@ Scoring Settings Router - UI and API for managing scoring configurations
 
 from fastapi import APIRouter, Request, HTTPException, Form
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
 from typing import Dict, Any, Optional
 from dependencies import ScoringConfigDep, DbServiceDep
 from loguru import logger
 
 router = APIRouter()
-templates = Jinja2Templates(directory="templates")
 
 # Criteria descriptions for UI
 CRITERIA_DESCRIPTIONS = {
@@ -48,6 +46,9 @@ async def scoring_settings_page(
 ):
     """Main scoring settings page"""
     try:
+        # Get templates from app state (configured in main.py with cache disabled)
+        templates = request.app.state.templates
+        
         # Get all scoring configurations
         configs = await scoring_config.get_all_configs()
         
