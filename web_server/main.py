@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 
 # Import our modules
-from routers import interviews, dashboard, feedback, bots, tavus, voices
+from routers import interviews, dashboard, feedback, bots, tavus, voices, scoring_settings
 from services.database import DatabaseService
 from services.question_engine import QuestionEngine
 from services.scoring_engine import ScoringEngine
@@ -90,11 +90,15 @@ app = FastAPI(
 
 # Mount static files and templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
+# Disable Jinja2 template caching for development
 templates = Jinja2Templates(directory="templates")
+templates.env.auto_reload = True
+templates.env.cache = {}  # Disable cache
 
 # Include routers
 # Dashboard (no versioning - UI routes)
 app.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
+app.include_router(scoring_settings.router, prefix="/dashboard/scoring-settings", tags=["scoring-settings"])
 
 # API v1 routes
 app.include_router(interviews.router, prefix="/api/v1/interviews", tags=["interviews-v1"])

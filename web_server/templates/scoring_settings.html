@@ -1,0 +1,551 @@
+{% extends "base.html" %}
+
+{% block title %}Scoring Settings - AI Interviewer{% endblock %}
+
+{% block content %}
+<!-- TEMPLATE VERSION: 4.0 - CACHE DISABLED -->
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-1">⚙️ Scoring Configuration</h1>
+                    <p class="text-muted mb-0">Customize scoring weights and criteria to match your recruitment standards</p>
+                </div>
+                <a href="/dashboard/" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Alert -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-info border-0 shadow-sm">
+                <div class="d-flex align-items-start">
+                    <i class="bi bi-info-circle fs-4 me-3 mt-1"></i>
+                    <div>
+                        <strong>How Scoring Works:</strong>
+                        <p class="mb-0 small">Adjust the weight percentages below to prioritize different evaluation criteria. 
+                        The total must equal 100%. Higher weights mean that criterion has more impact on the final score. 
+                        Changes apply to future interviews only.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Level Tabs -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <ul class="nav nav-tabs nav-tabs-custom" id="levelTabs" role="tablist">
+                {% for level in levels %}
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link {% if loop.first %}active{% endif %}" 
+                            id="{{ level }}-tab" 
+                            data-bs-toggle="tab" 
+                            data-bs-target="#{{ level }}-panel" 
+                            type="button" 
+                            role="tab">
+                        {% if level == 'easy' %}
+                            <i class="bi bi-emoji-smile"></i> Easy (Lenient)
+                        {% elif level == 'intermediate' %}
+                            <i class="bi bi-emoji-neutral"></i> Intermediate (Balanced)
+                        {% else %}
+                            <i class="bi bi-emoji-frown"></i> Strict (Rigorous)
+                        {% endif %}
+                    </button>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <!-- Tab Panels -->
+    <div class="tab-content" id="levelTabContent">
+        {% for level in levels %}
+        {% set config = configs.get(level, {}) %}
+        <div class="tab-pane fade {% if loop.first %}show active{% endif %}" 
+             id="{{ level }}-panel" 
+             role="tabpanel"
+             data-level="{{ level }}"
+             data-config-id="{{ config.get('config_id', '') }}">
+            
+            <!-- Level Info Card -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <h5 class="card-title mb-2">{{ config.get('name', level|title + ' Configuration') }}</h5>
+                                    <p class="text-muted mb-0">{{ config.get('description', '') }}</p>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <div class="d-inline-block px-3 py-2 bg-light rounded">
+                                        <small class="text-muted d-block">Strictness Multiplier</small>
+                                        <strong class="fs-5">{{ "%.2f"|format(config.get('strictness_multiplier', 1.0)) }}x</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Weights Configuration -->
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="card border-0 shadow-sm mb-4">
+                        <div class="card-header bg-white border-bottom">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-sliders"></i> Scoring Weights
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            {% set weights = config.get('weights', {}) %}
+                            <div id="weights-container-{{ level }}">
+                                {% for criterion_key, criterion_info in criteria_descriptions.items() %}
+                                {% set current_weight = weights.get(criterion_key, 0) %}
+                                <div class="weight-item mb-4 pb-4 border-bottom" data-criterion="{{ criterion_key }}">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex align-items-center mb-1">
+                                                <span class="fs-5 me-2">{{ criterion_info.icon }}</span>
+                                                <strong>{{ criterion_info.name }}</strong>
+                                            </div>
+                                            <p class="text-muted small mb-0">{{ criterion_info.description }}</p>
+                                        </div>
+                                        <div class="text-end ms-3">
+                                            <div class="weight-display">
+                                                <div class="input-group" style="width: 200px;">
+                                                    <input type="number" 
+                                                           class="form-control weight-input" 
+                                                           id="weight-{{ level }}-{{ criterion_key }}"
+                                                           value="{{ "%.1f"|format(current_weight * 100) }}"
+                                                           min="0" 
+                                                           max="100" 
+                                                           step="0.1"
+                                                           data-criterion="{{ criterion_key }}"
+                                                           style="font-size: 1.25rem; font-weight: 600; text-align: center; padding: 12px 16px;">
+                                                    <span class="input-group-text bg-light" style="font-size: 1.1rem; font-weight: 500; padding: 12px 16px;">%</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Visual Progress Bar -->
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar" 
+                                             role="progressbar" 
+                                             style="width: {{ current_weight * 100 }}%"
+                                             data-criterion="{{ criterion_key }}">
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+
+                            <!-- Total Validation -->
+                            <div class="mt-4 pt-3 border-top">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>Total Weight:</strong>
+                                        <span id="total-weight-{{ level }}" class="ms-2 fs-5">100.0%</span>
+                                    </div>
+                                    <div id="weight-status-{{ level }}">
+                                        <span class="badge bg-success">
+                                            <i class="bi bi-check-circle"></i> Valid
+                                        </span>
+                                    </div>
+                                </div>
+                                <div id="weight-error-{{ level }}" class="text-danger small mt-2" style="display: none;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sidebar: Additional Settings -->
+                <div class="col-lg-4">
+                    <!-- Score Categories -->
+                    <div class="card border-0 shadow-sm mb-4">
+                        <div class="card-header bg-white border-bottom">
+                            <h6 class="card-title mb-0">
+                                <i class="bi bi-bar-chart"></i> Score Categories
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            {% set categories = config.get('score_categories', {}) %}
+                            <div class="small">
+                                {% for category, threshold in categories.items() %}
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-capitalize">{{ category.replace('_', ' ') }}:</span>
+                                    <strong>{{ threshold }}+</strong>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recommendation Thresholds -->
+                    <div class="card border-0 shadow-sm mb-4">
+                        <div class="card-header bg-white border-bottom">
+                            <h6 class="card-title mb-0">
+                                <i class="bi bi-hand-thumbs-up"></i> Recommendations
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            {% set thresholds = config.get('recommendation_thresholds', {}) %}
+                            <div class="small">
+                                {% for rec, threshold in thresholds.items() %}
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-capitalize">{{ rec.replace('_', ' ') }}:</span>
+                                    <strong>{{ threshold }}+</strong>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Save Button -->
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body">
+                            <button class="btn btn-primary w-100 mb-2" 
+                                    id="save-btn-{{ level }}"
+                                    onclick="saveWeights('{{ level }}')">
+                                <i class="bi bi-save"></i> Save Changes
+                            </button>
+                            <button class="btn btn-outline-secondary w-100" 
+                                    onclick="resetWeights('{{ level }}')">
+                                <i class="bi bi-arrow-counterclockwise"></i> Reset to Default
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Success Toast -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="successToast" class="toast" role="alert">
+        <div class="toast-header bg-success text-white">
+            <i class="bi bi-check-circle me-2"></i>
+            <strong class="me-auto">Success</strong>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body">
+            Scoring weights updated successfully!
+        </div>
+    </div>
+</div>
+
+<style>
+.nav-tabs-custom .nav-link {
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: #64748b;
+    font-weight: 500;
+    padding: 12px 24px;
+    transition: all 0.3s ease;
+}
+
+.nav-tabs-custom .nav-link:hover {
+    border-bottom-color: #cbd5e1;
+    color: #2563eb;
+}
+
+.nav-tabs-custom .nav-link.active {
+    border-bottom-color: #2563eb;
+    color: #2563eb;
+    background-color: transparent;
+}
+
+.weight-item {
+    transition: all 0.3s ease;
+}
+
+.weight-item:hover {
+    background-color: #f8fafc;
+    border-radius: 8px;
+    padding: 8px;
+    margin: -8px;
+}
+
+.weight-input {
+    font-weight: 600;
+    border: 2px solid #e2e8f0;
+    transition: all 0.3s ease;
+    font-size: 1.25rem !important;
+    padding: 12px 16px !important;
+    min-height: 52px;
+    width: 100%;
+}
+
+.weight-input:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    outline: none;
+}
+
+.input-group-text {
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.progress-bar {
+    transition: width 0.3s ease;
+    background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
+}
+
+.card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+}
+</style>
+
+<script>
+// CACHE BUST: v2.0 - Fixed variable scope issue
+// Store original weights for reset (in decimal format, 0.0-1.0)
+const originalWeights = {};
+
+console.log('✅ Scoring settings script loaded - v2.0');
+
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('✅ DOM Content Loaded');
+    
+    {% for level in levels %}
+    // Scope block for {{ level }}
+    {
+        const levelKey = '{{ level }}';
+        const config = {{ configs.get(level, {}) | tojson }};
+        const weights = config.weights || {};
+        
+        // Store original weights in decimal format
+        originalWeights[levelKey] = {};
+        for (const [key, value] of Object.entries(weights)) {
+            originalWeights[levelKey][key] = parseFloat(value) || 0;
+        }
+        
+        console.log(`Initialized ${levelKey} weights:`, originalWeights[levelKey]);
+        
+        // Add event listeners to weight inputs
+        document.querySelectorAll(`#{{ level }}-panel .weight-input`).forEach(input => {
+            input.addEventListener('input', function() {
+                updateWeightDisplay('{{ level }}', this.dataset.criterion, parseFloat(this.value) || 0);
+                validateWeights('{{ level }}');
+            });
+        });
+        
+        // Initial validation
+        validateWeights('{{ level }}');
+    }
+    {% endfor %}
+    
+    console.log('All original weights:', originalWeights);
+    console.log('saveWeights function exists:', typeof window.saveWeights);
+    console.log('resetWeights function exists:', typeof window.resetWeights);
+});
+
+function updateWeightDisplay(level, criterion, value) {
+    // Update progress bar
+    const progressBar = document.querySelector(`#${level}-panel .progress-bar[data-criterion="${criterion}"]`);
+    if (progressBar) {
+        progressBar.style.width = value + '%';
+    }
+}
+
+function validateWeights(level) {
+    const inputs = document.querySelectorAll(`#${level}-panel .weight-input`);
+    let total = 0;
+    
+    inputs.forEach(input => {
+        total += parseFloat(input.value) || 0;
+    });
+    
+    const totalDisplay = document.getElementById(`total-weight-${level}`);
+    const statusDiv = document.getElementById(`weight-status-${level}`);
+    const errorDiv = document.getElementById(`weight-error-${level}`);
+    
+    totalDisplay.textContent = total.toFixed(1) + '%';
+    
+    if (Math.abs(total - 100.0) < 0.1) {
+        // Valid
+        totalDisplay.className = 'ms-2 fs-5 text-success';
+        statusDiv.innerHTML = '<span class="badge bg-success"><i class="bi bi-check-circle"></i> Valid</span>';
+        errorDiv.style.display = 'none';
+        document.getElementById(`save-btn-${level}`).disabled = false;
+    } else {
+        // Invalid
+        const diff = (100.0 - total).toFixed(1);
+        totalDisplay.className = 'ms-2 fs-5 text-danger';
+        statusDiv.innerHTML = '<span class="badge bg-danger"><i class="bi bi-x-circle"></i> Invalid</span>';
+        errorDiv.textContent = `Weights must sum to 100%. Current: ${total.toFixed(1)}% (${diff > 0 ? '+' : ''}${diff}% needed)`;
+        errorDiv.style.display = 'block';
+        document.getElementById(`save-btn-${level}`).disabled = true;
+    }
+}
+
+// Make functions globally accessible
+window.saveWeights = async function(level) {
+    console.log('💾 saveWeights called for level:', level);
+    alert('Save button clicked for: ' + level);  // TEST
+    
+    const panel = document.getElementById(`${level}-panel`);
+    if (!panel) {
+        console.error('Panel not found:', `${level}-panel`);
+        alert('Error: Panel not found. Please refresh the page.');
+        return;
+    }
+    
+    // Try both configId and config_id (for compatibility)
+    let configId = panel.dataset.configId || panel.dataset.config_id || panel.getAttribute('data-config-id');
+    
+    console.log('Config ID from panel:', configId);
+    
+    // Note: We'll use level-based endpoint as fallback if configId is missing
+    
+    const inputs = document.querySelectorAll(`#${level}-panel .weight-input`);
+    console.log('Found inputs:', inputs.length);
+    
+    if (inputs.length === 0) {
+        alert('Error: No weight inputs found. Please refresh the page.');
+        return;
+    }
+    
+    const weights = {};
+    inputs.forEach(input => {
+        const criterion = input.dataset.criterion;
+        const value = parseFloat(input.value) || 0;
+        weights[criterion] = value / 100.0; // Convert percentage to decimal
+        console.log(`  ${criterion}: ${input.value}% = ${weights[criterion]}`);
+    });
+    
+    // Double-check validation before sending
+    const total = Object.values(weights).reduce((sum, val) => sum + val, 0);
+    console.log('Total weight (decimal):', total);
+    
+    if (Math.abs(total - 1.0) > 0.01) {
+        alert(`Weights must sum to 100%. Current total: ${(total * 100).toFixed(1)}%`);
+        return;
+    }
+    
+    // Disable save button during request
+    const saveBtn = document.getElementById(`save-btn-${level}`);
+    if (!saveBtn) {
+        console.error('Save button not found:', `save-btn-${level}`);
+        alert('Error: Save button not found.');
+        return;
+    }
+    
+    const originalText = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Saving...';
+    
+    try {
+        // Use config_id endpoint if available, otherwise use level endpoint
+        let url;
+        if (configId && configId.trim() !== '') {
+            url = `/dashboard/scoring-settings/api/configs/${configId}/weights`;
+        } else {
+            // Fallback: use level-based endpoint
+            console.warn('Config ID not found, using level-based endpoint');
+            url = `/dashboard/scoring-settings/api/configs/by-level/${level}/weights`;
+        }
+        
+        console.log('Sending POST to:', url);
+        console.log('Payload:', { weights });
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ weights: weights })
+        });
+        
+        console.log('Response status:', response.status);
+        const data = await response.json();
+        console.log('Response data:', data);
+        
+        if (response.ok && data.success) {
+            // Show success toast
+            const toastElement = document.getElementById('successToast');
+            if (toastElement) {
+                const toast = new bootstrap.Toast(toastElement);
+                toast.show();
+            }
+            
+            // Update original weights for reset functionality
+            originalWeights[level] = JSON.parse(JSON.stringify(weights));
+            console.log('✅ Weights saved successfully. Updated originalWeights:', originalWeights[level]);
+        } else {
+            const errorMsg = data.error || data.detail || 'Failed to save weights';
+            alert('Error: ' + errorMsg);
+            console.error('Save error:', data);
+        }
+    } catch (error) {
+        console.error('Error saving weights:', error);
+        alert('Error saving weights: ' + error.message + '. Please check your connection and try again.');
+    } finally {
+        // Re-enable save button
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalText;
+    }
+};
+
+window.resetWeights = function(level) {
+    console.log('🔄 resetWeights called for level:', level);
+    alert('Reset button clicked for: ' + level);  // TEST
+    console.log('Available originalWeights keys:', Object.keys(originalWeights));
+    
+    if (!confirm('Reset weights to original values? This will discard any unsaved changes.')) {
+        return;
+    }
+    
+    const original = originalWeights[level];
+    console.log('Original weights for', level, ':', original);
+    
+    if (!original || Object.keys(original).length === 0) {
+        console.error('Original weights not found for level:', level);
+        console.error('Available levels:', Object.keys(originalWeights));
+        alert('Error: Original weights not found. Please refresh the page.');
+        return;
+    }
+    
+    const inputs = document.querySelectorAll(`#${level}-panel .weight-input`);
+    console.log('Found inputs to reset:', inputs.length);
+    
+    if (inputs.length === 0) {
+        alert('Error: No weight inputs found. Please refresh the page.');
+        return;
+    }
+    
+    inputs.forEach(input => {
+        const criterion = input.dataset.criterion;
+        const originalValue = original[criterion];
+        const value = (originalValue !== undefined ? originalValue : 0) * 100;
+        console.log(`  Resetting ${criterion}: ${originalValue} -> ${value.toFixed(1)}%`);
+        input.value = value.toFixed(1);
+        updateWeightDisplay(level, criterion, value);
+    });
+    
+    // Re-validate after reset
+    validateWeights(level);
+    
+    console.log('✅ Weights reset to original values for', level);
+};
+</script>
+{% endblock %}
+
