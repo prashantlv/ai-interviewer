@@ -204,6 +204,32 @@ async def update_weights_api(
         logger.error(f"Error updating weights: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/api/configs/{config_id}/reset", response_class=JSONResponse)
+async def reset_config_to_default_api(
+    config_id: str,
+    scoring_config: ScoringConfigDep
+):
+    """API endpoint to reset a config to its factory default values"""
+    try:
+        logger.info(f"Resetting config '{config_id}' to factory defaults")
+        
+        # Reset to default values
+        updated_config = await scoring_config.reset_to_default(config_id)
+        
+        if updated_config:
+            return {
+                "success": True,
+                "config": updated_config,
+                "message": "Configuration reset to factory defaults"
+            }
+        else:
+            raise HTTPException(status_code=404, detail="Config not found or reset failed")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error resetting config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/api/configs/by-level/{level}/weights", response_class=JSONResponse)
 async def update_weights_by_level_api(
     level: str,

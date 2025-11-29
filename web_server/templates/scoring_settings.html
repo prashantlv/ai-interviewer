@@ -217,6 +217,7 @@
                                 <i class="bi bi-save"></i> Save Changes
                             </button>
                             <button class="btn btn-outline-secondary w-100" 
+                                    id="reset-btn-{{ level }}"
                                     onclick="resetWeights('{{ level }}')">
                                 <i class="bi bi-arrow-counterclockwise"></i> Reset to Default
                             </button>
@@ -314,11 +315,11 @@
 </style>
 
 <script>
-// CACHE BUST: v2.0 - Fixed variable scope issue
+// CACHE BUST: v5.0 - FIXED BUTTON ID BUG
 // Store original weights for reset (in decimal format, 0.0-1.0)
 const originalWeights = {};
 
-console.log('✅ Scoring settings script loaded - v2.0');
+console.log('✅ Scoring settings script loaded - v5.0 - BUTTON ID FIXED');
 
 
 // Initialize on page load
@@ -504,45 +505,107 @@ window.saveWeights = async function(level) {
     }
 };
 
-window.resetWeights = function(level) {
-    console.log('🔄 resetWeights called for level:', level);
-    console.log('Available originalWeights keys:', Object.keys(originalWeights));
+window.resetWeights = async function(level) {
+    console.log('🔄 ========== RESET WEIGHTS CALLED ==========');
+    console.log('Level:', level);
     
-    if (!confirm('Reset weights to original values? This will discard any unsaved changes.')) {
+    if (!confirm('Reset weights to factory defaults? This will restore the original system values and cannot be undone.')) {
+        console.log('User cancelled reset');
         return;
     }
     
-    const original = originalWeights[level];
-    console.log('Original weights for', level, ':', original);
-    
-    if (!original || Object.keys(original).length === 0) {
-        console.error('Original weights not found for level:', level);
-        console.error('Available levels:', Object.keys(originalWeights));
-        alert('Error: Original weights not found. Please refresh the page.');
+    const panel = document.getElementById(`${level}-panel`);
+    console.log('Panel found:', !!panel);
+    if (!panel) {
+        console.error('Panel not found:', `${level}-panel`);
+        alert('Error: Panel not found. Please refresh the page.');
         return;
     }
     
-    const inputs = document.querySelectorAll(`#${level}-panel .weight-input`);
-    console.log('Found inputs to reset:', inputs.length);
+    console.log('Panel dataset:', panel.dataset);
+    const configId = panel.dataset.configId || panel.dataset.config_id || panel.getAttribute('data-config-id');
+    console.log('Config ID extracted:', configId);
     
-    if (inputs.length === 0) {
-        alert('Error: No weight inputs found. Please refresh the page.');
+    if (!configId) {
+        console.error('Config ID not found for level:', level);
+        alert('Error: Configuration ID not found. Please refresh the page.');
         return;
     }
     
-    inputs.forEach(input => {
-        const criterion = input.dataset.criterion;
-        const originalValue = original[criterion];
-        const value = (originalValue !== undefined ? originalValue : 0) * 100;
-        console.log(`  Resetting ${criterion}: ${originalValue} -> ${value.toFixed(1)}%`);
-        input.value = value.toFixed(1);
-        updateWeightDisplay(level, criterion, value);
-    });
-    
-    // Re-validate after reset
-    validateWeights(level);
-    
-    console.log('✅ Weights reset to original values for', level);
+    const resetBtn = document.getElementById(`reset-btn-${level}`);
+    if (resetBtn) {
+        resetBtn.disabled = true;
+        const originalText = resetBtn.innerHTML;
+        resetBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Resetting...';
+        
+        try {
+            const apiUrl = `/dashboard/scoring-settings/api/configs/${configId}/reset`;
+            console.log(`📡 Calling API: POST ${apiUrl}`);
+            
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            console.log('📥 Response status:', response.status);
+            const data = await response.json();
+            console.log('📦 Response data:', data);
+            
+            if (response.ok && data.success) {
+                console.log('✅ API call successful');
+                
+                // Update inputs with factory default values
+                const defaultWeights = data.config.weights;
+                console.log('🏭 Factory default weights from API:', defaultWeights);
+                
+                const inputs = document.querySelectorAll(`#${level}-panel .weight-input`);
+                console.log(`📝 Found ${inputs.length} input fields to update`);
+                
+                inputs.forEach(input => {
+                    const criterion = input.dataset.criterion;
+                    const defaultValue = defaultWeights[criterion];
+                    const value = (defaultValue !== undefined ? defaultValue : 0) * 100;
+                    console.log(`  Setting ${criterion}: ${input.value}% -> ${value.toFixed(1)}%`);
+                    input.value = value.toFixed(1);
+                    updateWeightDisplay(level, criterion, value);
+                });
+                
+                // Update originalWeights to the new factory defaults
+                originalWeights[level] = JSON.parse(JSON.stringify(defaultWeights));
+                console.log('💾 Updated originalWeights[' + level + ']:', originalWeights[level]);
+                
+                // Re-validate
+                validateWeights(level);
+                
+                // Show success toast
+                const toastElement = document.getElementById('successToast');
+                if (toastElement) {
+                    toastElement.querySelector('.toast-body').textContent = 'Configuration reset to factory defaults';
+                    const toast = new bootstrap.Toast(toastElement);
+                    toast.show();
+                }
+                
+                console.log('✅ Configuration reset to factory defaults COMPLETE');
+            } else {
+                const errorMsg = data.error || data.detail || 'Failed to reset configuration';
+                console.error('❌ API returned error:', errorMsg);
+                alert('Error: ' + errorMsg);
+                console.error('Reset error:', data);
+            }
+        } catch (error) {
+            console.error('❌ Exception during reset:', error);
+            console.error('Error stack:', error.stack);
+            alert('Error resetting configuration: ' + error.message + '. Please check your connection and try again.');
+        } finally {
+            resetBtn.disabled = false;
+            resetBtn.innerHTML = originalText;
+            console.log('🔄 ========== RESET WEIGHTS COMPLETE ==========');
+        }
+    } else {
+        console.error('Reset button not found:', `reset-btn-${level}`);
+    }
 };
 </script>
 {% endblock %}

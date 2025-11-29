@@ -290,6 +290,52 @@ class ScoringConfigService:
             logger.error(f"Error retrieving all configs: {e}")
             return []
     
+    async def reset_to_default(self, config_id: str) -> Optional[Dict[str, Any]]:
+        """Reset a scoring configuration to its factory default values"""
+        if self.database is None:
+            logger.warning("Database not available")
+            return None
+        
+        try:
+            # Get current config to determine level
+            current_config = await self.get_config_by_id(config_id)
+            if not current_config:
+                logger.warning(f"Config not found: {config_id}")
+                return None
+            
+            level = current_config.get("level")
+            
+            # Get the default config for this level from the factory defaults
+            default_configs = self._get_default_configs()
+            default_config = next((c for c in default_configs if c["level"] == level), None)
+            
+            if not default_config:
+                logger.error(f"No factory default found for level: {level}")
+                return None
+            
+            # Update the config in DB with default weights (preserve config_id and timestamps)
+            collection = self.database[self.collection_name]
+            result = await collection.update_one(
+                {"config_id": config_id},
+                {
+                    "$set": {
+                        "weights": default_config["weights"],
+                        "updated_at": datetime.now()
+                    }
+                }
+            )
+            
+            if result.modified_count > 0:
+                logger.info(f"✅ Reset config '{config_id}' to factory defaults")
+                return await self.get_config_by_id(config_id)
+            else:
+                logger.warning(f"No changes made to config: {config_id}")
+                return current_config
+                
+        except Exception as e:
+            logger.error(f"Error resetting config to default: {e}")
+            return None
+    
     async def update_config(self, config_id: str, updates: Dict[str, Any]) -> bool:
         """Update a scoring configuration"""
         if self.database is None:
