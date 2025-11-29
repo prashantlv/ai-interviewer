@@ -337,7 +337,8 @@ async def interview_detail(
             "questions_asked": evaluation.get("questions_asked", []),
             "feedback": evaluation.get("feedback", None),
             "company": evaluation.get("company", "N/A"),
-            "recommendation": evaluation.get("recommendation", "N/A")
+            "recommendation": evaluation.get("recommendation", "N/A"),
+            "notes": evaluation.get("notes", None),
         }
     else:
         # Fallback to demo data if interview not found
