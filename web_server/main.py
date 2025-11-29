@@ -90,10 +90,15 @@ app = FastAPI(
 
 # Mount static files and templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
-# Disable Jinja2 template caching for development
+
+# Configure Jinja2 templates (shared across all routers)
+# Disable caching for development to ensure template changes are reflected immediately
 templates = Jinja2Templates(directory="templates")
 templates.env.auto_reload = True
-templates.env.cache = {}  # Disable cache
+templates.env.cache = None  # Completely disable cache
+
+# Make templates available to routers via app state
+app.state.templates = templates
 
 # Include routers
 # Dashboard (no versioning - UI routes)
