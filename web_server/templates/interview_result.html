@@ -116,6 +116,22 @@
         </div>
     </div>
 
+    <!-- Recruiter Notes -->
+    {% if interview.notes %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">📝 Recruiter Notes</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-0" style="white-space: pre-wrap;">{{ interview.notes }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Interview Transcript -->
     <div class="row mb-4">
         <div class="col-12">
