@@ -4,11 +4,17 @@ Scoring Settings Router - UI and API for managing scoring configurations
 
 from fastapi import APIRouter, Request, HTTPException, Form
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
 from typing import Dict, Any, Optional
 from dependencies import ScoringConfigDep, DbServiceDep
 from loguru import logger
 
 router = APIRouter()
+
+# Create templates instance with caching disabled
+templates = Jinja2Templates(directory="templates")
+templates.env.auto_reload = True
+templates.env.cache = None  # Disable cache
 
 # Criteria descriptions for UI
 CRITERIA_DESCRIPTIONS = {
@@ -46,16 +52,20 @@ async def scoring_settings_page(
 ):
     """Main scoring settings page"""
     try:
-        # Get templates from app state (configured in main.py with cache disabled)
-        templates = request.app.state.templates
-        
         # Get all scoring configurations
         configs = await scoring_config.get_all_configs()
         
-        # Organize by level
+        # Organize by level and convert datetime objects to strings
         configs_by_level = {}
         for config in configs:
             level = config.get("level", "unknown")
+            # Convert MongoDB's datetime objects to ISO format strings
+            if "_id" in config:
+                config["_id"] = str(config["_id"])
+            if "created_at" in config and hasattr(config["created_at"], "isoformat"):
+                config["created_at"] = config["created_at"].isoformat()
+            if "updated_at" in config and hasattr(config["updated_at"], "isoformat"):
+                config["updated_at"] = config["updated_at"].isoformat()
             configs_by_level[level] = config
         
         # Ensure we have all three levels
@@ -65,6 +75,13 @@ async def scoring_settings_page(
                 # Fallback to default if missing
                 config = await scoring_config.get_config_by_level(level)
                 if config:
+                    # Convert datetime fields
+                    if "_id" in config:
+                        config["_id"] = str(config["_id"])
+                    if "created_at" in config and hasattr(config["created_at"], "isoformat"):
+                        config["created_at"] = config["created_at"].isoformat()
+                    if "updated_at" in config and hasattr(config["updated_at"], "isoformat"):
+                        config["updated_at"] = config["updated_at"].isoformat()
                     configs_by_level[level] = config
         
         return templates.TemplateResponse("scoring_settings.html", {
