@@ -1,6 +1,6 @@
 """
 Database Service - MongoDB connection and operations
-PLACEHOLDER: Waiting for ATS MongoDB schema from user
+Manages interview_results and cloned_voices collections
 """
 
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -110,31 +110,15 @@ class DatabaseService:
         # Create collections if they don't exist
         collections = await self.database.list_collection_names()
         
-        if "interviews" not in collections:
-            await self.database.create_collection("interviews")
-            # Create indexes for interviews
-            await self.database.interviews.create_index("interview_id", unique=True)
-            await self.database.interviews.create_index("candidate_id")
-            await self.database.interviews.create_index("status")
-            await self.database.interviews.create_index("created_at")
-            print("✅ Created 'interviews' collection with indexes")
-        
-        if "candidates" not in collections:
-            await self.database.create_collection("candidates")
-            await self.database.candidates.create_index("candidate_id", unique=True)
-            await self.database.candidates.create_index("email", unique=True)
-            print("✅ Created 'candidates' collection with indexes")
-        
-        if "job_descriptions" not in collections:
-            await self.database.create_collection("job_descriptions")
-            await self.database.job_descriptions.create_index("job_id", unique=True)
-            print("✅ Created 'job_descriptions' collection with indexes")
-        
+        # interview_results - stores ALL interview data (scheduled + completed)
         if "interview_results" not in collections:
             await self.database.create_collection("interview_results")
             await self.database.interview_results.create_index("interview_id", unique=True)
+            await self.database.interview_results.create_index("status")
+            await self.database.interview_results.create_index("created_at")
             print("✅ Created 'interview_results' collection with indexes")
         
+        # cloned_voices - stores voice cloning data
         if "cloned_voices" not in collections:
             await self.database.create_collection("cloned_voices")
             await self.database.cloned_voices.create_index("voice_id", unique=True)
