@@ -23,7 +23,7 @@
                         <div class="col-md-6">
                             <h6>Interview Details:</h6>
                             <p><strong>Interview ID:</strong> <code>{{ interview.interview_id }}</code></p>
-                            <p><strong>Type:</strong> {{ interview.interview_type|title }}</p>
+                            <p><strong>Type:</strong> {{ interview.interview_type | replace("_", " ") | title }}</p>
                             <p><strong>Status:</strong> <span class="badge bg-warning">{{ interview.status|title }}</span></p>
                         </div>
                     </div>

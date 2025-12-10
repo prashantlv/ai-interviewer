@@ -260,6 +260,30 @@ class QuestionEngine:
                 "category": "cultural_fit",
                 "focus": "teamwork",
                 "follow_up": "What did you learn from that experience?"
+            },
+            {
+                "question": "What values are most important to you in a workplace, and how do you demonstrate them?",
+                "category": "cultural_fit",
+                "focus": "values",
+                "follow_up": "Can you give an example of a time when those values were tested?"
+            },
+            {
+                "question": "How do you prefer to collaborate with your team - do you prefer working independently or closely with others?",
+                "category": "cultural_fit",
+                "focus": "collaboration",
+                "follow_up": "How do you adapt when the situation requires the opposite approach?"
+            },
+            {
+                "question": "Tell me about a company culture where you thrived. What made it great for you?",
+                "category": "cultural_fit",
+                "focus": "culture_preference",
+                "follow_up": "What aspects of culture would be deal-breakers for you?"
+            },
+            {
+                "question": "How do you handle disagreements with your manager or leadership decisions you don't agree with?",
+                "category": "cultural_fit",
+                "focus": "conflict_resolution",
+                "follow_up": "Can you share a specific example?"
             }
         ]
         

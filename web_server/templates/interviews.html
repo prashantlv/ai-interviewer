@@ -83,7 +83,7 @@
                                     </td>
                                     <td>{{ interview.position }}</td>
                                     <td>{{ interview.scheduled_date }}</td>
-                                    <td>{{ interview.interview_type | default("Technical", true) | title }}</td>
+                                    <td>{{ interview.interview_type | default("technical", true) | replace("_", " ") | title }}</td>
                                     <td>
                                         {% if interview.status == 'completed' %}
                                             <span class="badge bg-success">✅ Completed</span>
