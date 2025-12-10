@@ -781,7 +781,8 @@ async def run_bot(
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, participant):
         logger.info(f"Client connected - AI Interviewer ({BOT_IMPLEMENTATION.upper()}) ready")
-        await transport.capture_participant_transcription(participant["id"])
+        # Note: Using OpenAI STT for transcription, not Daily's built-in transcription
+        # This prevents the bot from transcribing its own TTS output
         
         if recording_context["status"] == "not_started":
             start_resp = await start_daily_recording(session, room_name)
@@ -1063,7 +1064,7 @@ async def bot(runner_args: RunnerArguments):
                         min_volume=0.5     # Minimum volume threshold
                     )
                 ),
-                transcription_enabled=True,
+                transcription_enabled=False,  # Disabled - using OpenAI STT instead
             ),
         )
 
@@ -1135,7 +1136,7 @@ if __name__ == "__main__":
                                 min_volume=0.5     # Minimum volume threshold
                             )
                         ),
-                        transcription_enabled=True,
+                        transcription_enabled=False,  # Disabled - using OpenAI STT instead
                     ),
                 )
                 
