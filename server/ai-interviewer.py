@@ -360,6 +360,53 @@ class TalkingAnimation(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
+
+class UserTranscriptCollector(FrameProcessor):
+    """Collects candidate speech - must be placed BEFORE context_aggregator."""
+    
+    def __init__(self, transcript_list: list):
+        super().__init__()
+        self.transcript_list = transcript_list
+        self.last_text = ""
+    
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+        
+        if isinstance(frame, TranscriptionFrame):
+            text = frame.text.strip()
+            logger.info(f"🎤 USER SPEECH: '{text}'")
+            if text and len(text) > 1 and text.lower() != self.last_text.lower():
+                self.transcript_list.append({"role": "candidate", "content": text})
+                self.last_text = text
+                logger.info(f"📝 CANDIDATE: {text}")
+        
+        await self.push_frame(frame, direction)
+
+
+class AITranscriptCollector(FrameProcessor):
+    """Collects AI responses - placed AFTER llm."""
+    
+    def __init__(self, transcript_list: list):
+        super().__init__()
+        self.transcript_list = transcript_list
+        self.recent = []
+    
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+        
+        if isinstance(frame, TextFrame):
+            text = frame.text.strip()
+            if text and len(text) > 2:
+                if text.lower() not in [t.lower() for t in self.recent[-15:]]:
+                    self.transcript_list.append({"role": "ai_interviewer", "content": text})
+                    self.recent.append(text)
+                    if len(self.recent) > 30:
+                        self.recent.pop(0)
+                    logger.info(f"🤖 AI: {text}")
+        
+        await self.push_frame(frame, direction)
+
+
 class TranscriptCollector(FrameProcessor):
     """Collects conversation transcript for later analysis with advanced filtering."""
     
@@ -619,7 +666,9 @@ async def run_bot(
     # Transcript collection temporarily disabled due to pipeline issues
     # Initialize transcript collection
     interview_transcript = []
-    transcript_collector = TranscriptCollector(interview_transcript)
+    # Two collectors: one for user speech (before context), one for AI (after LLM)
+    user_collector = UserTranscriptCollector(interview_transcript)
+    ai_collector = AITranscriptCollector(interview_transcript)
     
     # Initialize RTVI processor
     rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
@@ -692,16 +741,16 @@ async def run_bot(
     # Build pipeline based on configuration
     if BOT_IMPLEMENTATION == "openai":
         # Pipeline for OpenAI with separate STT/TTS
-        # transcript_collector is placed AFTER llm to capture BOTH:
-        # - TranscriptionFrame from STT (candidate speech) 
-        # - TextFrame from LLM (AI responses)
+        # user_collector BEFORE context_aggregator (to capture TranscriptionFrame)
+        # ai_collector AFTER llm (to capture TextFrame)
         pipeline_processors = [
             transport.input(),
             stt,
+            user_collector,  # Capture user speech BEFORE context consumes it
             rtvi,
             context_aggregator.user(),
             llm,
-            transcript_collector,  # Capture BOTH user transcriptions AND AI responses
+            ai_collector,  # Capture AI responses AFTER llm generates them
             tts,
         ]
         
@@ -718,13 +767,13 @@ async def run_bot(
         
     else:  # BOT_IMPLEMENTATION == "gemini"
         # Pipeline for Gemini (built-in STT/TTS)
-        # Note: Gemini has built-in audio handling
         pipeline_processors = [
             transport.input(),
+            user_collector,  # Capture user speech
             rtvi,
             context_aggregator.user(),
             llm,
-            transcript_collector,  # Capture both user and AI speech
+            ai_collector,  # Capture AI responses
         ]
         
         # Add video processing (Video services work with Gemini audio)
