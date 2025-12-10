@@ -390,16 +390,50 @@ async def get_interview_config(interview_id: str, scoring_level: Optional[str] =
                     "previous_roles": []
                 }
         
-        # Create interview config
-        interview_config = {
-            "difficulty_level": job_description.get("difficulty_level", "medium"),
-            "focus_areas": job_description.get("interview_focus_areas", {
-                "technical_skills": 40,
+        # Get interview type from evaluation (defaults to technical)
+        interview_type = evaluation.get("interview_type", "technical") if interview and interview.get("evaluation") else "technical"
+        print(f"🎯 Interview type: {interview_type}")
+        
+        # Define focus areas based on interview type
+        interview_type_focus_areas = {
+            "technical": {
+                "technical_skills": 45,
                 "experience": 25,
                 "problem_solving": 20,
                 "cultural_fit": 10,
-                "leadership": 5
-            }),
+                "behavioral": 0
+            },
+            "behavioral": {
+                "technical_skills": 10,
+                "experience": 25,
+                "problem_solving": 15,
+                "cultural_fit": 25,
+                "behavioral": 25
+            },
+            "mixed": {
+                "technical_skills": 30,
+                "experience": 20,
+                "problem_solving": 15,
+                "cultural_fit": 15,
+                "behavioral": 20
+            },
+            "leadership": {
+                "technical_skills": 15,
+                "experience": 30,
+                "problem_solving": 15,
+                "cultural_fit": 20,
+                "behavioral": 20
+            }
+        }
+        
+        # Get focus areas for the selected interview type (default to technical)
+        focus_areas = interview_type_focus_areas.get(interview_type.lower(), interview_type_focus_areas["technical"])
+        
+        # Create interview config with correct focus areas based on interview type
+        interview_config = {
+            "difficulty_level": job_description.get("difficulty_level", "medium"),
+            "interview_type": interview_type,
+            "focus_areas": focus_areas,
             "question_count": 8
         }
         
