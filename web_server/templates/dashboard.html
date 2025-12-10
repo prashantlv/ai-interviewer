@@ -10,10 +10,20 @@
         border: none;
         border-radius: 12px;
         transition: transform 0.2s, box-shadow 0.2s;
+        position: relative;
+        overflow: hidden;
     }
     .stat-card:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    .stat-icon {
+        font-size: 2.5rem;
+        position: absolute;
+        right: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        opacity: 0.15;
     }
     .avatar-sm {
         width: 32px;
@@ -40,10 +50,7 @@
     .score-good { background-color: #dbeafe; color: #1e40af; }
     .score-average { background-color: #fef3c7; color: #92400e; }
     .score-poor { background-color: #fee2e2; color: #991b1b; }
-    .quick-action-card {
-        border: none;
-        border-radius: 12px;
-    }
+    .quick-action-card { border: none; border-radius: 12px; }
     .table th {
         font-size: 0.8rem;
         font-weight: 600;
@@ -51,10 +58,7 @@
         color: #6c757d;
         border-bottom: 2px solid #dee2e6;
     }
-    .table td {
-        vertical-align: middle;
-        font-size: 0.9rem;
-    }
+    .table td { vertical-align: middle; font-size: 0.9rem; }
     @media (max-width: 1400px) {
         .hide-on-lg { display: none !important; }
     }
@@ -73,52 +77,57 @@
     <div class="col-6 col-lg-3">
         <a href="/dashboard/interviews" class="text-decoration-none">
             <div class="card stat-card h-100">
-                <div class="card-body text-center py-3">
+                <div class="card-body py-3">
                     <div class="text-primary text-uppercase small fw-bold mb-1">Total Interviews</div>
                     <div class="h3 mb-0 fw-bold">{{ data.total_interviews }}</div>
-                    <i class="bi bi-people text-primary opacity-25" style="font-size: 2rem; position: absolute; right: 15px; top: 50%; transform: translateY(-50%);"></i>
+                    <i class="bi bi-people stat-icon text-primary"></i>
                 </div>
             </div>
         </a>
-    </div>
-    <div class="col-6 col-lg-3">
-        <div class="card stat-card h-100">
-            <div class="card-body text-center py-3">
-                <div class="text-success text-uppercase small fw-bold mb-1">Today's Interviews</div>
-                <div class="h3 mb-0 fw-bold">{{ data.interviews_today }}</div>
-                <i class="bi bi-calendar-check text-success opacity-25" style="font-size: 2rem; position: absolute; right: 15px; top: 50%; transform: translateY(-50%);"></i>
-            </div>
-        </div>
-    </div>
-    <div class="col-6 col-lg-3">
-        <div class="card stat-card h-100">
-            <div class="card-body text-center py-3">
-                <div class="text-warning text-uppercase small fw-bold mb-1">Pending Reviews</div>
-                <div class="h3 mb-0 fw-bold">{{ data.pending_interviews }}</div>
-                <i class="bi bi-clock text-warning opacity-25" style="font-size: 2rem; position: absolute; right: 15px; top: 50%; transform: translateY(-50%);"></i>
-            </div>
-        </div>
     </div>
     <div class="col-6 col-lg-3">
         <a href="/dashboard/interviews?status=completed" class="text-decoration-none">
             <div class="card stat-card h-100">
-                <div class="card-body text-center py-3">
-                    <div class="text-info text-uppercase small fw-bold mb-1">Completed Today</div>
-                    <div class="h3 mb-0 fw-bold">{{ data.completed_today }}</div>
-                    <i class="bi bi-check-circle text-info opacity-25" style="font-size: 2rem; position: absolute; right: 15px; top: 50%; transform: translateY(-50%);"></i>
+                <div class="card-body py-3">
+                    <div class="text-success text-uppercase small fw-bold mb-1">Completed</div>
+                    <div class="h3 mb-0 fw-bold">{{ data.completed_total }}</div>
+                    <small class="text-muted">{{ data.completion_rate }}% rate</small>
+                    <i class="bi bi-check-circle stat-icon text-success"></i>
                 </div>
             </div>
         </a>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card stat-card h-100">
+            <div class="card-body py-3">
+                <div class="text-info text-uppercase small fw-bold mb-1">Avg Score</div>
+                <div class="h3 mb-0 fw-bold">{{ data.average_score }}</div>
+                <small class="text-muted">Out of 100</small>
+                <i class="bi bi-graph-up stat-icon text-info"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card stat-card h-100">
+            <div class="card-body py-3">
+                <div class="text-warning text-uppercase small fw-bold mb-1">Today</div>
+                <div class="h3 mb-0 fw-bold">{{ data.interviews_today }}</div>
+                <small class="text-muted">{{ data.pending_interviews }} pending</small>
+                <i class="bi bi-calendar-check stat-icon text-warning"></i>
+            </div>
+        </div>
     </div>
 </div>
 
 <!-- Main Content Row -->
 <div class="row g-4">
-    <!-- Recent Interviews - Full Width on Large, 8 cols on XL -->
+    <!-- Recent Interviews -->
     <div class="col-12 col-xxl-8">
         <div class="card h-100">
             <div class="card-header py-3 d-flex align-items-center justify-content-between bg-white">
-                <h6 class="m-0 fw-bold text-primary">Recent Interviews</h6>
+                <h6 class="m-0 fw-bold text-primary">
+                    <i class="bi bi-clock-history me-2"></i>Recent Interviews
+                </h6>
                 <a href="/dashboard/interviews" class="btn btn-sm btn-primary">View All</a>
             </div>
             <div class="card-body p-0">
@@ -131,7 +140,7 @@
                                 <th>Status</th>
                                 <th>Score</th>
                                 <th class="hide-on-lg">Date</th>
-                                <th class="pe-3">Action</th>
+                                <th class="pe-3 text-center">Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -152,7 +161,7 @@
                                     </span>
                                 </td>
                                 <td>
-                                    {% if interview.score is not none %}
+                                    {% if interview.score is not none and interview.score > 0 %}
                                         <span class="score-badge {% if interview.score >= 90 %}score-excellent{% elif interview.score >= 75 %}score-good{% elif interview.score >= 60 %}score-average{% else %}score-poor{% endif %}">
                                             {{ "%.1f"|format(interview.score) }}%
                                         </span>
@@ -161,13 +170,13 @@
                                     {% endif %}
                                 </td>
                                 <td class="hide-on-lg text-muted small">
-                                    {% if interview.date %}
-                                        {{ interview.date[:10] if interview.date|length > 10 else interview.date }}
+                                    {% if interview.date and interview.date != 'N/A' %}
+                                        {{ interview.date[:10] }}
                                     {% else %}
                                         -
                                     {% endif %}
                                 </td>
-                                <td class="pe-3">
+                                <td class="pe-3 text-center">
                                     <a href="/dashboard/interview/{{ interview.id }}" class="btn btn-sm btn-outline-primary">
                                         <i class="bi bi-eye"></i>
                                     </a>
@@ -192,12 +201,14 @@
     <div class="col-12 col-xxl-4">
         <div class="card quick-action-card h-100">
             <div class="card-header py-3 bg-white">
-                <h6 class="m-0 fw-bold text-primary">Quick Actions</h6>
+                <h6 class="m-0 fw-bold text-primary">
+                    <i class="bi bi-lightning me-2"></i>Quick Actions
+                </h6>
             </div>
             <div class="card-body">
                 <div class="d-grid gap-2 mb-4">
                     <a href="/dashboard/schedule" class="btn btn-primary py-2">
-                        <i class="bi bi-calendar-plus me-2"></i>Schedule New Interview
+                        <i class="bi bi-calendar-plus me-2"></i>Schedule Interview
                     </a>
                     <a href="/dashboard/interviews?status=completed" class="btn btn-outline-success py-2">
                         <i class="bi bi-clipboard-check me-2"></i>Review Completed
@@ -205,22 +216,37 @@
                     <a href="/dashboard/scoring-settings" class="btn btn-outline-secondary py-2">
                         <i class="bi bi-sliders me-2"></i>Scoring Settings
                     </a>
+                    <a href="/dashboard/replicas" class="btn btn-outline-info py-2">
+                        <i class="bi bi-person-video3 me-2"></i>Manage Replicas
+                    </a>
                 </div>
                 
                 <hr>
                 
-                <h6 class="fw-bold mb-3">Quick Stats</h6>
-                <div class="row g-2 text-center">
+                <h6 class="fw-bold mb-3"><i class="bi bi-bar-chart me-2"></i>Summary</h6>
+                <div class="row g-2">
                     <div class="col-6">
-                        <div class="p-3 rounded" style="background: #FFF5F6;">
+                        <div class="p-3 rounded text-center" style="background: #FFF5F6;">
                             <div class="h4 mb-0 fw-bold" style="color: #FF6183;">{{ data.total_interviews }}</div>
                             <small class="text-muted">Total</small>
                         </div>
                     </div>
                     <div class="col-6">
-                        <div class="p-3 rounded" style="background: #d1fae5;">
-                            <div class="h4 mb-0 fw-bold text-success">{{ data.completed_today }}</div>
+                        <div class="p-3 rounded text-center" style="background: #d1fae5;">
+                            <div class="h4 mb-0 fw-bold text-success">{{ data.completed_total }}</div>
                             <small class="text-muted">Completed</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-3 rounded text-center" style="background: #dbeafe;">
+                            <div class="h4 mb-0 fw-bold text-info">{{ data.average_score }}</div>
+                            <small class="text-muted">Avg Score</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-3 rounded text-center" style="background: #fef3c7;">
+                            <div class="h4 mb-0 fw-bold text-warning">{{ data.completion_rate }}%</div>
+                            <small class="text-muted">Complete Rate</small>
                         </div>
                     </div>
                 </div>
@@ -232,7 +258,7 @@
 
 {% block extra_js %}
 <script>
-// Auto-refresh every 60 seconds (reduced from 30)
+// Auto-refresh every 60 seconds
 setInterval(function() {
     if (!document.hidden) {
         location.reload();

@@ -76,6 +76,14 @@ async def dashboard_home(
                     pass
         
         pending_interviews = len([i for i in interviews if i.get("status") in ["scheduled", "in_progress"]])
+        completed_total = len([i for i in interviews if i.get("status") == "completed"])
+        
+        # Calculate average score (only for completed interviews with scores > 0)
+        scored_interviews = [i for i in interviews if i.get("status") == "completed" and i.get("score", 0) > 0]
+        average_score = round(sum(i.get("score", 0) for i in scored_interviews) / len(scored_interviews), 1) if scored_interviews else 0
+        
+        # Calculate completion rate
+        completion_rate = round((completed_total / total_interviews * 100), 1) if total_interviews > 0 else 0
         
         # Get recent interviews (limit to 5 for dashboard) - already sorted
         recent_interviews = []
@@ -94,6 +102,9 @@ async def dashboard_home(
             "interviews_today": interviews_today,
             "pending_interviews": pending_interviews,
             "completed_today": completed_today,
+            "completed_total": completed_total,
+            "average_score": average_score,
+            "completion_rate": completion_rate,
             "recent_interviews": recent_interviews
         }
         
@@ -105,6 +116,9 @@ async def dashboard_home(
             "interviews_today": 0,
             "pending_interviews": 0,
             "completed_today": 0,
+            "completed_total": 0,
+            "average_score": 0,
+            "completion_rate": 0,
             "recent_interviews": []
         }
     
