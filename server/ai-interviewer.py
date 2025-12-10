@@ -826,59 +826,100 @@ async def run_bot(
         
         # Clean up transcript - remove duplicates and streaming artifacts
         def clean_transcript(transcript):
-            """Remove duplicate/incremental entries from transcript."""
+            """Clean transcript: fix mislabeling, remove duplicates, merge fragments."""
             if not transcript:
                 return []
             
-            cleaned = []
-            for entry in transcript:
+            # Step 1: Fix mislabeled AI entries that are actually candidate speech
+            # AI responses that match nearby candidate speech are likely echoes
+            fixed = []
+            for i, entry in enumerate(transcript):
+                role = entry.get('role', '')
+                content = entry.get('content', '').strip()
+                
+                if not content or len(content) < 2:
+                    continue
+                
+                # Check if this AI entry matches a nearby CANDIDATE entry
+                if role == 'ai_interviewer':
+                    content_lower = content.lower()
+                    is_echo = False
+                    
+                    # Look at surrounding candidate entries (within 5 positions)
+                    for j in range(max(0, i-5), min(len(transcript), i+5)):
+                        if j == i:
+                            continue
+                        other = transcript[j]
+                        if other.get('role') == 'candidate':
+                            other_content = other.get('content', '').lower().strip()
+                            # Check if AI text is contained in or contains candidate text
+                            if len(content_lower) > 5 and len(other_content) > 5:
+                                if content_lower in other_content or other_content in content_lower:
+                                    is_echo = True
+                                    break
+                                # Check prefix match
+                                min_len = min(len(content_lower), len(other_content))
+                                if min_len > 8 and content_lower[:min_len-3] == other_content[:min_len-3]:
+                                    is_echo = True
+                                    break
+                    
+                    if is_echo:
+                        # Skip this - it's an echo of candidate speech
+                        continue
+                
+                fixed.append(entry)
+            
+            # Step 2: Merge consecutive same-role entries that are fragments
+            merged = []
+            for entry in fixed:
                 role = entry.get('role', '')
                 content = entry.get('content', '').strip()
                 
                 if not content:
                     continue
                 
-                # Check if this is a duplicate or incremental version of previous entry
-                is_duplicate = False
+                # If same role as last entry and looks like a fragment, try to merge
+                if merged and merged[-1].get('role') == role:
+                    last_content = merged[-1].get('content', '').strip()
+                    combined_lower = last_content.lower() + ' ' + content.lower()
+                    
+                    # If this looks like a continuation (short fragment), merge
+                    if len(content) < 30 and not content.endswith(('.', '?', '!')):
+                        merged[-1]['content'] = last_content + ' ' + content
+                        continue
                 
-                # Check against last few entries of same role
-                same_role_entries = [e for e in cleaned[-5:] if e.get('role') == role]
-                for prev in same_role_entries:
-                    prev_content = prev.get('content', '').lower().strip()
-                    curr_content = content.lower().strip()
+                merged.append(entry.copy())
+            
+            # Step 3: Remove remaining duplicates
+            final = []
+            for entry in merged:
+                role = entry.get('role', '')
+                content = entry.get('content', '').strip()
+                content_lower = content.lower()
+                
+                is_duplicate = False
+                for prev in final[-5:]:
+                    prev_lower = prev.get('content', '').lower().strip()
                     
-                    # Exact duplicate
-                    if curr_content == prev_content:
+                    # Exact or near-exact match
+                    if content_lower == prev_lower:
                         is_duplicate = True
                         break
                     
-                    # Current is incremental (starts with previous)
-                    if curr_content.startswith(prev_content):
-                        # Remove the shorter version, keep this longer one
-                        cleaned.remove(prev)
-                        break
-                    
-                    # Previous is incremental (starts with current) - skip current
-                    if prev_content.startswith(curr_content):
-                        is_duplicate = True
-                        break
-                    
-                    # High overlap (first 80% matches)
-                    min_len = min(len(curr_content), len(prev_content))
-                    if min_len > 15:
-                        check_len = int(min_len * 0.8)
-                        if curr_content[:check_len] == prev_content[:check_len]:
+                    # One contains the other
+                    if len(content_lower) > 10 and len(prev_lower) > 10:
+                        if content_lower in prev_lower or prev_lower in content_lower:
                             # Keep the longer one
-                            if len(curr_content) > len(prev_content):
-                                cleaned.remove(prev)
+                            if len(content) > len(prev.get('content', '')):
+                                final.remove(prev)
                             else:
                                 is_duplicate = True
                             break
                 
                 if not is_duplicate:
-                    cleaned.append(entry)
+                    final.append(entry)
             
-            return cleaned
+            return final
         
         # Clean the transcript before building text
         cleaned_transcript = clean_transcript(interview_transcript)
