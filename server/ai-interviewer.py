@@ -221,7 +221,7 @@ You are hiring on behalf of Hire2Inspire."""
         # Extract job description details
         job_description = interview_config.get("job_description", {})
         job_title = job_description.get("title", "the position")
-        company = job_description.get("company", "our company")
+        company = job_description.get("company") or "our company"
         location = job_description.get("location", "")
         
         # Extract resume details
@@ -482,45 +482,37 @@ class TranscriptCollector(FrameProcessor):
         # Capture user speech (transcription)
         if isinstance(frame, TranscriptionFrame):
             text = frame.text.strip()
+            logger.info(f"📥 TranscriptionFrame received: '{text[:50]}...' (len={len(text)})")
             if text and len(text) > 1:  # Skip very short transcriptions
-                # Skip if it's an echo of AI speech
-                if self._is_echo_of_ai(text):
-                    logger.debug(f"🔇 Filtered candidate echo of AI: {text}")
-                # Skip if it's a duplicate of recent candidate speech
-                elif self._is_duplicate_candidate(text):
-                    logger.debug(f"🔇 Filtered duplicate candidate: {text}")
-                else:
-                    self.transcript_list.append({
-                        "role": "candidate",
-                        "content": text
-                    })
-                    self.last_candidate_text = text
-                    # Track for reverse echo detection
-                    self.recent_candidate_texts.append(text)
-                    if len(self.recent_candidate_texts) > 5:
-                        self.recent_candidate_texts.pop(0)
-                    logger.debug(f"📝 Candidate said: {text}")
+                # Always capture candidate speech - filtering caused issues
+                self.transcript_list.append({
+                    "role": "candidate",
+                    "content": text
+                })
+                self.last_candidate_text = text
+                self.recent_candidate_texts.append(text)
+                if len(self.recent_candidate_texts) > 5:
+                    self.recent_candidate_texts.pop(0)
+                logger.info(f"📝 Candidate said: {text}")
         
         # Capture bot responses
         elif isinstance(frame, TextFrame):
             text = frame.text.strip()
+            logger.info(f"📥 TextFrame received: '{text[:50]}...' (len={len(text)})")
             if text and len(text) > 1:
-                # Skip if AI is echoing what candidate just said
-                if self._is_ai_echoing_candidate(text):
-                    logger.debug(f"🔇 Filtered AI echo of candidate: {text}")
-                # Skip if this is a streaming partial we already captured
-                elif self._is_streaming_continuation(text):
-                    logger.debug(f"🔇 Filtered streaming partial: {text}")
+                # Skip very short fragments only
+                if len(text) < 3:
+                    logger.debug(f"🔇 Skipped short fragment: {text}")
                 else:
+                    # Capture AI response
                     self.transcript_list.append({
                         "role": "ai_interviewer",
                         "content": text
                     })
-                    # Track AI text for bidirectional echo detection
                     self.recent_ai_texts.append(text)
                     if len(self.recent_ai_texts) > 5:
                         self.recent_ai_texts.pop(0)
-                    logger.debug(f"📝 AI said: {text}")
+                    logger.info(f"📝 AI said: {text}")
         
         await self.push_frame(frame, direction)
 
