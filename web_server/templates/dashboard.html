@@ -50,15 +50,33 @@
     .score-good { background-color: #dbeafe; color: #1e40af; }
     .score-average { background-color: #fef3c7; color: #92400e; }
     .score-poor { background-color: #fee2e2; color: #991b1b; }
-    .quick-action-card { border: none; border-radius: 12px; }
+    .action-card { border: none; border-radius: 12px; }
+    .action-btn {
+        border-radius: 10px;
+        padding: 12px 16px;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+    .action-btn:hover {
+        transform: translateX(4px);
+    }
+    .action-btn i {
+        width: 24px;
+    }
     .table th {
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         font-weight: 600;
         text-transform: uppercase;
         color: #6c757d;
         border-bottom: 2px solid #dee2e6;
     }
-    .table td { vertical-align: middle; font-size: 0.9rem; }
+    .table td { vertical-align: middle; font-size: 0.875rem; }
+    .recent-card { border: none; border-radius: 12px; }
+    .tip-card {
+        background: linear-gradient(135deg, #FFF5F6 0%, #FFE8EC 100%);
+        border: none;
+        border-radius: 12px;
+    }
     @media (max-width: 1400px) {
         .hide-on-lg { display: none !important; }
     }
@@ -123,9 +141,9 @@
 <div class="row g-4">
     <!-- Recent Interviews -->
     <div class="col-12 col-xxl-8">
-        <div class="card h-100">
-            <div class="card-header py-3 d-flex align-items-center justify-content-between bg-white">
-                <h6 class="m-0 fw-bold text-primary">
+        <div class="card recent-card h-100 shadow-sm">
+            <div class="card-header py-3 d-flex align-items-center justify-content-between bg-white border-0">
+                <h6 class="m-0 fw-bold" style="color: #FF6183;">
                     <i class="bi bi-clock-history me-2"></i>Recent Interviews
                 </h6>
                 <a href="/dashboard/interviews" class="btn btn-sm btn-primary">View All</a>
@@ -148,7 +166,7 @@
                             <tr>
                                 <td class="ps-3">
                                     <div class="d-flex align-items-center">
-                                        <div class="avatar-sm bg-primary rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0">
+                                        <div class="avatar-sm rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="background: #FF6183;">
                                             <span class="text-white fw-bold">{{ interview.candidate_name[0] }}</span>
                                         </div>
                                         <span class="fw-medium">{{ interview.candidate_name }}</span>
@@ -197,59 +215,53 @@
         </div>
     </div>
     
-    <!-- Quick Actions Sidebar -->
+    <!-- Sidebar -->
     <div class="col-12 col-xxl-4">
-        <div class="card quick-action-card h-100">
-            <div class="card-header py-3 bg-white">
-                <h6 class="m-0 fw-bold text-primary">
-                    <i class="bi bi-lightning me-2"></i>Quick Actions
+        <!-- Quick Actions -->
+        <div class="card action-card shadow-sm mb-4">
+            <div class="card-header py-3 bg-white border-0">
+                <h6 class="m-0 fw-bold" style="color: #FF6183;">
+                    <i class="bi bi-lightning-fill me-2"></i>Quick Actions
                 </h6>
             </div>
-            <div class="card-body">
-                <div class="d-grid gap-2 mb-4">
-                    <a href="/dashboard/schedule" class="btn btn-primary py-2">
-                        <i class="bi bi-calendar-plus me-2"></i>Schedule Interview
+            <div class="card-body pt-0">
+                <div class="d-grid gap-2">
+                    <a href="/dashboard/schedule" class="btn btn-primary action-btn text-start">
+                        <i class="bi bi-calendar-plus me-2"></i>Schedule New Interview
                     </a>
-                    <a href="/dashboard/interviews?status=completed" class="btn btn-outline-success py-2">
+                    <a href="/dashboard/interviews?status=completed" class="btn btn-outline-success action-btn text-start">
                         <i class="bi bi-clipboard-check me-2"></i>Review Completed
                     </a>
-                    <a href="/dashboard/scoring-settings" class="btn btn-outline-secondary py-2">
-                        <i class="bi bi-sliders me-2"></i>Scoring Settings
+                    <a href="/dashboard/analytics" class="btn btn-outline-info action-btn text-start">
+                        <i class="bi bi-bar-chart-line me-2"></i>View Analytics
                     </a>
-                    <a href="/dashboard/replicas" class="btn btn-outline-info py-2">
+                    <a href="/dashboard/replicas" class="btn btn-outline-secondary action-btn text-start">
                         <i class="bi bi-person-video3 me-2"></i>Manage Replicas
                     </a>
                 </div>
-                
-                <hr>
-                
-                <h6 class="fw-bold mb-3"><i class="bi bi-bar-chart me-2"></i>Summary</h6>
-                <div class="row g-2">
-                    <div class="col-6">
-                        <div class="p-3 rounded text-center" style="background: #FFF5F6;">
-                            <div class="h4 mb-0 fw-bold" style="color: #FF6183;">{{ data.total_interviews }}</div>
-                            <small class="text-muted">Total</small>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="p-3 rounded text-center" style="background: #d1fae5;">
-                            <div class="h4 mb-0 fw-bold text-success">{{ data.completed_total }}</div>
-                            <small class="text-muted">Completed</small>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="p-3 rounded text-center" style="background: #dbeafe;">
-                            <div class="h4 mb-0 fw-bold text-info">{{ data.average_score }}</div>
-                            <small class="text-muted">Avg Score</small>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="p-3 rounded text-center" style="background: #fef3c7;">
-                            <div class="h4 mb-0 fw-bold text-warning">{{ data.completion_rate }}%</div>
-                            <small class="text-muted">Complete Rate</small>
-                        </div>
-                    </div>
-                </div>
+            </div>
+        </div>
+        
+        <!-- Tips Card -->
+        <div class="card tip-card">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3" style="color: #FF6183;">
+                    <i class="bi bi-lightbulb me-2"></i>Quick Tip
+                </h6>
+                <p class="mb-2 small">
+                    {% if data.average_score < 50 %}
+                    Consider reviewing your <strong>Scoring Settings</strong> to calibrate evaluation criteria for better candidate assessment.
+                    {% elif data.pending_interviews > 0 %}
+                    You have <strong>{{ data.pending_interviews }} pending</strong> interviews. Review them to stay on track!
+                    {% elif data.completed_total == 0 %}
+                    Get started by <strong>scheduling your first interview</strong> to begin evaluating candidates.
+                    {% else %}
+                    Great progress! You've completed <strong>{{ data.completed_total }} interviews</strong> with a {{ data.completion_rate }}% completion rate.
+                    {% endif %}
+                </p>
+                <a href="/dashboard/scoring-settings" class="btn btn-sm btn-outline-dark">
+                    <i class="bi bi-sliders me-1"></i>Scoring Settings
+                </a>
             </div>
         </div>
     </div>
