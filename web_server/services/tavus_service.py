@@ -188,6 +188,10 @@ class TavusService:
                     result = response.json()
                     count = result.get('total_count', 0)
                     logger.info(f"✅ Retrieved {count} replicas")
+                    # Log sample replica fields for debugging
+                    if result.get("data") and len(result["data"]) > 0:
+                        sample = result["data"][0]
+                        logger.info(f"📋 Sample replica fields: {list(sample.keys())}")
                     return result
                 else:
                     logger.error(f"❌ Failed to list replicas: {response.status_code} - {response.text}")

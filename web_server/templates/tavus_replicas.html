@@ -56,6 +56,19 @@
     .grid-view {
         display: flex;
     }
+    .replica-video {
+        width: 100%;
+        height: 180px;
+        object-fit: cover;
+        background: #000;
+    }
+    .table-thumbnail-video {
+        width: 60px;
+        height: 60px;
+        object-fit: cover;
+        border-radius: 8px;
+        background: #000;
+    }
 </style>
 {% endblock %}
 
@@ -96,14 +109,12 @@
     <div class="col-md-6 col-lg-4 col-xl-3">
         <div class="card replica-card h-100 shadow-sm">
             <div class="position-relative">
-                {% if replica.thumbnail_video_url or replica.thumbnail_url %}
-                <img src="{{ replica.thumbnail_video_url or replica.thumbnail_url }}" 
-                     alt="{{ replica.replica_name }}" 
-                     class="replica-thumbnail"
-                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                <div class="replica-placeholder" style="display: none;">
-                    <i class="bi bi-person-video2"></i>
-                </div>
+                {% if replica.thumbnail_video_url %}
+                <video class="replica-video" muted loop playsinline
+                       onmouseenter="this.play()" 
+                       onmouseleave="this.pause(); this.currentTime=0;">
+                    <source src="{{ replica.thumbnail_video_url }}" type="video/mp4">
+                </video>
                 {% else %}
                 <div class="replica-placeholder">
                     <i class="bi bi-person-video2"></i>
@@ -178,14 +189,15 @@
                     {% for replica in replicas %}
                     <tr id="replica-{{ replica.replica_id }}">
                         <td>
-                            {% if replica.thumbnail_video_url or replica.thumbnail_url %}
-                            <img src="{{ replica.thumbnail_video_url or replica.thumbnail_url }}" 
-                                 alt="{{ replica.replica_name }}" 
-                                 style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px;"
-                                 onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2260%22 height=%2260%22 viewBox=%220 0 60 60%22><rect fill=%22%23FFF5F6%22 width=%2260%22 height=%2260%22/><text x=%2230%22 y=%2235%22 font-size=%2220%22 text-anchor=%22middle%22 fill=%22%23FF6183%22>👤</text></svg>'">
+                            {% if replica.thumbnail_video_url %}
+                            <video class="table-thumbnail-video" muted loop playsinline
+                                   onmouseenter="this.play()" 
+                                   onmouseleave="this.pause(); this.currentTime=0;">
+                                <source src="{{ replica.thumbnail_video_url }}" type="video/mp4">
+                            </video>
                             {% else %}
                             <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #FFF5F6 0%, #FFE4E8 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                                <i class="bi bi-person-video2 text-muted" style="font-size: 1.5rem; color: #FF6183 !important;"></i>
+                                <i class="bi bi-person-video2" style="font-size: 1.5rem; color: #FF6183;"></i>
                             </div>
                             {% endif %}
                         </td>
@@ -432,13 +444,15 @@
 
             if (result.success) {
                 const replica = result.data;
-                const thumbnailHtml = replica.thumbnail_video_url || replica.thumbnail_url
-                    ? `<img src="${replica.thumbnail_video_url || replica.thumbnail_url}" alt="${replica.replica_name}" class="img-fluid rounded mb-3" style="max-height: 200px;">`
+                const videoHtml = replica.thumbnail_video_url
+                    ? `<video class="img-fluid rounded mb-3" style="max-height: 250px;" controls autoplay muted loop>
+                         <source src="${replica.thumbnail_video_url}" type="video/mp4">
+                       </video>`
                     : `<div class="mb-3 p-4 text-center rounded" style="background: linear-gradient(135deg, #FFF5F6 0%, #FFE4E8 100%);"><i class="bi bi-person-video2" style="font-size: 4rem; color: #FF6183;"></i></div>`;
                 
                 document.getElementById('replicaDetailsContent').innerHTML = `
                     <div class="text-center">
-                        ${thumbnailHtml}
+                        ${videoHtml}
                     </div>
                     <dl class="row">
                         <dt class="col-sm-4">Replica ID:</dt>
@@ -455,6 +469,9 @@
                         
                         <dt class="col-sm-4">Replica Type:</dt>
                         <dd class="col-sm-8">${replica.replica_type || 'N/A'}</dd>
+                        
+                        <dt class="col-sm-4">Model:</dt>
+                        <dd class="col-sm-8">${replica.model_name || 'N/A'}</dd>
                         
                         <dt class="col-sm-4">Created:</dt>
                         <dd class="col-sm-8">${replica.created_at || 'N/A'}</dd>
