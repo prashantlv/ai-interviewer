@@ -423,6 +423,13 @@ async def get_interview_config(interview_id: str, scoring_level: Optional[str] =
                 "problem_solving": 15,
                 "cultural_fit": 20,
                 "behavioral": 20
+            },
+            "cultural_fit": {
+                "technical_skills": 5,
+                "experience": 20,
+                "problem_solving": 10,
+                "cultural_fit": 40,
+                "behavioral": 25
             }
         }
         

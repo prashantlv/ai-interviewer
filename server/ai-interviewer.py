@@ -360,49 +360,92 @@ class TalkingAnimation(FrameProcessor):
 
 
 class TranscriptCollector(FrameProcessor):
-    """Collects conversation transcript for later analysis with echo filtering."""
+    """Collects conversation transcript for later analysis with advanced filtering."""
     
     def __init__(self, transcript_list: list):
         super().__init__()
         self.transcript_list = transcript_list
         self.recent_ai_texts = []  # Track recent AI utterances for echo detection
+        self.recent_candidate_texts = []  # Track recent candidate texts
         self.last_candidate_text = ""  # Track last candidate text to avoid duplicates
+        self.pending_ai_text = ""  # Aggregate streaming AI text
+        self.last_ai_timestamp = 0  # Track timing for aggregation
+        import time
+        self.time = time
     
-    def _is_echo(self, text: str) -> bool:
-        """Check if the transcription is likely an echo of AI speech."""
+    def _is_echo_of_ai(self, text: str) -> bool:
+        """Check if candidate transcription is an echo of AI speech."""
         text_lower = text.lower().strip()
         
-        # Check against recent AI utterances
         for ai_text in self.recent_ai_texts:
             ai_lower = ai_text.lower().strip()
-            # Check for exact match or if text is contained in AI speech
             if text_lower == ai_lower:
                 return True
             if len(text_lower) > 5 and text_lower in ai_lower:
                 return True
             if len(ai_lower) > 5 and ai_lower in text_lower:
                 return True
-            # Check for high similarity (starts with same words)
             if len(text_lower) > 10 and len(ai_lower) > 10:
                 if text_lower[:20] == ai_lower[:20]:
                     return True
         return False
     
-    def _is_duplicate(self, text: str) -> bool:
-        """Check if this is a duplicate/partial of the last candidate text."""
+    def _is_ai_echoing_candidate(self, text: str) -> bool:
+        """Check if AI text is echoing what candidate just said."""
         text_lower = text.lower().strip()
-        last_lower = self.last_candidate_text.lower().strip()
         
-        if not last_lower:
-            return False
+        # Check against recent candidate transcriptions
+        for candidate_text in self.recent_candidate_texts:
+            candidate_lower = candidate_text.lower().strip()
+            # If AI text matches or is contained in recent candidate speech
+            if text_lower == candidate_lower:
+                return True
+            if len(text_lower) > 5 and text_lower in candidate_lower:
+                return True
+            if len(candidate_lower) > 5 and candidate_lower in text_lower:
+                return True
+            # Check if AI text starts with what candidate said
+            if len(text_lower) > 10 and len(candidate_lower) > 10:
+                if text_lower[:15] == candidate_lower[:15]:
+                    return True
+        return False
+    
+    def _is_duplicate_candidate(self, text: str) -> bool:
+        """Check if this is a duplicate/partial of recent candidate text."""
+        text_lower = text.lower().strip()
         
-        # Exact duplicate
-        if text_lower == last_lower:
-            return True
+        # Check against last candidate text
+        if self.last_candidate_text:
+            last_lower = self.last_candidate_text.lower().strip()
+            if text_lower == last_lower:
+                return True
+            if len(text_lower) > 5 and text_lower in last_lower:
+                return True
         
-        # New text is contained in last (partial repeat)
-        if len(text_lower) > 5 and text_lower in last_lower:
-            return True
+        # Check against recent texts
+        for prev_text in self.recent_candidate_texts[-3:]:
+            prev_lower = prev_text.lower().strip()
+            if text_lower == prev_lower:
+                return True
+            # Current text is a shorter version of previous
+            if len(text_lower) > 5 and text_lower in prev_lower:
+                return True
+        
+        return False
+    
+    def _is_streaming_continuation(self, text: str) -> bool:
+        """Check if this AI text is a continuation of streaming output (partial)."""
+        text_lower = text.lower().strip()
+        
+        # Check if any recent AI text starts with or contains this text
+        for ai_text in self.recent_ai_texts[-3:]:
+            ai_lower = ai_text.lower().strip()
+            # This text is a prefix of a longer AI text we already have
+            if len(text_lower) < len(ai_lower) and ai_lower.startswith(text_lower):
+                return True
+            # This text is the same as something we already captured
+            if text_lower == ai_lower:
+                return True
         
         return False
     
@@ -412,34 +455,45 @@ class TranscriptCollector(FrameProcessor):
         # Capture user speech (transcription)
         if isinstance(frame, TranscriptionFrame):
             text = frame.text.strip()
-            if text:
+            if text and len(text) > 1:  # Skip very short transcriptions
                 # Skip if it's an echo of AI speech
-                if self._is_echo(text):
-                    logger.debug(f"🔇 Filtered echo: {text}")
-                # Skip if it's a duplicate
-                elif self._is_duplicate(text):
-                    logger.debug(f"🔇 Filtered duplicate: {text}")
+                if self._is_echo_of_ai(text):
+                    logger.debug(f"🔇 Filtered candidate echo of AI: {text}")
+                # Skip if it's a duplicate of recent candidate speech
+                elif self._is_duplicate_candidate(text):
+                    logger.debug(f"🔇 Filtered duplicate candidate: {text}")
                 else:
                     self.transcript_list.append({
                         "role": "candidate",
                         "content": text
                     })
                     self.last_candidate_text = text
+                    # Track for reverse echo detection
+                    self.recent_candidate_texts.append(text)
+                    if len(self.recent_candidate_texts) > 5:
+                        self.recent_candidate_texts.pop(0)
                     logger.debug(f"📝 Candidate said: {text}")
         
         # Capture bot responses
         elif isinstance(frame, TextFrame):
             text = frame.text.strip()
-            if text:
-                self.transcript_list.append({
-                    "role": "ai_interviewer",
-                    "content": text
-                })
-                # Track AI text for echo detection (keep last 5)
-                self.recent_ai_texts.append(text)
-                if len(self.recent_ai_texts) > 5:
-                    self.recent_ai_texts.pop(0)
-                logger.debug(f"📝 AI said: {text}")
+            if text and len(text) > 1:
+                # Skip if AI is echoing what candidate just said
+                if self._is_ai_echoing_candidate(text):
+                    logger.debug(f"🔇 Filtered AI echo of candidate: {text}")
+                # Skip if this is a streaming partial we already captured
+                elif self._is_streaming_continuation(text):
+                    logger.debug(f"🔇 Filtered streaming partial: {text}")
+                else:
+                    self.transcript_list.append({
+                        "role": "ai_interviewer",
+                        "content": text
+                    })
+                    # Track AI text for bidirectional echo detection
+                    self.recent_ai_texts.append(text)
+                    if len(self.recent_ai_texts) > 5:
+                        self.recent_ai_texts.pop(0)
+                    logger.debug(f"📝 AI said: {text}")
         
         await self.push_frame(frame, direction)
 

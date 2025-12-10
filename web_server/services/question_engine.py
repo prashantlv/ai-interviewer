@@ -359,7 +359,8 @@ class QuestionEngine:
             "technical": ["technical", "problem", "experience", "behavioral", "cultural"],
             "behavioral": ["behavioral", "cultural", "experience", "problem", "technical"],
             "mixed": ["experience", "behavioral", "technical", "problem", "cultural"],
-            "leadership": ["behavioral", "experience", "cultural", "problem", "technical"]
+            "leadership": ["behavioral", "experience", "cultural", "problem", "technical"],
+            "cultural_fit": ["cultural", "behavioral", "experience", "problem", "technical"]
         }
         
         priority_order = priority_map.get(interview_type.lower(), priority_map["technical"])
