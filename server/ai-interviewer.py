@@ -700,13 +700,16 @@ async def run_bot(
     # Build pipeline based on configuration
     if BOT_IMPLEMENTATION == "openai":
         # Pipeline for OpenAI with separate STT/TTS
+        # transcript_collector is placed AFTER llm to capture BOTH:
+        # - TranscriptionFrame from STT (candidate speech) 
+        # - TextFrame from LLM (AI responses)
         pipeline_processors = [
             transport.input(),
             stt,
-            transcript_collector,  # Collect transcript
             rtvi,
             context_aggregator.user(),
             llm,
+            transcript_collector,  # Capture BOTH user transcriptions AND AI responses
             tts,
         ]
         
@@ -723,11 +726,13 @@ async def run_bot(
         
     else:  # BOT_IMPLEMENTATION == "gemini"
         # Pipeline for Gemini (built-in STT/TTS)
+        # Note: Gemini has built-in audio handling
         pipeline_processors = [
             transport.input(),
             rtvi,
             context_aggregator.user(),
             llm,
+            transcript_collector,  # Capture both user and AI speech
         ]
         
         # Add video processing (Video services work with Gemini audio)
