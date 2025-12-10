@@ -34,7 +34,7 @@
     .video-container {
         width: 100%;
         height: 180px;
-        background: #000;
+        background: linear-gradient(135deg, #FFF5F6 0%, #FFE8EC 100%);
         position: relative;
         overflow: hidden;
     }
@@ -42,6 +42,30 @@
         width: 100%;
         height: 100%;
         object-fit: cover;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    .replica-video.loaded {
+        opacity: 1;
+    }
+    .loading-spinner {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 40px;
+        height: 40px;
+        border: 3px solid #FFE8EC;
+        border-top: 3px solid #FF6183;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        0% { transform: translate(-50%, -50%) rotate(0deg); }
+        100% { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+    .video-container.loaded .loading-spinner {
+        display: none;
     }
     .play-overlay {
         position: absolute;
@@ -98,7 +122,27 @@
         height: 60px;
         object-fit: cover;
         border-radius: 8px;
-        background: #000;
+        background: linear-gradient(135deg, #FFF5F6 0%, #FFE8EC 100%);
+    }
+    .table-thumb-container {
+        width: 60px;
+        height: 60px;
+        position: relative;
+        border-radius: 8px;
+        overflow: hidden;
+        background: linear-gradient(135deg, #FFF5F6 0%, #FFE8EC 100%);
+    }
+    .table-thumb-container .mini-spinner {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 20px;
+        height: 20px;
+        border: 2px solid #FFE8EC;
+        border-top: 2px solid #FF6183;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
     }
     .pagination-info {
         color: #6c757d;
@@ -184,10 +228,12 @@
         <div class="card replica-card h-100 shadow-sm" onclick="viewReplica('{{ replica.replica_id }}')">
             <div class="position-relative">
                 {% if replica.thumbnail_video_url %}
-                <div class="video-container">
+                <div class="video-container" id="vc-{{ loop.index }}">
+                    <div class="loading-spinner"></div>
                     <video class="replica-video" muted preload="metadata" 
-                           poster="{{ replica.thumbnail_video_url }}#t=0.5">
-                        <source src="{{ replica.thumbnail_video_url }}" type="video/mp4">
+                           onloadeddata="this.classList.add('loaded'); this.parentElement.classList.add('loaded');"
+                           onerror="this.parentElement.querySelector('.loading-spinner').innerHTML='<i class="bi bi-exclamation-circle" style="font-size:2rem;color:#FF6183;"></i>';">
+                        <source data-src="{{ replica.thumbnail_video_url }}" src="" type="video/mp4">
                     </video>
                     <div class="play-overlay">
                         <i class="bi bi-play-circle-fill"></i>
@@ -262,7 +308,7 @@
                             {% if replica.thumbnail_video_url %}
                             <video class="table-thumbnail" muted preload="metadata"
                                    poster="{{ replica.thumbnail_video_url }}#t=0.5">
-                                <source src="{{ replica.thumbnail_video_url }}" type="video/mp4">
+                                <source data-src="{{ replica.thumbnail_video_url }}" src="" type="video/mp4">
                             </video>
                             {% else %}
                             <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #FFF5F6 0%, #FFE4E8 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
@@ -421,6 +467,28 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+// Lazy loading for videos - only load when visible
+document.addEventListener('DOMContentLoaded', function() {
+    const videos = document.querySelectorAll('.replica-video');
+    
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const video = entry.target;
+                const source = video.querySelector('source');
+                if (source && source.dataset.src) {
+                    source.src = source.dataset.src;
+                    video.load();
+                }
+                observer.unobserve(video);
+            }
+        });
+    }, { rootMargin: '100px' });
+    
+    videos.forEach(video => observer.observe(video));
+});
+</script>
 <script>
     // Toggle view
     function toggleView(view) {
