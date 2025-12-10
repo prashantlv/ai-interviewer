@@ -285,6 +285,7 @@ class DatabaseService:
                         "score": evaluation.get("overall_score", 0),
                         "created_at": date_value,
                         "scheduled_date": date_value,  # Alias for compatibility
+                        "interview_type": evaluation.get("interview_type", "technical"),
                         "transcript_available": bool(doc.get("transcript") and doc.get("transcript") != "Interview scheduled - waiting for completion")
                     })
                 

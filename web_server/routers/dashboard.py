@@ -92,6 +92,7 @@ async def dashboard_home(
                 "id": interview.get("id", "unknown"),
                 "candidate_name": interview.get("candidate_name", "Unknown"),
                 "position": interview.get("position", "Unknown Position"),
+                "interview_type": interview.get("interview_type", "technical"),
                 "status": interview.get("status", "unknown"),
                 "score": interview.get("score", 0),
                 "date": interview.get("scheduled_date", "N/A")
@@ -208,8 +209,9 @@ async def interviews_page(
                 "id": interview.get("id", "unknown"),
                 "interview_id": interview_id,
                 "candidate_name": interview.get("candidate_name", "Unknown"),
-                "candidate_email": "N/A",  # TODO: Add email to database
+                "candidate_email": interview.get("candidate_email", "N/A"),
                 "position": interview.get("position", "Unknown Position"),
+                "interview_type": interview.get("interview_type", "technical"),
                 "status": interview.get("status", "unknown"),
                 "score": interview.get("score", 0),
                 "scheduled_date": interview.get("created_at", "N/A"),
