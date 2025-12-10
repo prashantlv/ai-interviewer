@@ -149,28 +149,26 @@
     <div class="col-md-6">
         <div class="alert alert-light border mb-0">
             <i class="bi bi-collection me-2"></i> 
-            <strong>Total:</strong> {{ total_count }} {% if replica_type == 'stock' %}Stock{% elif replica_type == 'user' %}Personal{% else %}Stock{% endif %} Replicas
+            <strong>{% if replica_type == 'stock' %}Stock{% elif replica_type == 'user' %}Personal{% else %}Stock{% endif %} Replicas</strong>
             <span class="pagination-info ms-2">
-                (Page {{ current_page }} of {{ total_pages }}, showing {{ replicas|length }})
+                - Page {{ current_page }}, showing {{ replicas|length }} replicas
             </span>
         </div>
     </div>
     <div class="col-md-6 text-end">
         <div class="btn-group">
-            <a href="?page=1&limit={{ limit }}{% if replica_type != 'all' %}&replica_type={{ replica_type }}{% endif %}" class="btn btn-outline-secondary {% if current_page == 1 %}disabled{% endif %}">
-                <i class="bi bi-chevron-double-left"></i>
+            <a href="?page=1&limit={{ limit }}&replica_type={{ replica_type }}" class="btn btn-outline-secondary {% if current_page == 1 %}disabled{% endif %}">
+                <i class="bi bi-chevron-double-left"></i> First
             </a>
-            <a href="?page={{ current_page - 1 }}&limit={{ limit }}{% if replica_type != 'all' %}&replica_type={{ replica_type }}{% endif %}" class="btn btn-outline-secondary {% if current_page <= 1 %}disabled{% endif %}">
+            <a href="?page={{ current_page - 1 }}&limit={{ limit }}&replica_type={{ replica_type }}" class="btn btn-outline-secondary {% if current_page <= 1 %}disabled{% endif %}">
                 <i class="bi bi-chevron-left"></i> Prev
             </a>
-            <a href="?page={{ current_page + 1 }}&limit={{ limit }}{% if replica_type != 'all' %}&replica_type={{ replica_type }}{% endif %}" class="btn btn-outline-secondary {% if current_page >= total_pages %}disabled{% endif %}">
+            <span class="btn btn-light disabled">Page {{ current_page }}</span>
+            <a href="?page={{ current_page + 1 }}&limit={{ limit }}&replica_type={{ replica_type }}" class="btn btn-outline-secondary {% if replicas|length < limit %}disabled{% endif %}">
                 Next <i class="bi bi-chevron-right"></i>
             </a>
-            <a href="?page={{ total_pages }}&limit={{ limit }}{% if replica_type != 'all' %}&replica_type={{ replica_type }}{% endif %}" class="btn btn-outline-secondary {% if current_page >= total_pages %}disabled{% endif %}">
-                <i class="bi bi-chevron-double-right"></i>
-            </a>
         </div>
-        <select class="form-select d-inline-block ms-2" style="width: auto;" onchange="window.location.href='?page=1&limit='+this.value+'{% if replica_type != 'all' %}&replica_type={{ replica_type }}{% endif %}'">
+        <select class="form-select d-inline-block ms-2" style="width: auto;" onchange="window.location.href='?page=1&limit='+this.value+'&replica_type={{ replica_type }}'">
             <option value="12" {% if limit == 12 %}selected{% endif %}>12/page</option>
             <option value="20" {% if limit == 20 %}selected{% endif %}>20/page</option>
             <option value="40" {% if limit == 40 %}selected{% endif %}>40/page</option>
