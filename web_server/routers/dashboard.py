@@ -87,7 +87,7 @@ async def dashboard_home(
         
         # Get recent interviews (limit to 5 for dashboard) - already sorted
         recent_interviews = []
-        for interview in interviews[:5]:
+        for interview in interviews[:8]:
             recent_interviews.append({
                 "id": interview.get("id", "unknown"),
                 "candidate_name": interview.get("candidate_name", "Unknown"),
