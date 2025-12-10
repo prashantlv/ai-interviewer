@@ -360,32 +360,86 @@ class TalkingAnimation(FrameProcessor):
 
 
 class TranscriptCollector(FrameProcessor):
-    """Collects conversation transcript for later analysis."""
+    """Collects conversation transcript for later analysis with echo filtering."""
     
     def __init__(self, transcript_list: list):
         super().__init__()
         self.transcript_list = transcript_list
+        self.recent_ai_texts = []  # Track recent AI utterances for echo detection
+        self.last_candidate_text = ""  # Track last candidate text to avoid duplicates
+    
+    def _is_echo(self, text: str) -> bool:
+        """Check if the transcription is likely an echo of AI speech."""
+        text_lower = text.lower().strip()
+        
+        # Check against recent AI utterances
+        for ai_text in self.recent_ai_texts:
+            ai_lower = ai_text.lower().strip()
+            # Check for exact match or if text is contained in AI speech
+            if text_lower == ai_lower:
+                return True
+            if len(text_lower) > 5 and text_lower in ai_lower:
+                return True
+            if len(ai_lower) > 5 and ai_lower in text_lower:
+                return True
+            # Check for high similarity (starts with same words)
+            if len(text_lower) > 10 and len(ai_lower) > 10:
+                if text_lower[:20] == ai_lower[:20]:
+                    return True
+        return False
+    
+    def _is_duplicate(self, text: str) -> bool:
+        """Check if this is a duplicate/partial of the last candidate text."""
+        text_lower = text.lower().strip()
+        last_lower = self.last_candidate_text.lower().strip()
+        
+        if not last_lower:
+            return False
+        
+        # Exact duplicate
+        if text_lower == last_lower:
+            return True
+        
+        # New text is contained in last (partial repeat)
+        if len(text_lower) > 5 and text_lower in last_lower:
+            return True
+        
+        return False
     
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
         
         # Capture user speech (transcription)
         if isinstance(frame, TranscriptionFrame):
-            if frame.text.strip():
-                self.transcript_list.append({
-                    "role": "candidate",
-                    "content": frame.text
-                })
-                logger.debug(f"📝 Candidate said: {frame.text}")
+            text = frame.text.strip()
+            if text:
+                # Skip if it's an echo of AI speech
+                if self._is_echo(text):
+                    logger.debug(f"🔇 Filtered echo: {text}")
+                # Skip if it's a duplicate
+                elif self._is_duplicate(text):
+                    logger.debug(f"🔇 Filtered duplicate: {text}")
+                else:
+                    self.transcript_list.append({
+                        "role": "candidate",
+                        "content": text
+                    })
+                    self.last_candidate_text = text
+                    logger.debug(f"📝 Candidate said: {text}")
         
         # Capture bot responses
         elif isinstance(frame, TextFrame):
-            if frame.text.strip():
+            text = frame.text.strip()
+            if text:
                 self.transcript_list.append({
                     "role": "ai_interviewer",
-                    "content": frame.text
+                    "content": text
                 })
-                logger.debug(f"📝 AI said: {frame.text}")
+                # Track AI text for echo detection (keep last 5)
+                self.recent_ai_texts.append(text)
+                if len(self.recent_ai_texts) > 5:
+                    self.recent_ai_texts.pop(0)
+                logger.debug(f"📝 AI said: {text}")
         
         await self.push_frame(frame, direction)
 
