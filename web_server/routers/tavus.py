@@ -39,15 +39,16 @@ class RenameReplicaRequest(BaseModel):
 # ============================================================================
 
 @router.get("/dashboard/replicas", response_class=HTMLResponse)
-async def replicas_page(request: Request):
+async def replicas_page(request: Request, page: int = 1, limit: int = 20):
     """
     Replica Management dashboard page
     
     Displays UI for managing avatar replicas (list, create, rename, delete)
+    Supports pagination with page and limit query parameters.
     """
     try:
-        # Fetch all replicas
-        result = await tavus_service.list_replicas(verbose=True)
+        # Fetch replicas with pagination
+        result = await tavus_service.list_replicas(verbose=True, limit=limit, page=page)
         
         replicas = []
         total_count = 0
@@ -56,13 +57,18 @@ async def replicas_page(request: Request):
             replicas = result.get('data', [])
             total_count = result.get('total_count', 0)
         
+        total_pages = (total_count + limit - 1) // limit  # Ceiling division
+        
         return templates.TemplateResponse(
             "tavus_replicas.html",
             {
                 "request": request,
                 "replicas": replicas,
                 "total_count": total_count,
-                "page_title": "Replicas"
+                "page_title": "Replicas",
+                "current_page": page,
+                "limit": limit,
+                "total_pages": total_pages
             }
         )
     except Exception as e:
