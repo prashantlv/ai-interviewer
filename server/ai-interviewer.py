@@ -397,17 +397,28 @@ class TranscriptCollector(FrameProcessor):
         # Check against recent candidate transcriptions
         for candidate_text in self.recent_candidate_texts:
             candidate_lower = candidate_text.lower().strip()
-            # If AI text matches or is contained in recent candidate speech
+            
+            # Exact match
             if text_lower == candidate_lower:
                 return True
+            
+            # AI text is contained in candidate speech
             if len(text_lower) > 5 and text_lower in candidate_lower:
                 return True
+            
+            # Candidate speech is contained in AI text
             if len(candidate_lower) > 5 and candidate_lower in text_lower:
                 return True
-            # Check if AI text starts with what candidate said
-            if len(text_lower) > 10 and len(candidate_lower) > 10:
-                if text_lower[:15] == candidate_lower[:15]:
+            
+            # AI text starts with candidate speech (or vice versa)
+            if len(text_lower) > 8 and len(candidate_lower) > 8:
+                # Check first 10 chars
+                if text_lower[:10] == candidate_lower[:10]:
                     return True
+                # Check if one starts with the other
+                if text_lower.startswith(candidate_lower[:8]) or candidate_lower.startswith(text_lower[:8]):
+                    return True
+        
         return False
     
     def _is_duplicate_candidate(self, text: str) -> bool:
@@ -434,18 +445,33 @@ class TranscriptCollector(FrameProcessor):
         return False
     
     def _is_streaming_continuation(self, text: str) -> bool:
-        """Check if this AI text is a continuation of streaming output (partial)."""
+        """Check if this AI text is a streaming continuation (builds on previous text)."""
         text_lower = text.lower().strip()
         
-        # Check if any recent AI text starts with or contains this text
-        for ai_text in self.recent_ai_texts[-3:]:
+        # Check against recent AI texts
+        for ai_text in self.recent_ai_texts[-5:]:
             ai_lower = ai_text.lower().strip()
-            # This text is a prefix of a longer AI text we already have
-            if len(text_lower) < len(ai_lower) and ai_lower.startswith(text_lower):
-                return True
-            # This text is the same as something we already captured
+            
+            # Exact duplicate
             if text_lower == ai_lower:
                 return True
+            
+            # New text STARTS WITH old text (new is longer version)
+            # e.g., old="Yeah. I have", new="Yeah. I have a little bit"
+            if len(text_lower) > len(ai_lower) and text_lower.startswith(ai_lower):
+                return True
+            
+            # Old text STARTS WITH new text (new is shorter/prefix)
+            if len(ai_lower) > len(text_lower) and ai_lower.startswith(text_lower):
+                return True
+                
+            # High similarity - first N characters match
+            min_len = min(len(text_lower), len(ai_lower))
+            if min_len > 10:
+                # If first 80% of the shorter text matches
+                check_len = int(min_len * 0.8)
+                if text_lower[:check_len] == ai_lower[:check_len]:
+                    return True
         
         return False
     
@@ -798,11 +824,71 @@ async def run_bot(
             else:
                 recording_context["status"] = "stop_failed"
         
+        # Clean up transcript - remove duplicates and streaming artifacts
+        def clean_transcript(transcript):
+            """Remove duplicate/incremental entries from transcript."""
+            if not transcript:
+                return []
+            
+            cleaned = []
+            for entry in transcript:
+                role = entry.get('role', '')
+                content = entry.get('content', '').strip()
+                
+                if not content:
+                    continue
+                
+                # Check if this is a duplicate or incremental version of previous entry
+                is_duplicate = False
+                
+                # Check against last few entries of same role
+                same_role_entries = [e for e in cleaned[-5:] if e.get('role') == role]
+                for prev in same_role_entries:
+                    prev_content = prev.get('content', '').lower().strip()
+                    curr_content = content.lower().strip()
+                    
+                    # Exact duplicate
+                    if curr_content == prev_content:
+                        is_duplicate = True
+                        break
+                    
+                    # Current is incremental (starts with previous)
+                    if curr_content.startswith(prev_content):
+                        # Remove the shorter version, keep this longer one
+                        cleaned.remove(prev)
+                        break
+                    
+                    # Previous is incremental (starts with current) - skip current
+                    if prev_content.startswith(curr_content):
+                        is_duplicate = True
+                        break
+                    
+                    # High overlap (first 80% matches)
+                    min_len = min(len(curr_content), len(prev_content))
+                    if min_len > 15:
+                        check_len = int(min_len * 0.8)
+                        if curr_content[:check_len] == prev_content[:check_len]:
+                            # Keep the longer one
+                            if len(curr_content) > len(prev_content):
+                                cleaned.remove(prev)
+                            else:
+                                is_duplicate = True
+                            break
+                
+                if not is_duplicate:
+                    cleaned.append(entry)
+            
+            return cleaned
+        
+        # Clean the transcript before building text
+        cleaned_transcript = clean_transcript(interview_transcript)
+        logger.info(f"📝 Cleaned transcript: {len(interview_transcript)} -> {len(cleaned_transcript)} entries")
+        
         # Collect transcript
         transcript_text = "\n\n".join([
             f"{entry['role'].upper()}: {entry['content']}" 
-            for entry in interview_transcript
-        ]) if interview_transcript else "No transcript available"
+            for entry in cleaned_transcript
+        ]) if cleaned_transcript else "No transcript available"
         
         logger.info(f"📝 Interview completed - collected {len(interview_transcript)} transcript entries")
         
@@ -822,7 +908,7 @@ async def run_bot(
         
         # Score the interview using LLM
         scoring_result = await scoring_engine.score_interview(
-            transcript=interview_transcript,
+            transcript=cleaned_transcript,
             job_description=job_description,
             questions_asked=questions_asked
         )
