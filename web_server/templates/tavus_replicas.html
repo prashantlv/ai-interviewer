@@ -2,12 +2,79 @@
 
 {% block title %}Replica Management{% endblock %}
 
+{% block extra_css %}
+<style>
+    .replica-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .replica-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 25px rgba(255, 97, 131, 0.15);
+    }
+    .replica-thumbnail {
+        width: 100%;
+        height: 180px;
+        object-fit: cover;
+        background: linear-gradient(135deg, #FFF5F6 0%, #FFE4E8 100%);
+    }
+    .replica-placeholder {
+        width: 100%;
+        height: 180px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #FFF5F6 0%, #FFE4E8 100%);
+        color: #FF6183;
+    }
+    .replica-placeholder i {
+        font-size: 4rem;
+        opacity: 0.6;
+    }
+    .replica-status {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+    }
+    .replica-type-badge {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+    }
+    .view-toggle .btn {
+        padding: 0.375rem 0.75rem;
+    }
+    .view-toggle .btn.active {
+        background-color: #FF6183;
+        border-color: #FF6183;
+        color: white;
+    }
+    .table-view {
+        display: none;
+    }
+    .grid-view {
+        display: flex;
+    }
+</style>
+{% endblock %}
+
 {% block header %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
     <h1 class="h2"><i class="bi bi-person-video3 me-2"></i>Replica Management</h1>
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createReplicaModal">
-        <i class="bi bi-plus-lg me-1"></i> Create New Replica
-    </button>
+    <div class="d-flex gap-2">
+        <div class="btn-group view-toggle" role="group">
+            <button type="button" class="btn btn-outline-secondary active" id="gridViewBtn" onclick="toggleView('grid')">
+                <i class="bi bi-grid-3x3-gap"></i>
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="tableViewBtn" onclick="toggleView('table')">
+                <i class="bi bi-list-ul"></i>
+            </button>
+        </div>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createReplicaModal">
+            <i class="bi bi-plus-lg me-1"></i> Create New Replica
+        </button>
+    </div>
 </div>
 {% endblock %}
 
@@ -22,21 +89,86 @@
     </div>
 </div>
 
-<!-- Replicas Table -->
-<div class="card shadow-sm">
+{% if replicas %}
+<!-- Grid View -->
+<div class="row g-4 grid-view" id="gridView">
+    {% for replica in replicas %}
+    <div class="col-md-6 col-lg-4 col-xl-3">
+        <div class="card replica-card h-100 shadow-sm">
+            <div class="position-relative">
+                {% if replica.thumbnail_video_url or replica.thumbnail_url %}
+                <img src="{{ replica.thumbnail_video_url or replica.thumbnail_url }}" 
+                     alt="{{ replica.replica_name }}" 
+                     class="replica-thumbnail"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="replica-placeholder" style="display: none;">
+                    <i class="bi bi-person-video2"></i>
+                </div>
+                {% else %}
+                <div class="replica-placeholder">
+                    <i class="bi bi-person-video2"></i>
+                </div>
+                {% endif %}
+                
+                <span class="replica-type-badge badge bg-info">{{ replica.replica_type or 'N/A' }}</span>
+                
+                {% if replica.status == 'completed' %}
+                <span class="replica-status badge bg-success"><i class="bi bi-check-circle me-1"></i>Ready</span>
+                {% elif replica.status == 'started' %}
+                <span class="replica-status badge bg-warning"><i class="bi bi-hourglass-split me-1"></i>Training</span>
+                {% elif replica.status == 'error' %}
+                <span class="replica-status badge bg-danger"><i class="bi bi-x-circle me-1"></i>Error</span>
+                {% else %}
+                <span class="replica-status badge bg-secondary">{{ replica.status }}</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <h6 class="card-title mb-1 text-truncate" title="{{ replica.replica_name }}">
+                    {{ replica.replica_name }}
+                </h6>
+                <p class="card-text small text-muted mb-2">
+                    <code class="small">{{ replica.replica_id[:12] }}...</code>
+                </p>
+                {% if replica.training_progress and replica.status == 'started' %}
+                <div class="progress mb-2" style="height: 6px;">
+                    <div class="progress-bar" style="width: {{ replica.training_progress }}%; background-color: #FF6183;"></div>
+                </div>
+                <small class="text-muted">Training: {{ replica.training_progress }}%</small>
+                {% endif %}
+            </div>
+            <div class="card-footer bg-transparent border-top-0">
+                <div class="btn-group btn-group-sm w-100">
+                    <button class="btn btn-outline-primary" onclick="viewReplica('{{ replica.replica_id }}')" title="View">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                    <button class="btn btn-outline-warning" onclick="showRenameModal('{{ replica.replica_id }}', '{{ replica.replica_name }}')" title="Rename">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-outline-danger" onclick="confirmDelete('{{ replica.replica_id }}', '{{ replica.replica_name }}')" title="Delete">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Table View -->
+<div class="card shadow-sm table-view" id="tableView">
     <div class="card-header" style="background-color: #FF6183; color: white;">
         <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>All Replicas</h5>
     </div>
     <div class="card-body">
-        {% if replicas %}
         <div class="table-responsive">
-            <table class="table table-hover" id="replicasTable">
+            <table class="table table-hover align-middle" id="replicasTable">
                 <thead class="table-light">
                     <tr>
+                        <th style="width: 80px;">Preview</th>
                         <th>Name</th>
                         <th>Replica ID</th>
                         <th>Status</th>
-                        <th>Training Progress</th>
+                        <th>Training</th>
                         <th>Type</th>
                         <th>Created At</th>
                         <th>Actions</th>
@@ -46,10 +178,22 @@
                     {% for replica in replicas %}
                     <tr id="replica-{{ replica.replica_id }}">
                         <td>
+                            {% if replica.thumbnail_video_url or replica.thumbnail_url %}
+                            <img src="{{ replica.thumbnail_video_url or replica.thumbnail_url }}" 
+                                 alt="{{ replica.replica_name }}" 
+                                 style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px;"
+                                 onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2260%22 height=%2260%22 viewBox=%220 0 60 60%22><rect fill=%22%23FFF5F6%22 width=%2260%22 height=%2260%22/><text x=%2230%22 y=%2235%22 font-size=%2220%22 text-anchor=%22middle%22 fill=%22%23FF6183%22>👤</text></svg>'">
+                            {% else %}
+                            <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #FFF5F6 0%, #FFE4E8 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                <i class="bi bi-person-video2 text-muted" style="font-size: 1.5rem; color: #FF6183 !important;"></i>
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td>
                             <strong>{{ replica.replica_name }}</strong>
                         </td>
                         <td>
-                            <code class="text-muted">{{ replica.replica_id }}</code>
+                            <code class="text-muted small">{{ replica.replica_id }}</code>
                         </td>
                         <td>
                             {% if replica.status == 'completed' %}
@@ -95,14 +239,14 @@
                 </tbody>
             </table>
         </div>
-        {% else %}
-        <div class="text-center py-5">
-            <i class="bi bi-inbox display-1 text-muted mb-3"></i>
-            <p class="text-muted">No replicas found. Create your first replica to get started!</p>
-        </div>
-        {% endif %}
     </div>
 </div>
+{% else %}
+<div class="text-center py-5">
+    <i class="bi bi-inbox display-1 text-muted mb-3"></i>
+    <p class="text-muted">No replicas found. Create your first replica to get started!</p>
+</div>
+{% endif %}
 
 <!-- Create Replica Modal -->
 <div class="modal fade" id="createReplicaModal" tabindex="-1">
@@ -207,6 +351,34 @@
 
 {% block extra_js %}
 <script>
+    // Toggle between grid and table view
+    function toggleView(view) {
+        const gridView = document.getElementById('gridView');
+        const tableView = document.getElementById('tableView');
+        const gridBtn = document.getElementById('gridViewBtn');
+        const tableBtn = document.getElementById('tableViewBtn');
+        
+        if (view === 'grid') {
+            gridView.style.display = 'flex';
+            tableView.style.display = 'none';
+            gridBtn.classList.add('active');
+            tableBtn.classList.remove('active');
+            localStorage.setItem('replicaView', 'grid');
+        } else {
+            gridView.style.display = 'none';
+            tableView.style.display = 'block';
+            gridBtn.classList.remove('active');
+            tableBtn.classList.add('active');
+            localStorage.setItem('replicaView', 'table');
+        }
+    }
+    
+    // Restore view preference
+    document.addEventListener('DOMContentLoaded', function() {
+        const savedView = localStorage.getItem('replicaView') || 'grid';
+        toggleView(savedView);
+    });
+
     // Create Replica
     async function createReplica() {
         const name = document.getElementById('replicaName').value;
@@ -260,7 +432,14 @@
 
             if (result.success) {
                 const replica = result.data;
+                const thumbnailHtml = replica.thumbnail_video_url || replica.thumbnail_url
+                    ? `<img src="${replica.thumbnail_video_url || replica.thumbnail_url}" alt="${replica.replica_name}" class="img-fluid rounded mb-3" style="max-height: 200px;">`
+                    : `<div class="mb-3 p-4 text-center rounded" style="background: linear-gradient(135deg, #FFF5F6 0%, #FFE4E8 100%);"><i class="bi bi-person-video2" style="font-size: 4rem; color: #FF6183;"></i></div>`;
+                
                 document.getElementById('replicaDetailsContent').innerHTML = `
+                    <div class="text-center">
+                        ${thumbnailHtml}
+                    </div>
                     <dl class="row">
                         <dt class="col-sm-4">Replica ID:</dt>
                         <dd class="col-sm-8"><code>${replica.replica_id}</code></dd>
