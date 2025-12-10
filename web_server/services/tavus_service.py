@@ -188,6 +188,8 @@ class TavusService:
                 if response.status_code == 200:
                     result = response.json()
                     count = result.get('total_count', 0)
+                    data_len = len(result.get('data', []))
+                    logger.info(f"📊 API returned total_count={count}, data length={data_len}, params={params}")
                     logger.info(f"✅ Retrieved {count} replicas")
                     # Log sample replica fields for debugging
                     if result.get("data") and len(result["data"]) > 0:

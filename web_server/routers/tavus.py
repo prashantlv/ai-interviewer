@@ -39,7 +39,7 @@ class RenameReplicaRequest(BaseModel):
 # ============================================================================
 
 @router.get("/dashboard/replicas", response_class=HTMLResponse)
-async def replicas_page(request: Request, page: int = 1, limit: int = 20, replica_type: Optional[str] = None):
+async def replicas_page(request: Request, page: int = 1, limit: int = 20, replica_type: str = "stock"):
     """
     Replica Management dashboard page
     
