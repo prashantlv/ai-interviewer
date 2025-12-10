@@ -4,6 +4,20 @@
 
 {% block extra_css %}
 <style>
+    .nav-pills .nav-link {
+        color: #FF6183;
+        border: 1px solid #FF6183;
+        margin-right: 0.5rem;
+    }
+    .nav-pills .nav-link:hover {
+        background-color: #FFF5F6;
+    }
+    .nav-pills .nav-link.active {
+        background-color: #FF6183;
+        color: white;
+    }
+</style>
+<style>
     .replica-card {
         transition: transform 0.2s, box-shadow 0.2s;
         border-radius: 12px;
@@ -112,12 +126,35 @@
 {% endblock %}
 
 {% block content %}
+<!-- Filter Tabs -->
+<div class="row mb-3">
+    <div class="col-12">
+        <ul class="nav nav-pills">
+            <li class="nav-item">
+                <a class="nav-link {% if replica_type == 'all' %}active{% endif %}" href="?page=1&limit={{ limit }}">
+                    <i class="bi bi-grid-3x3-gap me-1"></i> All Replicas
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if replica_type == 'stock' %}active{% endif %}" href="?page=1&limit={{ limit }}&replica_type=stock">
+                    <i class="bi bi-box-seam me-1"></i> Stock Replicas
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if replica_type == 'user' %}active{% endif %}" href="?page=1&limit={{ limit }}&replica_type=user">
+                    <i class="bi bi-person me-1"></i> Personal Replicas
+                </a>
+            </li>
+        </ul>
+    </div>
+</div>
+
 <!-- Stats & Pagination Info -->
 <div class="row mb-4">
     <div class="col-md-6">
         <div class="alert alert-light border mb-0">
             <i class="bi bi-collection me-2"></i> 
-            <strong>Total:</strong> {{ total_count }} replicas
+            <strong>Total:</strong> {{ total_count }} {{ replica_type }} replicas
             <span class="pagination-info ms-2">
                 (Page {{ current_page }} of {{ total_pages }}, showing {{ replicas|length }})
             </span>
@@ -125,20 +162,20 @@
     </div>
     <div class="col-md-6 text-end">
         <div class="btn-group">
-            <a href="?page=1&limit={{ limit }}" class="btn btn-outline-secondary {% if current_page == 1 %}disabled{% endif %}">
+            <a href="?page=1&limit={{ limit }}{% if replica_type != 'all' %}&replica_type={{ replica_type }}{% endif %}" class="btn btn-outline-secondary {% if current_page == 1 %}disabled{% endif %}">
                 <i class="bi bi-chevron-double-left"></i>
             </a>
-            <a href="?page={{ current_page - 1 }}&limit={{ limit }}" class="btn btn-outline-secondary {% if current_page <= 1 %}disabled{% endif %}">
+            <a href="?page={{ current_page - 1 }}&limit={{ limit }}{% if replica_type != 'all' %}&replica_type={{ replica_type }}{% endif %}" class="btn btn-outline-secondary {% if current_page <= 1 %}disabled{% endif %}">
                 <i class="bi bi-chevron-left"></i> Prev
             </a>
-            <a href="?page={{ current_page + 1 }}&limit={{ limit }}" class="btn btn-outline-secondary {% if current_page >= total_pages %}disabled{% endif %}">
+            <a href="?page={{ current_page + 1 }}&limit={{ limit }}{% if replica_type != 'all' %}&replica_type={{ replica_type }}{% endif %}" class="btn btn-outline-secondary {% if current_page >= total_pages %}disabled{% endif %}">
                 Next <i class="bi bi-chevron-right"></i>
             </a>
-            <a href="?page={{ total_pages }}&limit={{ limit }}" class="btn btn-outline-secondary {% if current_page >= total_pages %}disabled{% endif %}">
+            <a href="?page={{ total_pages }}&limit={{ limit }}{% if replica_type != 'all' %}&replica_type={{ replica_type }}{% endif %}" class="btn btn-outline-secondary {% if current_page >= total_pages %}disabled{% endif %}">
                 <i class="bi bi-chevron-double-right"></i>
             </a>
         </div>
-        <select class="form-select d-inline-block ms-2" style="width: auto;" onchange="window.location.href='?page=1&limit='+this.value">
+        <select class="form-select d-inline-block ms-2" style="width: auto;" onchange="window.location.href='?page=1&limit='+this.value+'{% if replica_type != 'all' %}&replica_type={{ replica_type }}{% endif %}'">
             <option value="12" {% if limit == 12 %}selected{% endif %}>12/page</option>
             <option value="20" {% if limit == 20 %}selected{% endif %}>20/page</option>
             <option value="40" {% if limit == 40 %}selected{% endif %}>40/page</option>
