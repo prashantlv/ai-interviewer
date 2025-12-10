@@ -34,6 +34,7 @@ from loguru import logger
 from scoring_engine import ScoringEngine
 from PIL import Image
 from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
@@ -1049,7 +1050,14 @@ async def bot(runner_args: RunnerArguments):
                 video_out_width=video_width,
                 video_out_height=video_height,
                 video_out_framerate=video_framerate,
-                vad_analyzer=SileroVADAnalyzer(),
+                vad_analyzer=SileroVADAnalyzer(
+                    params=VADParams(
+                        confidence=0.8,    # Higher confidence threshold
+                        start_secs=0.2,    # Quick to detect speech start
+                        stop_secs=1.5,     # Wait 1.5 seconds of silence before responding
+                        min_volume=0.5     # Minimum volume threshold
+                    )
+                ),
                 transcription_enabled=True,
             ),
         )
@@ -1114,7 +1122,14 @@ if __name__ == "__main__":
                         video_out_width=video_width,
                         video_out_height=video_height,
                         video_out_framerate=video_framerate,
-                        vad_analyzer=SileroVADAnalyzer(),
+                        vad_analyzer=SileroVADAnalyzer(
+                            params=VADParams(
+                                confidence=0.8,    # Higher confidence threshold
+                                start_secs=0.2,    # Quick to detect speech start
+                                stop_secs=1.5,     # Wait 1.5 seconds of silence before responding
+                                min_volume=0.5     # Minimum volume threshold
+                            )
+                        ),
                         transcription_enabled=True,
                     ),
                 )
