@@ -13,12 +13,6 @@
         transform: translateY(-4px);
         box-shadow: 0 8px 25px rgba(255, 97, 131, 0.15);
     }
-    .replica-thumbnail {
-        width: 100%;
-        height: 180px;
-        object-fit: cover;
-        background: linear-gradient(135deg, #FFF5F6 0%, #FFE4E8 100%);
-    }
     .replica-placeholder {
         width: 100%;
         height: 180px;
@@ -56,18 +50,55 @@
     .grid-view {
         display: flex;
     }
-    .replica-video {
+    .video-container {
         width: 100%;
         height: 180px;
-        object-fit: cover;
-        background: #000;
+        background: linear-gradient(135deg, #FFF5F6 0%, #FFE4E8 100%);
+        position: relative;
+        overflow: hidden;
     }
-    .table-thumbnail-video {
+    .replica-video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: none;
+    }
+    .replica-video.loaded {
+        display: block;
+    }
+    .video-loader {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: #FF6183;
+    }
+    .table-video-container {
         width: 60px;
         height: 60px;
-        object-fit: cover;
+        background: linear-gradient(135deg, #FFF5F6 0%, #FFE4E8 100%);
         border-radius: 8px;
-        background: #000;
+        overflow: hidden;
+        position: relative;
+    }
+    .table-thumbnail-video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: none;
+    }
+    .table-thumbnail-video.loaded {
+        display: block;
+    }
+    .pagination-controls {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+    .page-size-select {
+        width: auto;
     }
 </style>
 {% endblock %}
@@ -92,12 +123,19 @@
 {% endblock %}
 
 {% block content %}
-<!-- Stats -->
+<!-- Stats & Filter -->
 <div class="row mb-4">
-    <div class="col-md-12">
-        <div class="alert alert-light border">
+    <div class="col-md-8">
+        <div class="alert alert-light border mb-0">
             <i class="bi bi-info-circle me-2"></i> 
             <strong>Total Replicas:</strong> {{ total_count }}
+            <span class="ms-3" id="showingCount"></span>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="text" class="form-control" id="searchInput" placeholder="Search replicas..." onkeyup="filterReplicas()">
         </div>
     </div>
 </div>
@@ -106,15 +144,23 @@
 <!-- Grid View -->
 <div class="row g-4 grid-view" id="gridView">
     {% for replica in replicas %}
-    <div class="col-md-6 col-lg-4 col-xl-3">
+    <div class="col-md-6 col-lg-4 col-xl-3 replica-item" 
+         data-name="{{ replica.replica_name | lower }}" 
+         data-id="{{ replica.replica_id | lower }}">
         <div class="card replica-card h-100 shadow-sm">
             <div class="position-relative">
                 {% if replica.thumbnail_video_url %}
-                <video class="replica-video" muted loop playsinline
-                       onmouseenter="this.play()" 
-                       onmouseleave="this.pause(); this.currentTime=0;">
-                    <source src="{{ replica.thumbnail_video_url }}" type="video/mp4">
-                </video>
+                <div class="video-container">
+                    <div class="video-loader">
+                        <i class="bi bi-person-video2" style="font-size: 3rem;"></i>
+                    </div>
+                    <video class="replica-video" muted loop playsinline preload="none"
+                           data-src="{{ replica.thumbnail_video_url }}"
+                           onloadeddata="this.classList.add('loaded'); this.previousElementSibling.style.display='none';"
+                           onmouseenter="loadAndPlay(this)" 
+                           onmouseleave="this.pause();">
+                    </video>
+                </div>
                 {% else %}
                 <div class="replica-placeholder">
                     <i class="bi bi-person-video2"></i>
@@ -179,22 +225,27 @@
                         <th>Name</th>
                         <th>Replica ID</th>
                         <th>Status</th>
-                        <th>Training</th>
                         <th>Type</th>
-                        <th>Created At</th>
+                        <th>Model</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for replica in replicas %}
-                    <tr id="replica-{{ replica.replica_id }}">
+                    <tr class="replica-row" 
+                        data-name="{{ replica.replica_name | lower }}" 
+                        data-id="{{ replica.replica_id | lower }}">
                         <td>
                             {% if replica.thumbnail_video_url %}
-                            <video class="table-thumbnail-video" muted loop playsinline
-                                   onmouseenter="this.play()" 
-                                   onmouseleave="this.pause(); this.currentTime=0;">
-                                <source src="{{ replica.thumbnail_video_url }}" type="video/mp4">
-                            </video>
+                            <div class="table-video-container">
+                                <i class="bi bi-person-video2 video-loader" style="font-size: 1.5rem; color: #FF6183; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);"></i>
+                                <video class="table-thumbnail-video" muted loop playsinline preload="none"
+                                       data-src="{{ replica.thumbnail_video_url }}"
+                                       onloadeddata="this.classList.add('loaded'); this.previousElementSibling.style.display='none';"
+                                       onmouseenter="loadAndPlay(this)" 
+                                       onmouseleave="this.pause();">
+                                </video>
+                            </div>
                             {% else %}
                             <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #FFF5F6 0%, #FFE4E8 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
                                 <i class="bi bi-person-video2" style="font-size: 1.5rem; color: #FF6183;"></i>
@@ -219,13 +270,10 @@
                             {% endif %}
                         </td>
                         <td>
-                            {{ replica.training_progress or 'N/A' }}
-                        </td>
-                        <td>
                             <span class="badge bg-info">{{ replica.replica_type or 'N/A' }}</span>
                         </td>
                         <td>
-                            {{ replica.created_at or 'N/A' }}
+                            <small>{{ replica.model_name or 'N/A' }}</small>
                         </td>
                         <td>
                             <div class="btn-group btn-group-sm">
@@ -252,6 +300,23 @@
             </table>
         </div>
     </div>
+</div>
+
+<!-- Pagination -->
+<div class="pagination-controls">
+    <button class="btn btn-outline-secondary" id="prevPage" onclick="changePage(-1)">
+        <i class="bi bi-chevron-left"></i> Previous
+    </button>
+    <span id="pageInfo">Page 1</span>
+    <button class="btn btn-outline-secondary" id="nextPage" onclick="changePage(1)">
+        Next <i class="bi bi-chevron-right"></i>
+    </button>
+    <select class="form-select page-size-select" id="pageSize" onchange="changePageSize()">
+        <option value="12">12 per page</option>
+        <option value="24" selected>24 per page</option>
+        <option value="48">48 per page</option>
+        <option value="all">Show all</option>
+    </select>
 </div>
 {% else %}
 <div class="text-center py-5">
@@ -363,6 +428,35 @@
 
 {% block extra_js %}
 <script>
+    // Pagination state
+    let currentPage = 1;
+    let pageSize = 24;
+    let allItems = [];
+    let allRows = [];
+    
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        allItems = Array.from(document.querySelectorAll('.replica-item'));
+        allRows = Array.from(document.querySelectorAll('.replica-row'));
+        
+        const savedView = localStorage.getItem('replicaView') || 'grid';
+        const savedPageSize = localStorage.getItem('replicaPageSize') || '24';
+        
+        document.getElementById('pageSize').value = savedPageSize;
+        pageSize = savedPageSize === 'all' ? allItems.length : parseInt(savedPageSize);
+        
+        toggleView(savedView);
+        updatePagination();
+    });
+    
+    // Load and play video on hover (lazy loading)
+    function loadAndPlay(video) {
+        if (!video.src && video.dataset.src) {
+            video.src = video.dataset.src;
+        }
+        video.play().catch(e => console.log('Video play prevented:', e.message));
+    }
+    
     // Toggle between grid and table view
     function toggleView(view) {
         const gridView = document.getElementById('gridView');
@@ -383,13 +477,79 @@
             tableBtn.classList.add('active');
             localStorage.setItem('replicaView', 'table');
         }
+        updatePagination();
     }
     
-    // Restore view preference
-    document.addEventListener('DOMContentLoaded', function() {
-        const savedView = localStorage.getItem('replicaView') || 'grid';
-        toggleView(savedView);
-    });
+    // Filter replicas by search
+    function filterReplicas() {
+        const query = document.getElementById('searchInput').value.toLowerCase();
+        currentPage = 1;
+        
+        allItems.forEach(item => {
+            const name = item.dataset.name;
+            const id = item.dataset.id;
+            item.dataset.filtered = (name.includes(query) || id.includes(query)) ? 'false' : 'true';
+        });
+        
+        allRows.forEach(row => {
+            const name = row.dataset.name;
+            const id = row.dataset.id;
+            row.dataset.filtered = (name.includes(query) || id.includes(query)) ? 'false' : 'true';
+        });
+        
+        updatePagination();
+    }
+    
+    // Update pagination
+    function updatePagination() {
+        const isGrid = document.getElementById('gridView').style.display !== 'none';
+        const items = isGrid ? allItems : allRows;
+        
+        // Get filtered items
+        const filteredItems = items.filter(item => item.dataset.filtered !== 'true');
+        const totalItems = filteredItems.length;
+        const totalPages = pageSize === items.length ? 1 : Math.ceil(totalItems / pageSize);
+        
+        // Update page info
+        document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages || 1}`;
+        document.getElementById('prevPage').disabled = currentPage <= 1;
+        document.getElementById('nextPage').disabled = currentPage >= totalPages;
+        document.getElementById('showingCount').textContent = `(Showing ${Math.min(pageSize, totalItems)} of ${totalItems})`;
+        
+        // Show/hide items based on pagination
+        const startIndex = (currentPage - 1) * pageSize;
+        const endIndex = startIndex + pageSize;
+        
+        let visibleCount = 0;
+        items.forEach(item => {
+            if (item.dataset.filtered === 'true') {
+                item.style.display = 'none';
+            } else {
+                if (visibleCount >= startIndex && visibleCount < endIndex) {
+                    item.style.display = isGrid ? '' : '';
+                } else {
+                    item.style.display = 'none';
+                }
+                visibleCount++;
+            }
+        });
+    }
+    
+    // Change page
+    function changePage(delta) {
+        currentPage += delta;
+        updatePagination();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    
+    // Change page size
+    function changePageSize() {
+        const select = document.getElementById('pageSize');
+        pageSize = select.value === 'all' ? allItems.length : parseInt(select.value);
+        currentPage = 1;
+        localStorage.setItem('replicaPageSize', select.value);
+        updatePagination();
+    }
 
     // Create Replica
     async function createReplica() {
