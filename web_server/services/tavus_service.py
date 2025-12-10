@@ -169,13 +169,14 @@ class TavusService:
             if limit is not None:
                 params["limit"] = limit
             if page is not None:
-                params["page"] = page
+                # Tavus API uses 0-based pagination, our UI uses 1-based
+                params["page"] = page - 1 if page > 0 else 0
             if replica_type:
                 params["replica_type"] = replica_type
             if replica_ids:
                 params["replica_ids"] = replica_ids
             
-            logger.info("📋 Listing Tavus replicas...")
+            logger.info(f"📋 Listing Tavus replicas... API params: {params}")
             
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(
