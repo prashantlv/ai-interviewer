@@ -22,6 +22,7 @@ the conversation flow.
 
 import os
 import sys
+import time
 import aiohttp
 import json
 from urllib.parse import urlparse
@@ -38,6 +39,7 @@ from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
+    EndFrame,
     Frame,
     LLMRunFrame,
     OutputImageRawFrame,
@@ -62,6 +64,11 @@ WEB_SERVER_URL = os.getenv("WEB_SERVER_URL", "http://localhost:8009")
 INTERVIEW_ID = os.getenv("INTERVIEW_ID", "default_interview")
 DAILY_API_URL = os.getenv("DAILY_API_URL", "https://api.daily.co/v1")
 DAILY_API_KEY = os.getenv("DAILY_API_KEY")
+# Safety timeouts to prevent runaway costs
+MAX_SESSION_DURATION_SECONDS = int(os.getenv("MAX_SESSION_DURATION", "900"))  # 15 minutes default
+ROOM_EXPIRY_CHECK_INTERVAL = 60  # Check room expiry every 60 seconds
+ALONE_AFTER_PARTICIPANT_LEFT_TIMEOUT = int(os.getenv("ALONE_TIMEOUT", "100"))  # 100 seconds after participant leaves
+
 
 async def fetch_interview_config(session: aiohttp.ClientSession, interview_id: str) -> Optional[Dict[str, Any]]:
     """Fetch interview configuration from web server"""
@@ -418,7 +425,6 @@ class TranscriptCollector(FrameProcessor):
         self.last_candidate_text = ""  # Track last candidate text to avoid duplicates
         self.pending_ai_text = ""  # Aggregate streaming AI text
         self.last_ai_timestamp = 0  # Track timing for aggregation
-        import time
         self.time = time
     
     def _is_echo_of_ai(self, text: str) -> bool:
@@ -851,12 +857,22 @@ async def run_bot(
 
     @transport.event_handler("on_recording_stopped")
     async def on_recording_stopped(_transport, data):
-        rid = data.get("recordingId") or data.get("recording_id")
-        if rid:
-            recording_context["recording_id"] = rid
-        recording_context["status"] = data.get("state", "stopped")
-        recording_context["stopped_at"] = data.get("created_at") or data.get("updated_at")
-        recording_context["stop_response"] = data
+        # Handle both dict and string (recording ID) formats
+        if isinstance(data, str):
+            # If data is just a string (recording ID), use it directly
+            recording_context["recording_id"] = data
+            recording_context["status"] = "stopped"
+            from datetime import datetime
+            recording_context["stopped_at"] = datetime.now().isoformat()
+            recording_context["stop_response"] = {"recording_id": data}
+        else:
+            # If data is a dict, extract fields normally
+            rid = data.get("recordingId") or data.get("recording_id")
+            if rid:
+                recording_context["recording_id"] = rid
+            recording_context["status"] = data.get("state", "stopped")
+            recording_context["stopped_at"] = data.get("created_at") or data.get("updated_at")
+            recording_context["stop_response"] = data
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(_transport, _client):
@@ -1043,20 +1059,92 @@ async def run_bot(
 
     @transport.event_handler("on_participant_left")
     async def on_participant_left(_transport, participant, *args):
+        nonlocal participant_joined, participant_left, participant_left_time
         # Handle participant leaving event
         participant_info = participant.get("info", {}) if isinstance(participant, dict) else {}
         participant_id = participant.get("id", "unknown") if isinstance(participant, dict) else str(participant)
+        user_name = participant_info.get("userName", "") or ""
         
-        logger.info(f"Participant left: {participant_id}")
+        logger.info(f"👋 Participant left: {participant_id} ({user_name})")
         
         # Log additional info for debugging
         if participant_info:
             logger.debug(f"Participant info: {participant_info}")
         
-        # Note: This is just logging - the session continues until client disconnects
+        # If a real participant had joined and now left, start the alone countdown
+        if participant_joined and user_name and "Bot" not in user_name and "AI" not in user_name:
+            participant_left = True
+            participant_left_time = time.time()
+            logger.info(f"📤 Candidate left - starting {ALONE_AFTER_PARTICIPANT_LEFT_TIMEOUT}s alone countdown")
 
+    # Track session start time for safety timeout
+    session_start_time = time.time()
+    participant_joined = False  # Track if a real participant (not bot) joined
+    participant_left = False     # Track if participant left after joining
+    participant_left_time = None # When participant left
+    
+    @transport.event_handler("on_participant_joined")
+    async def on_participant_joined_safety(_transport, participant):
+        nonlocal participant_joined, participant_left, participant_left_time
+        # Check if this is a real participant (not the bot itself)
+        participant_info = participant if isinstance(participant, dict) else {}
+        user_name = participant_info.get("info", {}).get("userName", "") or participant_info.get("userName", "")
+        if user_name and "Bot" not in user_name and "AI" not in user_name:
+            participant_joined = True
+            participant_left = False  # Reset if they rejoin
+            participant_left_time = None
+            logger.info(f"👤 Real participant joined: {user_name}")
+    
+    async def safety_monitor():
+        """Background task to monitor session duration, room expiry, and alone timeout"""
+        nonlocal participant_joined, participant_left, participant_left_time
+        
+        while True:
+            await asyncio.sleep(10)  # Check every 10 seconds (more responsive for alone timeout)
+            
+            elapsed = time.time() - session_start_time
+            remaining = MAX_SESSION_DURATION_SECONDS - elapsed
+            
+            # Check if participant left and we've been alone long enough
+            if participant_left and participant_left_time:
+                alone_time = time.time() - participant_left_time
+                logger.debug(f"⏱️ Alone for {alone_time:.0f}s (timeout: {ALONE_AFTER_PARTICIPANT_LEFT_TIMEOUT}s)")
+                
+                if alone_time >= ALONE_AFTER_PARTICIPANT_LEFT_TIMEOUT:
+                    logger.warning(f"🏁 Participant left {ALONE_AFTER_PARTICIPANT_LEFT_TIMEOUT}s ago - ending interview for scoring")
+                    await task.queue_frame(EndFrame())
+                    break
+            
+            # Check max session duration
+            if elapsed >= MAX_SESSION_DURATION_SECONDS:
+                logger.warning(f"⏰ MAX SESSION DURATION ({MAX_SESSION_DURATION_SECONDS/60:.0f} min) reached - shutting down")
+                await task.queue_frame(EndFrame())
+                break
+            
+            # Log warning at 5 minutes remaining
+            if 270 < remaining <= 300:  # Between 4.5 and 5 minutes
+                logger.warning(f"⚠️ Session ending in ~5 minutes")
+            
+            # Log status periodically
+            if int(elapsed) % 60 == 0:  # Every minute
+                logger.debug(f"⏱️ Session elapsed: {elapsed/60:.1f} min, remaining: {remaining/60:.1f} min")
+    
+    # Start safety monitor as background task
+    safety_task = asyncio.create_task(safety_monitor())
+    logger.info(f"🛡️ Safety monitor started - Max session: {MAX_SESSION_DURATION_SECONDS/60:.0f} minutes")
+    
     runner = PipelineRunner(handle_sigint=False)
-    await runner.run(task)
+    
+    try:
+        await runner.run(task)
+    finally:
+        # Clean up safety monitor
+        safety_task.cancel()
+        try:
+            await safety_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("🛡️ Safety monitor stopped")
 
 
 async def bot(runner_args: RunnerArguments):

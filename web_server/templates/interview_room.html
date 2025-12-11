@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interview Session - {{ candidate_name }}</title>
+    
+    <!-- Daily.co JS SDK -->
+    <script crossorigin src="https://unpkg.com/@daily-co/daily-js"></script>
+    
+    <!-- Styles -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --primary-color: #FF6183;
+            --primary-dark: #E5557A;
+            --bg-color: #FFF5F6;
+            --text-dark: #1f2937;
+            --text-light: #6b7280;
+            --danger: #dc2626;
+            --warning: #f59e0b;
+            --success: #10b981;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-color);
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        /* Top Header Bar */
+        .header-bar {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: relative;
+            z-index: 100;
+        }
+        
+        .header-bar .logo {
+            font-size: 1.25rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .header-bar .logo svg {
+            width: 28px;
+            height: 28px;
+        }
+        
+        .header-bar .interview-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            font-size: 0.9rem;
+        }
+        
+        .header-bar .interview-info span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        /* Proctoring Status Indicator */
+        .proctoring-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.15);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+        
+        .proctoring-status .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+        
+        .proctoring-status.warning .dot {
+            background: var(--warning);
+        }
+        
+        .proctoring-status.danger .dot {
+            background: var(--danger);
+            animation: none;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Main Video Container */
+        .video-container {
+            height: calc(100vh - 56px);
+            width: 100%;
+            position: relative;
+        }
+        
+        #daily-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        
+        /* Pre-join Screen */
+        .prejoin-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+        
+        .prejoin-card {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .prejoin-card h1 {
+            color: var(--primary-color);
+            font-size: 1.75rem;
+            margin-bottom: 8px;
+        }
+        
+        .prejoin-card .subtitle {
+            color: var(--text-light);
+            margin-bottom: 30px;
+        }
+        
+        .prejoin-card .instructions {
+            text-align: left;
+            background: var(--bg-color);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 24px;
+        }
+        
+        .prejoin-card .instructions h3 {
+            color: var(--text-dark);
+            font-size: 1rem;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .prejoin-card .instructions ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .prejoin-card .instructions li {
+            padding: 8px 0;
+            color: var(--text-light);
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .prejoin-card .instructions li::before {
+            content: '✓';
+            color: var(--success);
+            font-weight: bold;
+        }
+        
+        .prejoin-card .warning-box {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 24px;
+            text-align: left;
+            font-size: 0.85rem;
+            color: #92400e;
+        }
+        
+        .prejoin-card .warning-box strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            color: white;
+            border: none;
+            padding: 14px 40px;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 97, 131, 0.4);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        /* Fullscreen Request Modal */
+        .fullscreen-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .fullscreen-modal.show {
+            display: flex;
+        }
+        
+        .fullscreen-modal .modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 450px;
+            text-align: center;
+        }
+        
+        .fullscreen-modal h2 {
+            color: var(--danger);
+            margin-bottom: 16px;
+        }
+        
+        .fullscreen-modal p {
+            color: var(--text-light);
+            margin-bottom: 24px;
+        }
+        
+        /* Violation Warning Toast */
+        .violation-toast {
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            background: var(--danger);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            animation: slideIn 0.3s ease;
+            z-index: 200;
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+        }
+        
+        .violation-toast.show {
+            display: flex;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        /* Loading Spinner */
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--bg-color);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Responsive */
+        @media (max-width: 600px) {
+            .header-bar {
+                padding: 10px 16px;
+            }
+            .header-bar .interview-info {
+                display: none;
+            }
+            .prejoin-card {
+                padding: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header Bar -->
+    <div class="header-bar">
+        <div class="logo">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            </svg>
+            Hire2Inspire
+        </div>
+        <div class="interview-info">
+            <span>📋 {{ position }}</span>
+            <span>👤 {{ candidate_name }}</span>
+        </div>
+        <button id="leave-btn" style="display: none; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.5); padding: 6px 16px; border-radius: 20px; cursor: pointer; font-size: 0.85rem; transition: all 0.3s;" onmouseover="this.style.background='rgba(255,0,0,0.7)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+            🚪 End Interview
+        </button>
+        <div class="proctoring-status" id="proctoring-status">
+            <span class="dot"></span>
+            <span id="proctoring-text">Proctoring Active</span>
+        </div>
+    </div>
+
+    <!-- Main Video Container -->
+    <div class="video-container">
+        <!-- Pre-join Screen -->
+        <div class="prejoin-screen" id="prejoin-screen">
+            <div class="prejoin-card">
+                <h1>Welcome, {{ candidate_name }}!</h1>
+                <p class="subtitle">{{ position }} Interview</p>
+                
+                <div class="instructions">
+                    <h3>📋 Before You Begin</h3>
+                    <ul>
+                        <li>Ensure you're in a quiet environment</li>
+                        <li>Check your camera and microphone</li>
+                        <li>Use a stable internet connection</li>
+                        <li>Close unnecessary applications</li>
+                    </ul>
+                </div>
+                
+                <div class="warning-box">
+                    <strong>⚠️ Proctoring Notice</strong>
+                    This interview is monitored. Tab switches, window changes, and fullscreen exits will be recorded and may affect your evaluation.
+                </div>
+                
+                <button class="btn-primary" id="join-btn" onclick="startInterview()">
+                    Join Interview
+                </button>
+                
+                <div class="spinner" id="loading-spinner" style="display: none;"></div>
+            </div>
+        </div>
+        
+        <!-- Daily.co container - SDK will create iframe inside -->
+        <div id="daily-container" style="display: none; width: 100%; height: 100%;"></div>
+    </div>
+    
+    <!-- Fullscreen Request Modal -->
+    <div class="fullscreen-modal" id="fullscreen-modal">
+        <div class="modal-content">
+            <h2>⚠️ Please Return to Fullscreen</h2>
+            <p>Exiting fullscreen mode has been recorded. Please click below to continue in fullscreen mode.</p>
+            <button class="btn-primary" onclick="requestFullscreen()">
+                Return to Fullscreen
+            </button>
+        </div>
+    </div>
+    
+    <!-- Violation Warning Toast -->
+    <div class="violation-toast" id="violation-toast">
+        <span>⚠️</span>
+        <span id="violation-message">Tab switch detected!</span>
+    </div>
+
+    <!-- Proctoring JavaScript -->
+    <script>
+        // Interview Configuration
+        const INTERVIEW_ID = "{{ interview_id }}";
+
+        const ROOM_URL = "{{ room_url }}";
+        const CANDIDATE_NAME = "{{ candidate_name }}";
+        const API_BASE = "{{ api_base }}";
+        
+        // Proctoring State
+        const proctoring = {
+            tabSwitches: 0,
+            fullscreenExits: 0,
+            windowBlurs: 0,
+            blockedShortcuts: [],
+            violations: [],
+            startTime: null,
+            isActive: false
+        };
+        
+        // Toast notification function
+        function showToast(message, type = 'info') {
+            // Create toast element
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                padding: 15px 25px;
+                background: ${type === 'warning' ? '#ff6b6b' : type === 'success' ? '#51cf66' : '#339af0'};
+                color: white;
+                border-radius: 8px;
+                font-weight: 600;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+                z-index: 10000;
+                animation: slideIn 0.3s ease;
+                font-size: 14px;
+            `;
+            toast.textContent = message;
+            
+            // Add animation
+            const style = document.createElement('style');
+            style.textContent = '@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }';
+            document.head.appendChild(style);
+            
+            document.body.appendChild(toast);
+            
+            // Remove after 3 seconds
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                toast.style.transition = 'all 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+        
+        // Leave Interview Function - saves data and updates status
+        async function leaveInterviewNow() {
+            if (!confirm('Are you sure you want to end this interview?')) return;
+            
+            console.log('🚪 Ending interview...');
+            const btn = document.getElementById('leave-btn');
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = '⏳ Ending...';
+            }
+            
+            // Disable proctoring
+            proctoring.isActive = false;
+            
+            try {
+                // Step 1: Save proctoring summary
+                const summary = {
+                    interview_id: INTERVIEW_ID,
+                    start_time: proctoring.startTime || new Date().toISOString(),
+                    end_time: new Date().toISOString(),
+                    summary: {
+                        tab_switches: proctoring.violations.filter(v => v.type === 'tab_switch').length,
+                        fullscreen_exits: proctoring.violations.filter(v => v.type === 'fullscreen_exit').length,
+                        window_blurs: proctoring.violations.filter(v => v.type === 'window_blur').length,
+                        blocked_shortcuts: [...new Set(proctoring.violations.filter(v => v.type === 'blocked_shortcut').map(v => v.details?.key || 'unknown'))],
+                        total_violations: proctoring.violations.length
+                    },
+                    violations: proctoring.violations
+                };
+                
+                console.log('📤 Saving proctoring...', summary);
+                
+                const procResponse = await fetch(`${API_BASE}/api/proctoring/summary`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(summary)
+                });
+                
+                if (procResponse.ok) {
+                    const result = await procResponse.json();
+                    console.log('✅ Proctoring saved:', result);
+                } else {
+                    const errorText = await procResponse.text();
+                    console.error('❌ Proctoring save failed:', procResponse.status, errorText);
+                    console.error('   Request body:', JSON.stringify(summary, null, 2));
+                }
+                
+                // Step 2: Mark interview as ended (new API)
+                console.log('📤 Marking interview as ended...');
+                const endResponse = await fetch(`${API_BASE}/api/interview/${INTERVIEW_ID}/end`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                console.log('✅ End interview response:', endResponse.status);
+                
+            } catch (error) {
+                console.error('❌ Error ending interview:', error);
+            }
+            
+            // Step 3: Close iframe connection
+            const iframe = document.querySelector('#daily-container iframe');
+            if (iframe) {
+                iframe.src = 'about:blank';
+            }
+            
+            // Step 4: Exit fullscreen
+            if (document.fullscreenElement) {
+                try { await document.exitFullscreen(); } catch (e) {}
+            }
+            
+            // Step 5: Redirect
+            console.log('🔄 Redirecting...');
+            setTimeout(() => {
+                window.location.href = `/interview/${INTERVIEW_ID}/complete`;
+            }, 500);
+        }
+        
+        // Attach button handler (with safety check)
+        (function() {
+            const btn = document.getElementById('leave-btn');
+            if (btn) {
+                btn.addEventListener('click', leaveInterviewNow);
+                console.log('✅ Leave button handler attached');
+            } else {
+                console.error('❌ Leave button not found');
+            }
+        })();
+        
+        // Daily.co Call Object
+        let callFrame = null;
+        
+        // ============= PROCTORING FUNCTIONS =============
+        
+        function logViolation(type, details = {}) {
+            // Don't log violations if proctoring is not active (interview ended)
+            if (!proctoring.isActive) {
+                console.log('⏸️ Proctoring not active, ignoring violation:', type);
+                return;
+            }
+            
+            const violation = {
+                type: type,
+                timestamp: new Date().toISOString(),
+                details: details
+            };
+            proctoring.violations.push(violation);
+            console.warn(`🚨 Proctoring violation: ${type}`, details);
+            
+            // Show toast notification
+            showViolationToast(type);
+            
+            // Update status indicator
+            updateProctoringStatus();
+            
+            // Send to backend (async)
+            sendViolationToServer(violation);
+        }
+        
+        function showViolationToast(type) {
+            const toast = document.getElementById('violation-toast');
+            const message = document.getElementById('violation-message');
+            
+            const messages = {
+                'tab_switch': 'Tab switch detected!',
+                'window_blur': 'Window focus lost!',
+                'fullscreen_exit': 'Fullscreen exited!',
+                'blocked_shortcut': 'Blocked shortcut detected!',
+                'copy_attempt': 'Copy attempt blocked!',
+                'paste_attempt': 'Paste attempt blocked!'
+            };
+            
+            message.textContent = messages[type] || 'Violation detected!';
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+        
+        function updateProctoringStatus() {
+            const status = document.getElementById('proctoring-status');
+            const text = document.getElementById('proctoring-text');
+            
+            const totalViolations = proctoring.tabSwitches + proctoring.fullscreenExits + proctoring.windowBlurs;
+            
+            if (totalViolations === 0) {
+                status.className = 'proctoring-status';
+                text.textContent = 'Proctoring Active';
+            } else if (totalViolations <= 2) {
+                status.className = 'proctoring-status warning';
+                text.textContent = `${totalViolations} Warning(s)`;
+            } else {
+                status.className = 'proctoring-status danger';
+                text.textContent = `${totalViolations} Violations`;
+            }
+        }
+        
+        async function sendViolationToServer(violation) {
+            try {
+                await fetch(`${API_BASE}/api/proctoring/violations`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        interview_id: INTERVIEW_ID,
+                        violation: violation,
+                        summary: {
+                            tab_switches: proctoring.tabSwitches,
+                            fullscreen_exits: proctoring.fullscreenExits,
+                            window_blurs: proctoring.windowBlurs,
+                            blocked_shortcuts: proctoring.blockedShortcuts
+                        }
+                    })
+                });
+            } catch (error) {
+                console.error('Failed to send violation:', error);
+            }
+        }
+        
+        // ============= EVENT LISTENERS =============
+        
+        // Track previous visibility state for polling
+        let previousVisibilityState = document.visibilityState;
+        let previousHasFocus = document.hasFocus();
+        
+        // Tab visibility change (primary detection)
+        document.addEventListener('visibilitychange', function() {
+            console.log('👁️ visibilitychange:', document.visibilityState, 'isActive:', proctoring.isActive);
+            if (!proctoring.isActive) {
+                console.log('⏸️ Proctoring not active, ignoring');
+                return;
+            }
+            
+            if (document.hidden) {
+                proctoring.tabSwitches++;
+                logViolation('tab_switch', { count: proctoring.tabSwitches });
+                console.log('🚨 TAB SWITCH VIOLATION #' + proctoring.tabSwitches);
+                showToast('⚠️ Tab switch detected! (' + proctoring.tabSwitches + ')', 'warning');
+                updateProctoringStatus();
+            }
+            previousVisibilityState = document.visibilityState;
+        });
+        
+        // Polling-based detection
+        proctoring.pollingInterval = setInterval(function() { (works even when iframe has focus)
+        setInterval(function() {
+            if (!proctoring.isActive) return;
+            
+            // Check visibility state changes
+            if (previousVisibilityState !== document.visibilityState) {
+                if (document.hidden) {
+                    console.log('🔍 POLLING: Tab became hidden');
+                    proctoring.tabSwitches++;
+                    logViolation('tab_switch', { count: proctoring.tabSwitches, detected_by: 'polling' });
+                    showToast('⚠️ Tab switch detected! (' + proctoring.tabSwitches + ')', 'warning');
+                    updateProctoringStatus();
+                }
+                previousVisibilityState = document.visibilityState;
+            }
+            
+            // Check focus changes (window blur)
+            const currentHasFocus = document.hasFocus();
+            if (previousHasFocus && !currentHasFocus && !document.hidden) {
+                console.log('🔍 POLLING: Window lost focus');
+                proctoring.windowBlurs++;
+                logViolation('window_blur', { count: proctoring.windowBlurs, detected_by: 'polling' });
+                showToast('⚠️ Window focus lost! (' + proctoring.windowBlurs + ')', 'warning');
+                updateProctoringStatus();
+            }
+            previousHasFocus = currentHasFocus;
+        }, 500); // Check every 500ms
+        
+        // Window blur (clicking outside)
+        window.addEventListener('blur', function() {
+            console.log('🔍 window blur, isActive:', proctoring.isActive);
+            if (!proctoring.isActive) {
+                console.log('⏸️ Proctoring not active, ignoring blur');
+                return;
+            }
+            
+            proctoring.windowBlurs++;
+            logViolation('window_blur', { count: proctoring.windowBlurs });
+            console.log('🚨 WINDOW BLUR VIOLATION #' + proctoring.windowBlurs);
+            showToast('⚠️ Window focus lost! (' + proctoring.windowBlurs + ')', 'warning');
+            updateProctoringStatus();
+        });
+        
+        // Fullscreen change
+        document.addEventListener('fullscreenchange', function() {
+            if (!proctoring.isActive) return;
+            
+            if (!document.fullscreenElement) {
+                proctoring.fullscreenExits++;
+                logViolation('fullscreen_exit', { count: proctoring.fullscreenExits });
+                
+                // Show modal to re-enter fullscreen
+                document.getElementById('fullscreen-modal').classList.add('show');
+            } else {
+                document.getElementById('fullscreen-modal').classList.remove('show');
+            }
+        });
+        
+        // Prevent keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (!proctoring.isActive) return;
+            
+            // Block common shortcuts
+            const blockedCombos = [
+                { ctrl: true, key: 'c' },  // Copy
+                { ctrl: true, key: 'v' },  // Paste
+                { ctrl: true, key: 'u' },  // View source
+                { ctrl: true, key: 'p' },  // Print
+                { ctrl: true, shift: true, key: 'i' },  // DevTools
+                { key: 'F12' },  // DevTools
+                { ctrl: true, shift: true, key: 'j' },  // DevTools Console
+            ];
+            
+            for (const combo of blockedCombos) {
+                const matches = 
+                    (!combo.ctrl || e.ctrlKey || e.metaKey) &&
+                    (!combo.shift || e.shiftKey) &&
+                    (e.key.toLowerCase() === combo.key?.toLowerCase() || e.key === combo.key);
+                
+                if (matches && (combo.ctrl || combo.key === 'F12')) {
+                    e.preventDefault();
+                    const shortcut = `${combo.ctrl ? 'Ctrl+' : ''}${combo.shift ? 'Shift+' : ''}${combo.key}`;
+                    proctoring.blockedShortcuts.push(shortcut);
+                    logViolation('blocked_shortcut', { shortcut: shortcut });
+                    return false;
+                }
+            }
+        });
+        
+        // Prevent right-click
+        document.addEventListener('contextmenu', function(e) {
+            if (!proctoring.isActive) return;
+            e.preventDefault();
+            logViolation('blocked_shortcut', { shortcut: 'right-click' });
+        });
+        
+        // Prevent copy
+        document.addEventListener('copy', function(e) {
+            if (!proctoring.isActive) return;
+            e.preventDefault();
+            logViolation('copy_attempt');
+        });
+        
+        // Prevent paste  
+        document.addEventListener('paste', function(e) {
+            if (!proctoring.isActive) return;
+            e.preventDefault();
+            logViolation('paste_attempt');
+        });
+        
+        // ============= INTERVIEW FUNCTIONS =============
+        
+        async function requestFullscreen() {
+            try {
+                await document.documentElement.requestFullscreen();
+                document.getElementById('fullscreen-modal').classList.remove('show');
+            } catch (error) {
+                console.error('Fullscreen request failed:', error);
+            }
+        }
+        
+        async function startInterview() {
+            const joinBtn = document.getElementById('join-btn');
+            const spinner = document.getElementById('loading-spinner');
+            
+            joinBtn.disabled = true;
+            joinBtn.textContent = 'Connecting...';
+            spinner.style.display = 'block';
+            
+            try {
+                // Request fullscreen (optional)
+                try {
+                    await requestFullscreen();
+                } catch (fsError) {
+                    console.warn('Fullscreen not available:', fsError);
+                }
+                
+                // Start proctoring IMMEDIATELY (before iframe loads)
+                proctoring.isActive = true;
+                proctoring.startTime = new Date().toISOString();
+                console.log('🛡️ PROCTORING ACTIVATED - isActive:', proctoring.isActive);
+                console.log('🛡️ Proctoring start time:', proctoring.startTime);
+                
+                console.log('🔄 Loading Daily.co room...');
+                console.log('Room URL:', ROOM_URL);
+                
+                // Simple approach: Create iframe directly with prebuilt Daily.co URL
+                const container = document.getElementById('daily-container');
+                const iframe = document.createElement('iframe');
+                iframe.src = ROOM_URL;
+                iframe.style.width = '100%';
+                iframe.style.height = '100%';
+                iframe.style.border = 'none';
+                iframe.allow = 'camera; microphone; fullscreen; display-capture; autoplay';
+                iframe.setAttribute('allowfullscreen', 'true');
+                
+                // Add load handler
+                iframe.onload = function() {
+                    console.log('✅ Daily.co iframe loaded');
+                    console.log('🛡️ Proctoring status on iframe load:', proctoring.isActive);
+                    spinner.style.display = 'none';
+                    
+                    // Double-check proctoring is active
+                    if (!proctoring.isActive) {
+                        console.warn('⚠️ Proctoring not active! Activating now...');
+                        proctoring.isActive = true;
+                        proctoring.startTime = proctoring.startTime || new Date().toISOString();
+                    }
+                };
+                
+                container.appendChild(iframe);
+                
+                // Hide prejoin screen, show video
+                document.getElementById('prejoin-screen').style.display = 'none';
+                container.style.display = 'block';
+                
+                // Show leave button
+                document.getElementById('leave-btn').style.display = 'block';
+                
+                console.log('✅ Interview iframe created');
+                
+            } catch (error) {
+                console.error('Failed to start interview:', error);
+                joinBtn.disabled = false;
+                joinBtn.textContent = 'Retry Join';
+                spinner.style.display = 'none';
+                alert('Failed to connect: ' + error.message);
+            }
+        }
+        
+        async function handleCallEnd() {
+            proctoring.isActive = false;
+            
+            // Clear polling interval to stop violation detection
+            if (proctoring.pollingInterval) {
+                clearInterval(proctoring.pollingInterval);
+                proctoring.pollingInterval = null;
+                console.log('🛑 Stopped proctoring polling');
+            }
+            
+            // Send final proctoring summary
+            try {
+                await fetch(`${API_BASE}/api/proctoring/summary`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        interview_id: INTERVIEW_ID,
+                        start_time: proctoring.startTime || new Date().toISOString(),
+                        end_time: new Date().toISOString(),
+                        summary: {
+                            tab_switches: proctoring.violations.filter(v => v.type === 'tab_switch').length,
+                            fullscreen_exits: proctoring.violations.filter(v => v.type === 'fullscreen_exit').length,
+                            window_blurs: proctoring.violations.filter(v => v.type === 'window_blur').length,
+                            blocked_shortcuts: [...new Set(proctoring.violations.filter(v => v.type === 'blocked_shortcut').map(v => v.details?.key || 'unknown'))],
+                            total_violations: proctoring.violations.length
+                        },
+                        violations: proctoring.violations
+                    })
+                });
+            } catch (error) {
+                console.error('Failed to send proctoring summary:', error);
+            }
+            
+            // Exit fullscreen
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            }
+            
+            // Redirect to thank you page or close
+            window.location.href = `${API_BASE}/interview/${INTERVIEW_ID}/complete`;
+        }
+        
+        // Leave interview function - saves data and redirects properly
+        window.leaveInterview = function() {
+            if (!confirm('Are you sure you want to end this interview?')) return;
+            
+            const summary = {
+                interview_id: INTERVIEW_ID,
+                summary: {
+                    tab_switches: proctoring.violations.filter(v => v.type === 'tab_switch').length,
+                    fullscreen_exits: proctoring.violations.filter(v => v.type === 'fullscreen_exit').length,
+                    window_blurs: proctoring.violations.filter(v => v.type === 'window_blur').length,
+                    blocked_shortcuts: [...new Set(proctoring.violations.filter(v => v.type === 'blocked_shortcut').map(v => v.details?.key || 'unknown'))],
+                    total_violations: proctoring.violations.length,
+                    start_time: proctoring.startTime,
+                    end_time: new Date().toISOString()
+                },
+                violations: proctoring.violations
+            };
+            
+            fetch(`${API_BASE}/api/proctoring/summary`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(summary)
+            }).finally(() => {
+                proctoring.isActive = false;
+                if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+                window.location.href = `${API_BASE}/interview/${INTERVIEW_ID}/complete`;
+            });
+        };
+        
+        // Save proctoring data before leaving (using sendBeacon for reliability)
+        window.addEventListener('beforeunload', function(e) {
+            if (proctoring.isActive) {
+                // Use sendBeacon to ensure data is sent even when tab closes
+                const summary = {
+                    interview_id: INTERVIEW_ID,
+                    start_time: proctoring.startTime || new Date().toISOString(),
+                    end_time: new Date().toISOString(),
+                    summary: {
+                        tab_switches: proctoring.violations.filter(v => v.type === 'tab_switch').length,
+                        fullscreen_exits: proctoring.violations.filter(v => v.type === 'fullscreen_exit').length,
+                        window_blurs: proctoring.violations.filter(v => v.type === 'window_blur').length,
+                        blocked_shortcuts: [...new Set(proctoring.violations.filter(v => v.type === 'blocked_shortcut').map(v => v.details?.key || 'unknown'))],
+                        total_violations: proctoring.violations.length
+                    },
+                    violations: proctoring.violations
+                };
+                
+                // sendBeacon with Blob to set proper content-type
+                const blob = new Blob([JSON.stringify(summary)], {type: 'application/json'});
+                navigator.sendBeacon(
+                    `${API_BASE}/api/proctoring/summary`,
+                    blob
+                );
+                
+                console.log('📤 Proctoring summary sent via beacon');
+                
+                // Show warning
+                e.preventDefault();
+                e.returnValue = 'Interview is in progress. Are you sure you want to leave?';
+                return e.returnValue;
+            }
+        });
+        
+        // Also save on visibility change (tab switch) - more reliable
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'hidden' && proctoring.isActive && proctoring.violations.length > 0) {
+                // Save current state when tab becomes hidden
+                const summary = {
+                    interview_id: INTERVIEW_ID,
+                    start_time: proctoring.startTime || new Date().toISOString(),
+                    end_time: new Date().toISOString(),
+                    summary: {
+                        tab_switches: proctoring.violations.filter(v => v.type === 'tab_switch').length,
+                        fullscreen_exits: proctoring.violations.filter(v => v.type === 'fullscreen_exit').length,
+                        window_blurs: proctoring.violations.filter(v => v.type === 'window_blur').length,
+                        blocked_shortcuts: [...new Set(proctoring.violations.filter(v => v.type === 'blocked_shortcut').map(v => v.details?.key || 'unknown'))],
+                        total_violations: proctoring.violations.length
+                    },
+                    violations: proctoring.violations
+                };
+                
+                const blob2 = new Blob([JSON.stringify(summary)], {type: 'application/json'});
+                navigator.sendBeacon(
+                    `${API_BASE}/api/proctoring/summary`,
+                    blob2
+                );
+            }
+        });
+    </script>
+</body>
+</html>
+

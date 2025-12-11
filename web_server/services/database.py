@@ -325,5 +325,25 @@ class DatabaseService:
             "previous_roles": ["Junior Developer", "Frontend Developer"]
         }
 
+
+    async def update_interview(
+        self,
+        interview_id: str,
+        update_data: Dict[str, Any]
+    ) -> bool:
+        """Update interview record with arbitrary data (e.g., proctoring)"""
+        if self.database is not None:
+            try:
+                result = await self.database.interview_results.update_one(
+                    {"interview_id": interview_id},
+                    {"$set": update_data}
+                )
+                return result.modified_count > 0 or result.matched_count > 0
+            except Exception as e:
+                print(f"❌ Error updating interview: {e}")
+                return False
+        return False
+
+
 # Global database instance
 db_service = DatabaseService()

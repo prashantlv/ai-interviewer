@@ -70,16 +70,16 @@ async def dashboard_home(
                     interview_date = datetime.fromisoformat(date_str.replace('Z', '+00:00')).date()
                     if interview_date == today:
                         interviews_today += 1
-                        if interview.get("status") == "completed":
+                        if interview.get("status") in ["completed", "ended_by_candidate"]:
                             completed_today += 1
                 except:
                     pass
         
         pending_interviews = len([i for i in interviews if i.get("status") in ["scheduled", "in_progress"]])
-        completed_total = len([i for i in interviews if i.get("status") == "completed"])
+        completed_total = len([i for i in interviews if i.get("status") in ["completed", "ended_by_candidate"]])
         
         # Calculate average score (only for completed interviews with scores > 0)
-        scored_interviews = [i for i in interviews if i.get("status") == "completed" and i.get("score", 0) > 0]
+        scored_interviews = [i for i in interviews if i.get("status") in ["completed", "ended_by_candidate"] and i.get("score", 0) > 0]
         average_score = round(sum(i.get("score", 0) for i in scored_interviews) / len(scored_interviews), 1) if scored_interviews else 0
         
         # Calculate completion rate
@@ -235,16 +235,16 @@ async def interviews_page(
     
     # Calculate real statistics for the page footer - FIX #4
     from datetime import datetime
-    completed_count = len([i for i in all_interviews if i.get("status") == "completed"])
+    completed_count = len([i for i in all_interviews if i.get("status") in ["completed", "ended_by_candidate"]])
     completion_rate = (completed_count / total_interviews * 100) if total_interviews > 0 else 0
     
     # Calculate average score (only for completed interviews with scores > 0)
-    scored_interviews = [i for i in all_interviews if i.get("status") == "completed" and i.get("score", 0) > 0]
+    scored_interviews = [i for i in all_interviews if i.get("status") in ["completed", "ended_by_candidate"] and i.get("score", 0) > 0]
     average_score = sum(i.get("score", 0) for i in scored_interviews) / len(scored_interviews) if scored_interviews else 0
     
     # Calculate hire rate (recommendation = "yes" or "strong_yes")
     # For now, use score >= 65 as proxy for "recommended"
-    recommended_count = len([i for i in all_interviews if i.get("status") == "completed" and i.get("score", 0) >= 65])
+    recommended_count = len([i for i in all_interviews if i.get("status") in ["completed", "ended_by_candidate"] and i.get("score", 0) >= 65])
     hire_rate = (recommended_count / completed_count * 100) if completed_count > 0 else 0
     
     # Count this month's interviews
@@ -344,6 +344,7 @@ async def interview_detail(
             "duration": "N/A",
             "transcript": interview_result.get("transcript", "No transcript available"),
             "recording": interview_result.get("recording"),
+            "proctoring": interview_result.get("proctoring"),  # Proctoring data (violations, risk level, etc.)
             "evaluation": {
                 "correctness": individual_scores.get("correctness", 0),
                 "terminology": individual_scores.get("terminology", 0),
@@ -370,6 +371,7 @@ async def interview_detail(
             "duration": "N/A",
             "transcript": f"Interview {interview_id} not found in database",
             "recording": None,
+            "proctoring": None,  # No proctoring data for not found interviews
             "evaluation": {
                 "correctness": 0,
                 "terminology": 0,
@@ -454,8 +456,12 @@ async def create_interview(
         candidate_name=candidate_name
     )
     
-    # Create candidate join URL with token
-    candidate_join_url = f"{room_data['room_url']}?t={candidate_token}" if candidate_token else room_data['room_url']
+    # Store original Daily.co URL with token (for internal use)
+    daily_room_url_with_token = f"{room_data['room_url']}?t={candidate_token}" if candidate_token else room_data['room_url']
+    
+    # Candidate join URL points to our proctored wrapper page
+    # The wrapper will embed Daily.co and add proctoring
+    candidate_join_url = f"/interview/{interview_id}/room"
     
     # Create interview record
     interview_data = {
@@ -469,6 +475,7 @@ async def create_interview(
         "notes": notes,
         "created_at": datetime.now(),
         "room_url": room_data["room_url"],
+        "daily_room_url_with_token": daily_room_url_with_token,  # Original Daily.co URL with token
         "room_name": room_data["room_name"],
         "candidate_join_url": candidate_join_url,
         # NEW: Store raw and parsed JD/Resume data
@@ -506,6 +513,10 @@ async def create_interview(
                 },
                 "questions_asked": [],
                 "notes": notes,
+                # Room URLs for proctoring
+                "room_url": room_data["room_url"],
+                "room_name": room_data["room_name"],
+                "daily_room_url_with_token": daily_room_url_with_token,
                 # NEW: Store parsed JD and Resume for question generation
                 "job_description_parsed": parsed_jd,
                 "candidate_resume_parsed": parsed_resume,
@@ -675,7 +686,7 @@ async def analytics_page(
     
     # Calculate metrics
     total_interviews = len(filtered_interviews)
-    completed_interviews = [i for i in filtered_interviews if i.get("status") == "completed"]
+    completed_interviews = [i for i in filtered_interviews if i.get("status") in ["completed", "ended_by_candidate"]]
     completed_count = len(completed_interviews)
     
     # Average score
@@ -858,8 +869,8 @@ async def system_health_page(
             
             # Get interview stats
             total_interviews = await db.database.interview_results.count_documents({})
-            completed = await db.database.interview_results.count_documents({"status": "completed"})
-            pending = await db.database.interview_results.count_documents({"status": {"$ne": "completed"}})
+            completed = await db.database.interview_results.count_documents({"status": {"$in": ["completed", "ended_by_candidate"]}})
+            pending = await db.database.interview_results.count_documents({"status": {"$nin": ["completed", "ended_by_candidate"]}})
             scoring_configs = await db.database.scoring_configs.count_documents({})
         except:
             db_name = "Unknown"

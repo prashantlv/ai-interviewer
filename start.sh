@@ -1,6 +1,5 @@
 #!/bin/bash
 # AI Interviewer - Start All Services with Live Logs
-# Pure pip/venv approach - NO conda required
 
 echo "🚀 Starting AI Interviewer with Live Logs..."
 echo "============================================"
@@ -15,6 +14,8 @@ NC='\033[0m' # No Color
 # Function to cleanup on exit
 cleanup() {
     echo -e "\n${YELLOW}🧹 Cleaning up processes...${NC}"
+    pkill -f "uvicorn.*8009" 2>/dev/null || true
+    pkill -f "rq.cli worker" 2>/dev/null || true
     jobs -p | xargs -r kill 2>/dev/null || true
     exit 0
 }
@@ -58,20 +59,20 @@ else
 fi
 
 # 2. Start RQ Worker with live logs
-echo -e "\n${BLUE}2️⃣ Starting RQ Worker (with live logs)...${NC}"
+echo -e "\n${BLUE}2️⃣ Starting RQ Worker on ai_bots queue (with live logs)...${NC}"
 cd web_server
 
 # Start RQ worker in background but pipe to tee for live viewing
-rq worker ai_bots --with-scheduler 2>&1 | tee /tmp/rq_worker.log &
+python -m rq.cli worker ai_bots --url redis://localhost:6379 2>&1 | tee /tmp/rq_worker.log &
 RQ_PID=$!
 echo "   Worker PID: $RQ_PID"
 sleep 2
 
-# 3. Start Web Server with live logs
-echo -e "\n${BLUE}3️⃣ Starting Web Server (with live logs)...${NC}"
+# 3. Start Web Server with live logs (using uvicorn)
+echo -e "\n${BLUE}3️⃣ Starting Web Server on port 8009 (with live logs)...${NC}"
 
 # Start web server in background but pipe to tee for live viewing
-python main.py 2>&1 | tee /tmp/web_server.log &
+python -m uvicorn main:app --host 0.0.0.0 --port 8009 --reload 2>&1 | tee /tmp/web_server.log &
 WEB_PID=$!
 echo "   Server PID: $WEB_PID"
 sleep 3
@@ -88,10 +89,10 @@ else
     echo -e "   ${RED}❌ RQ Worker: Failed${NC}"
 fi
 
-if curl -s http://localhost:8009/health > /dev/null 2>&1; then
+if curl -s http://localhost:8009/health > /dev/null 2>&1 || curl -s http://localhost:8009/dashboard > /dev/null 2>&1; then
     echo -e "   ${GREEN}✅ Web Server: Running (PID: $WEB_PID)${NC}"
 else
-    echo -e "   ${RED}❌ Web Server: Failed${NC}"
+    echo -e "   ${YELLOW}⚠️ Web Server: Starting... (may take a few seconds)${NC}"
 fi
 
 # 5. Show live logs
@@ -100,11 +101,11 @@ echo "============================================"
 echo -e "${BLUE}📊 Dashboard:${NC} http://localhost:8009/dashboard"
 echo -e "${BLUE}📚 API Docs:${NC} http://localhost:8009/docs"
 echo ""
-echo -e "${YELLOW}📝 Live Logs (Ctrl+C to stop):${NC}"
+echo -e "${YELLOW}📝 Live Logs (Ctrl+C to stop all services):${NC}"
 echo "   Web Server: tail -f /tmp/web_server.log"
 echo "   RQ Worker:  tail -f /tmp/rq_worker.log"
 echo ""
-echo -e "${YELLOW}💡 To view live logs in separate terminals:${NC}"
+echo -e "${YELLOW}💡 To view logs in separate terminals:${NC}"
 echo "   Terminal 1: tail -f /tmp/web_server.log"
 echo "   Terminal 2: tail -f /tmp/rq_worker.log"
 echo ""

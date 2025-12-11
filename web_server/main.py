@@ -6,7 +6,14 @@ Handles dashboard, interview management, and reporting
 
 # Load environment variables FIRST (before any other imports that might use them)
 from dotenv import load_dotenv
+from pathlib import Path
+
+# Load from web_server/.env (if exists)
 load_dotenv()
+# Also load from server/.env (for MongoDB and other shared configs)
+server_env = Path(__file__).parent.parent / "server" / ".env"
+if server_env.exists():
+    load_dotenv(server_env)
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -19,7 +26,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 
 # Import our modules
-from routers import interviews, dashboard, feedback, bots, tavus, voices, scoring_settings
+from routers import interviews, dashboard, feedback, bots, tavus, voices, scoring_settings, proctoring
 from services.database import DatabaseService
 from services.question_engine import QuestionEngine
 from services.scoring_engine import ScoringEngine
@@ -115,6 +122,7 @@ app.include_router(voices.router, prefix="/api/v1/voices", tags=["voices-v1"])
 # Dashboard: /dashboard/replicas
 # API: /api/v1/tavus/* (backend still uses tavus service)
 app.include_router(tavus.router, tags=["replicas"])
+app.include_router(proctoring.router, tags=["proctoring"])
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):

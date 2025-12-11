@@ -190,7 +190,7 @@ class DailyService:
         token_config = {
             "properties": {
                 "room_name": room_name,
-                "is_owner": False,  # Candidate is a participant
+                "is_owner": True,  # Candidate needs owner access to join empty room
                 "user_name": candidate_name,
                 "exp": self._calculate_expiry(token_exp_minutes)
             }

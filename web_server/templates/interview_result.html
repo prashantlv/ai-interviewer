@@ -67,6 +67,91 @@
         </div>
     </div>
 
+
+    <!-- Proctoring Report -->
+    {% if interview.proctoring %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card {% if interview.proctoring.risk_level == 'high' %}border-danger{% elif interview.proctoring.risk_level == 'medium' %}border-warning{% else %}border-success{% endif %}">
+                <div class="card-header {% if interview.proctoring.risk_level == 'high' %}bg-danger text-white{% elif interview.proctoring.risk_level == 'medium' %}bg-warning{% else %}bg-success text-white{% endif %}">
+                    <h5 class="card-title mb-0">🔒 Proctoring Report</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 text-center border-end">
+                            <h3 class="{% if interview.proctoring.risk_level == 'high' %}text-danger{% elif interview.proctoring.risk_level == 'medium' %}text-warning{% else %}text-success{% endif %}">
+                                {{ interview.proctoring.risk_level|upper }}
+                            </h3>
+                            <p class="text-muted mb-0">Risk Level</p>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="row g-3">
+                                <div class="col-4">
+                                    <div class="p-3 bg-light rounded text-center">
+                                        <h4 class="mb-0">{{ interview.proctoring.summary.tab_switches|default(0) }}</h4>
+                                        <small class="text-muted">Tab Switches</small>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="p-3 bg-light rounded text-center">
+                                        <h4 class="mb-0">{{ interview.proctoring.summary.fullscreen_exits|default(0) }}</h4>
+                                        <small class="text-muted">Fullscreen Exits</small>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="p-3 bg-light rounded text-center">
+                                        <h4 class="mb-0">{{ interview.proctoring.summary.window_blurs|default(0) }}</h4>
+                                        <small class="text-muted">Window Blurs</small>
+                                    </div>
+                                </div>
+                            </div>
+                            {% if interview.proctoring.summary.blocked_shortcuts %}
+                            <div class="mt-3">
+                                <p class="mb-1"><small class="text-muted">Blocked Shortcuts:</small></p>
+                                {% for shortcut in interview.proctoring.summary.blocked_shortcuts %}
+                                <span class="badge bg-secondary me-1">{{ shortcut }}</span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% if interview.proctoring.violations %}
+                    <hr>
+                    <div class="mt-3">
+                        <h6>📋 Violation Timeline ({{ interview.proctoring.violations|length }} total)</h6>
+                        <div style="max-height: 200px; overflow-y: auto;" class="small">
+                            <table class="table table-sm table-striped mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>Type</th>
+                                        <th>Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for v in interview.proctoring.violations[:20] %}
+                                    <tr>
+                                        <td>{{ v.timestamp[11:19] if v.timestamp else 'N/A' }}</td>
+                                        <td><span class="badge bg-danger">{{ v.type|replace('_', ' ')|title }}</span></td>
+                                        <td>{{ v.details|default({}) }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                    {% if interview.proctoring.violations|length > 20 %}
+                                    <tr>
+                                        <td colspan="3" class="text-muted text-center">... and {{ interview.proctoring.violations|length - 20 }} more</td>
+                                    </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Detailed Scores -->
     <div class="row mb-4">
         <div class="col-12">
