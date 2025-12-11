@@ -323,6 +323,8 @@
     </style>
 </head>
 <body>
+    <!-- Interview Configuration (hidden JSON) -->
+    <script type="application/json" id="interview-config">{{ interview_config_json }}</script>
     <!-- Header Bar -->
     <div class="header-bar">
         <div class="logo">
@@ -398,12 +400,30 @@
 
     <!-- Proctoring JavaScript -->
     <script>
-        // Interview Configuration
-        const INTERVIEW_ID = "{{ interview_id }}";
-
-        const ROOM_URL = "{{ room_url }}";
-        const CANDIDATE_NAME = "{{ candidate_name }}";
-        const API_BASE = "{{ api_base }}";
+        // Interview Configuration - Extract from JSON script tag (safest method)
+        let INTERVIEW_ID = '';
+        let ROOM_URL = '';
+        let CANDIDATE_NAME = '';
+        let API_BASE = '';
+        
+        try {
+            const configScript = document.getElementById('interview-config');
+            if (configScript) {
+                const config = JSON.parse(configScript.textContent);
+                INTERVIEW_ID = config.interview_id || '';
+                ROOM_URL = config.room_url || '';
+                CANDIDATE_NAME = config.candidate_name || '';
+                API_BASE = config.api_base || '';
+            }
+        } catch (e) {
+            console.error('Failed to parse interview configuration:', e);
+            alert('Interview configuration error. Please contact support.');
+        }
+        
+        // Validate required variables
+        if (!INTERVIEW_ID || !ROOM_URL) {
+            console.error('Missing required interview configuration', { INTERVIEW_ID, ROOM_URL, CANDIDATE_NAME, API_BASE });
+        }
         
         // Proctoring State
         const proctoring = {
