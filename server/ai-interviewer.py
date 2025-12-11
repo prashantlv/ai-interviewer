@@ -44,6 +44,7 @@ from pipecat.frames.frames import (
     LLMRunFrame,
     OutputImageRawFrame,
     SpriteFrame,
+    StartFrame,
     TextFrame,
     TranscriptionFrame,
 )
@@ -804,6 +805,9 @@ async def run_bot(
         ),
         observers=[RTVIObserver(rtvi)],
     )
+
+    # Queue StartFrame first to initialize the pipeline (required before processing audio frames)
+    await task.queue_frame(StartFrame())    
 
     # Queue initial frame if available
     if quiet_frame:
