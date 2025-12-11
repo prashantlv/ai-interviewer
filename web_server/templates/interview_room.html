@@ -113,10 +113,21 @@
             position: relative;
         }
         
-        #daily-iframe {
+        #daily-container {
             width: 100%;
             height: 100%;
             border: none;
+            position: relative;
+            background: #000;
+        }
+        
+        #daily-container iframe {
+            width: 100% !important;
+            height: 100% !important;
+            border: none !important;
+            position: absolute;
+            top: 0;
+            left: 0;
         }
         
         /* Pre-join Screen */
