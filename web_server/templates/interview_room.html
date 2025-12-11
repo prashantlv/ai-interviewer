@@ -675,8 +675,7 @@
         });
         
         // Polling-based detection
-        proctoring.pollingInterval = setInterval(function() { (works even when iframe has focus)
-        setInterval(function() {
+        proctoring.pollingInterval = setInterval(function() {
             if (!proctoring.isActive) return;
             
             // Check visibility state changes
