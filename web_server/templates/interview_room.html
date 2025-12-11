@@ -820,13 +820,28 @@
                 console.log('🔄 Loading Daily.co room...');
                 console.log('Room URL:', ROOM_URL);
                 
-                // Simple approach: Create iframe directly with prebuilt Daily.co URL
+                // Get container and show it BEFORE creating iframe (required for proper rendering)
                 const container = document.getElementById('daily-container');
+                if (!container) {
+                    throw new Error('daily-container element not found');
+                }
+                
+                // Show container first with proper styling
+                container.style.display = 'block';
+                container.style.position = 'relative';
+                container.style.width = '100%';
+                container.style.height = '100%';
+                container.style.background = '#000';
+                
+                // Create iframe directly with prebuilt Daily.co URL
                 const iframe = document.createElement('iframe');
                 iframe.src = ROOM_URL;
                 iframe.style.width = '100%';
                 iframe.style.height = '100%';
                 iframe.style.border = 'none';
+                iframe.style.position = 'absolute';
+                iframe.style.top = '0';
+                iframe.style.left = '0';
                 iframe.allow = 'camera; microphone; fullscreen; display-capture; autoplay';
                 iframe.setAttribute('allowfullscreen', 'true');
                 
@@ -846,9 +861,8 @@
                 
                 container.appendChild(iframe);
                 
-                // Hide prejoin screen, show video
+                // Hide prejoin screen (container already visible)
                 document.getElementById('prejoin-screen').style.display = 'none';
-                container.style.display = 'block';
                 
                 // Show leave button
                 document.getElementById('leave-btn').style.display = 'block';
