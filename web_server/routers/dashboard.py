@@ -8,7 +8,7 @@ from fastapi.templating import Jinja2Templates
 from typing import Optional
 from datetime import datetime, timedelta
 
-from dependencies import DbServiceDep, BotManagerDep
+from dependencies import DbServiceDep, BotManagerDep, CurrentUserDep
 from services.daily_service import daily_service
 
 router = APIRouter()
@@ -17,9 +17,10 @@ templates = Jinja2Templates(directory="templates")
 @router.get("/", response_class=HTMLResponse)
 async def dashboard_home(
     request: Request,
-    db: DbServiceDep
+    db: DbServiceDep,
+    current_user: CurrentUserDep
 ):
-    """Main dashboard page"""
+    """Main dashboard page - Requires authentication"""
     # Get real data from database directly
     try:
         from datetime import datetime, timedelta
@@ -155,10 +156,11 @@ async def test_database_connection(db: DbServiceDep):
 async def interviews_page(
     request: Request,
     db: DbServiceDep,
+    current_user: CurrentUserDep,
     status: Optional[str] = None,
     page: int = 1
 ):
-    """Interviews management page with filtering and pagination"""
+    """Interviews management page with filtering and pagination - Requires authentication"""
     # Pagination settings
     per_page = 20
     offset = (page - 1) * per_page
@@ -293,9 +295,10 @@ async def interviews_page(
 async def interview_detail(
     request: Request,
     interview_id: str,
-    db: DbServiceDep
+    db: DbServiceDep,
+    current_user: CurrentUserDep
 ):
-    """Individual interview detail page"""
+    """Individual interview detail page - Requires authentication"""
     # Get interview data using db service
     interview_result = await db.database.interview_results.find_one({"interview_id": interview_id})
     if interview_result:
@@ -390,8 +393,11 @@ async def interview_detail(
     })
 
 @router.get("/schedule", response_class=HTMLResponse)
-async def schedule_interview_page(request: Request):
-    """Schedule new interview page"""
+async def schedule_interview_page(
+    request: Request,
+    current_user: CurrentUserDep
+):
+    """Schedule new interview page - Requires authentication"""
     return templates.TemplateResponse("schedule_interview.html", {
         "request": request
     })
@@ -401,6 +407,7 @@ async def create_interview(
     request: Request,
     db: DbServiceDep,
     bot_manager: BotManagerDep,
+    current_user: CurrentUserDep,
     candidate_name: str = Form(...),
     candidate_email: str = Form(...),
     position: str = Form(...),
@@ -587,6 +594,9 @@ async def create_interview(
 
 @router.post("/schedule")
 async def schedule_interview(
+    request: Request,
+    current_user: CurrentUserDep,
+    async def schedule_interview(
     candidate_name: str = Form(...),
     candidate_email: str = Form(...),
     position: str = Form(...),
@@ -612,8 +622,11 @@ async def schedule_interview(
     return {"success": True, "interview_id": "int_" + str(hash(candidate_email))[:6]}
 
 @router.get("/settings", response_class=HTMLResponse)
-async def settings_page(request: Request):
-    """Interview settings and configuration page"""
+async def settings_page(
+    request: Request,
+    current_user: CurrentUserDep
+):
+    """Interview settings and configuration page - Requires authentication"""
     # TODO: Get current settings from database
     settings = {
         "default_duration": 45,
@@ -641,11 +654,12 @@ async def settings_page(request: Request):
 async def analytics_page(
     request: Request,
     db: DbServiceDep,
+    current_user: CurrentUserDep,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     position: Optional[str] = None
 ):
-    """Analytics page with charts and insights"""
+    """Analytics page with charts and insights - Requires authentication"""
     from datetime import datetime, timedelta
     from collections import defaultdict
     
@@ -850,9 +864,10 @@ async def analytics_page(
 async def system_health_page(
     request: Request,
     db: DbServiceDep,
-    bot_manager: BotManagerDep
+    bot_manager: BotManagerDep,
+    current_user: CurrentUserDep
 ):
-    """System health monitoring page"""
+    """System health monitoring page - Requires authentication"""
     import sys
     import os
     from datetime import datetime
@@ -953,8 +968,12 @@ async def system_health_page(
 
 
 @router.post("/api/v1/interviews/{interview_id}/generate-link")
-async def generate_interview_link(interview_id: str, db: DbServiceDep):
-    """Generate a fresh join link with token for an interview"""
+async def generate_interview_link(
+    interview_id: str,
+    db: DbServiceDep,
+    current_user: CurrentUserDep
+):
+    """Generate a fresh join link with token for an interview - Requires authentication"""
     print(f"🔍 API called: generate_interview_link for {interview_id}")
     try:
         # Get interview from database
