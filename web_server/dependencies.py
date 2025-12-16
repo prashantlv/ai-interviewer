@@ -4,14 +4,19 @@ FastAPI Dependencies
 Provides dependency injection for services throughout the application.
 This module defines all injectable dependencies following FastAPI best practices.
 """
-from typing import Annotated
-from fastapi import Depends, Request
+from typing import Annotated, Optional, Dict, Any
+from fastapi import Depends, Request, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from services.database import DatabaseService
 from services.bot_manager import BotManager
 from services.scoring_config_service import ScoringConfigService
 from services.question_engine import QuestionEngine
 from services.scoring_engine import ScoringEngine
+from services.auth_service import auth_service
+
+# HTTP Bearer security scheme
+security = HTTPBearer(auto_error=False)
 
 
 # =============================================================================
@@ -119,6 +124,49 @@ QuestionEngineDep = Annotated[QuestionEngine, Depends(get_question_engine)]
 
 ScoringEngineDep = Annotated[ScoringEngine, Depends(get_scoring_engine)]
 """Scoring engine dependency - injects ScoringEngine instance"""
+
+
+async def get_current_user(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+) -> Dict[str, Any]:
+    """
+    Dependency to get current authenticated user from JWT token
+    
+    Checks token in:
+    1. Authorization header (Bearer token)
+    2. Query parameter (token)
+    3. Cookies (accessToken or access_token)
+    
+    Returns:
+        Dict with userId and dataModel
+        
+    Raises:
+        HTTPException: If token is missing or invalid
+    """
+    # Try to get token from Authorization header
+    token = None
+    if credentials:
+        token = credentials.credentials
+    
+    # If not in header, try other sources
+    if not token:
+        token = auth_service.extract_token_from_request(request)
+    
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required. Please login at https://human2intelligence.com/",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Verify token
+    user_data = auth_service.verify_access_token(token)
+    return user_data
+
+# Type alias for route dependencies
+CurrentUserDep = Annotated[Dict[str, Any], Depends(get_current_user)]
+"""Current user dependency - injects authenticated user data (userId, dataModel)"""
 
 
 # =============================================================================

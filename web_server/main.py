@@ -16,9 +16,10 @@ if server_env.exists():
     load_dotenv(server_env)
 
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import uvicorn
 import os
@@ -95,6 +96,21 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Add CORS middleware for cross-origin requests from human2intelligence.com
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://human2intelligence.com",
+        "https://www.human2intelligence.com",
+        "http://localhost:3000",  # For local development
+        "http://localhost:3001",  # For local development
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
+
 # Mount static files and templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -123,6 +139,27 @@ app.include_router(voices.router, prefix="/api/v1/voices", tags=["voices-v1"])
 # API: /api/v1/tavus/* (backend still uses tavus service)
 app.include_router(tavus.router, tags=["replicas"])
 app.include_router(proctoring.router, tags=["proctoring"])
+
+@app.exception_handler(HTTPException)
+async def auth_exception_handler(request: Request, exc: HTTPException):
+    """Handle authentication errors by redirecting to login"""
+    if exc.status_code == 401:
+        # For API requests, return JSON error
+        if request.url.path.startswith("/api/"):
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": exc.detail}
+            )
+        # For dashboard/HTML requests, redirect to main site login
+        redirect_url = f"https://human2intelligence.com/login?redirect={request.url.path}"
+        return RedirectResponse(
+            url=redirect_url,
+            status_code=302
+        )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail}
+    )
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):

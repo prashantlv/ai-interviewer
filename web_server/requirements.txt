@@ -16,3 +16,6 @@ rq>=1.15.1                      # Python-RQ for background jobs
 
 # OpenAI API
 openai>=1.0.0                   # OpenAI API client
+
+# JWT Authentication
+PyJWT>=2.8.0                    # JWT token verification (for human2intelligence.com integration)
