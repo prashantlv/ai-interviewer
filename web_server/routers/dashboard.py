@@ -596,7 +596,6 @@ async def create_interview(
 async def schedule_interview(
     request: Request,
     current_user: CurrentUserDep,
-    async def schedule_interview(
     candidate_name: str = Form(...),
     candidate_email: str = Form(...),
     position: str = Form(...),
