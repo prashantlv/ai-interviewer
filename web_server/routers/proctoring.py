@@ -8,6 +8,7 @@ Handles interview proctoring functionality including:
 """
 
 import os
+import json
 import asyncio
 from datetime import datetime
 from typing import Dict, Any, Optional, List
@@ -58,6 +59,14 @@ async def test_interview_room(request: Request):
     """
     api_base = str(request.base_url).rstrip('/')
     
+
+    interview_config = {
+        "interview_id": "test-123",
+        "room_url": "https://hi2inspire.daily.co/test-proctoring",
+        "candidate_name": "Test Candidate",
+        "api_base": api_base
+    }
+    interview_config_json = json.dumps(interview_config)
     return templates.TemplateResponse(
         "interview_room.html",
         {
@@ -66,7 +75,8 @@ async def test_interview_room(request: Request):
             "room_url": "https://hi2inspire.daily.co/test-proctoring",  # This won't connect but shows the UI
             "candidate_name": "Test Candidate",
             "position": "Software Developer",
-            "api_base": api_base
+            "api_base": api_base,
+            "interview_config_json": interview_config_json
         }
     )
 
@@ -161,6 +171,14 @@ async def interview_room(request: Request, interview_id: str):
     api_base = str(request.base_url).rstrip('/')
     
     logger.info(f"✅ Serving interview room: candidate={candidate_name}, room={room_url}")
+
+    interview_config = {
+        "interview_id": interview_id,
+        "room_url": room_url,
+        "candidate_name": candidate_name,
+        "api_base": api_base
+    }
+    interview_config_json = json.dumps(interview_config)
     
     return templates.TemplateResponse(
         "interview_room.html",
@@ -170,7 +188,8 @@ async def interview_room(request: Request, interview_id: str):
             "room_url": room_url,
             "candidate_name": candidate_name,
             "position": position,
-            "api_base": api_base
+            "api_base": api_base,
+            "interview_config_json": interview_config_json
         }
     )
 
