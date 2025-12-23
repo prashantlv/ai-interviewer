@@ -224,6 +224,104 @@ async def auth_exception_handler(request: Request, exc: HTTPException):
         content={"detail": exc.detail}
     )
 
+@app.get("/sso/login")
+async def sso_login(request: Request, token: Optional[str] = None):
+    """SSO login endpoint - receives JWT from Hire2Inspire and sets cookie."""
+    from services.auth_service import auth_service
+    
+    if not token:
+        return HTMLResponse(
+            status_code=400,
+            content="""
+            <!DOCTYPE html>
+            <html>
+            <head><title>SSO Login - Missing Token</title></head>
+            <body style="font-family: system-ui; padding: 40px; background: #f8f9fa;">
+                <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <h1 style="color: #dc3545; margin: 0 0 16px;">❌ SSO Login Failed</h1>
+                    <p style="color: #666; line-height: 1.6;">No authentication token provided in the URL.</p>
+                    <p style="color: #666; line-height: 1.6;">
+                        This endpoint expects: <code style="background: #f1f3f5; padding: 2px 6px; border-radius: 4px;">/sso/login?token=YOUR_JWT</code>
+                    </p>
+                    <a href="https://human2intelligence.com/login" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #FF6183; color: white; text-decoration: none; border-radius: 6px;">
+                        ← Back to Login
+                    </a>
+                </div>
+            </body>
+            </html>
+            """
+        )
+    
+    try:
+        # Verify token using auth_service
+        user_data = auth_service.verify_access_token(token)
+        user_id = user_data.get("userId")
+        data_model = user_data.get("dataModel", "employers")
+        
+        # Create redirect response to dashboard
+        response = RedirectResponse(url="/dashboard", status_code=302)
+        
+        # Set secure cookie on .human2intelligence.com domain
+        # This cookie will be sent to api.human2intelligence.com automatically
+        response.set_cookie(
+            key="accessToken",
+            value=token,
+            httponly=True,
+            secure=True,
+            samesite="none",
+            domain=".human2intelligence.com",
+            max_age=7 * 24 * 60 * 60,
+            path="/"
+        )
+        
+        print(f"✅ SSO Login successful - User: {user_id} ({data_model})")
+        return response
+        
+    except HTTPException as e:
+        return HTMLResponse(
+            status_code=401,
+            content=f"""
+            <!DOCTYPE html>
+            <html>
+            <head><title>SSO Login - Invalid Token</title></head>
+            <body style="font-family: system-ui; padding: 40px; background: #f8f9fa;">
+                <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <h1 style="color: #dc3545; margin: 0 0 16px;">❌ SSO Login Failed</h1>
+                    <p style="color: #666; line-height: 1.6;"><strong>Error:</strong> {e.detail}</p>
+                    <p style="color: #666; line-height: 1.6;">
+                        The authentication token provided is invalid or has expired. Please log in again.
+                    </p>
+                    <a href="https://human2intelligence.com/login" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #FF6183; color: white; text-decoration: none; border-radius: 6px;">
+                        ← Back to Login
+                    </a>
+                </div>
+            </body>
+            </html>
+            """
+        )
+    except Exception as e:
+        return HTMLResponse(
+            status_code=500,
+            content=f"""
+            <!DOCTYPE html>
+            <html>
+            <head><title>SSO Login - Error</title></head>
+            <body style="font-family: system-ui; padding: 40px; background: #f8f9fa;">
+                <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <h1 style="color: #dc3545; margin: 0 0 16px;">⚠️ SSO Login Error</h1>
+                    <p style="color: #666; line-height: 1.6;">An unexpected error occurred during authentication.</p>
+                    <p style="color: #999; font-size: 14px; font-family: monospace; background: #f8f9fa; padding: 12px; border-radius: 4px; margin-top: 16px;">
+                        {str(e)}
+                    </p>
+                    <a href="https://human2intelligence.com/login" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #FF6183; color: white; text-decoration: none; border-radius: 6px;">
+                        ← Back to Login
+                    </a>
+                </div>
+            </body>
+            </html>
+            """
+        )
+
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     """Root endpoint - redirect to dashboard"""
