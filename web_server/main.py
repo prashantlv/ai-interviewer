@@ -322,6 +322,47 @@ async def sso_login(request: Request, token: Optional[str] = None):
             """
         )
 
+@app.get("/logout")
+async def logout(request: Request):
+    """
+    Logout endpoint - clears authentication cookie and redirects to login page.
+    Also attempts to invalidate token on hire2inspire backend.
+    """
+    from services.auth_service import auth_service
+    import httpx
+    
+    # Extract token from request (cookie or header)
+    token = auth_service.extract_token_from_request(request)
+    
+    # If token exists, try to call hire2inspire logout API
+    if token:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.post(
+                    "https://api.hire2inspire.com/api/agency/logout",
+                    headers={"Authorization": f"Bearer {token}"}
+                )
+                print(f"✅ Logout API called - Status: {response.status_code}")
+        except Exception as e:
+            # Don't fail logout if API call fails
+            print(f"⚠️ Logout API call failed (non-critical): {e}")
+    
+    # Create redirect response to signin page
+    response = RedirectResponse(
+        url="https://human2intelligence.com/signin/agency",
+        status_code=302
+    )
+    
+    # Clear the accessToken cookie
+    response.delete_cookie(
+        key="accessToken",
+        domain=".human2intelligence.com",
+        path="/"
+    )
+    
+    print(f"✅ User logged out successfully")
+    return response
+
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     """Root endpoint - redirect to dashboard"""
