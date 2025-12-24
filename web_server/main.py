@@ -158,66 +158,11 @@ async def auth_exception_handler(request: Request, exc: HTTPException):
                 content={"detail": exc.detail}
             )
 
-        # For dashboard/HTML requests, show a clear debug page (no redirect)
-        auth_header = request.headers.get("authorization") or request.headers.get("Authorization") or ""
-        has_auth = bool(auth_header.strip())
-        auth_scheme = auth_header.split(" ", 1)[0] if has_auth else ""
-
-        try:
-            cookie_names = list(request.cookies.keys())
-        except Exception:
-            cookie_names = []
-
-        content = f"""
-        <!doctype html>
-        <html lang="en">
-          <head>
-            <meta charset="utf-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1" />
-            <title>401 Unauthorized</title>
-            <style>
-              body {{ font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; padding: 24px; background: #0b1220; color: #e5e7eb; }}
-              .card {{ max-width: 920px; margin: 0 auto; background: #0f172a; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 20px; }}
-              h1 {{ margin: 0 0 8px; font-size: 20px; }}
-              p {{ color: #cbd5e1; line-height: 1.5; }}
-              code, pre {{ background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; }}
-              code {{ padding: 2px 6px; }}
-              pre {{ padding: 12px; overflow: auto; }}
-              .row {{ display: grid; grid-template-columns: 240px 1fr; gap: 10px; margin-top: 14px; }}
-              .k {{ color: #93c5fd; }}
-              .v {{ color: #e5e7eb; }}
-              .warn {{ color: #fbbf24; }}
-            </style>
-          </head>
-          <body>
-            <div class="card">
-              <h1>401 Unauthorized (Dashboard)</h1>
-              <p>{exc.detail}</p>
-              <p class="warn">Login redirect is disabled for debugging. Provide a valid JWT to access this page.</p>
-
-              <div class="row"><div class="k">Path</div><div class="v">{request.url.path}</div></div>
-              <div class="row"><div class="k">Authorization header present</div><div class="v">{str(has_auth)}</div></div>
-              <div class="row"><div class="k">Authorization scheme</div><div class="v">{auth_scheme}</div></div>
-              <div class="row"><div class="k">Cookie names received</div><div class="v">{', '.join(cookie_names) if cookie_names else '(none)'}</div></div>
-
-              <h2 style="margin-top:18px; font-size:16px;">Notes</h2>
-              <p>
-                If you type <code>/dashboard/</code> directly in the browser, the browser will NOT attach an <code>Authorization</code> header
-                unless you have a proxy/service-worker doing it. For browser SSO, use a cookie on <code>.human2intelligence.com</code>.
-              </p>
-              <p>
-                If frontend claims it sends <code>Authorization: Bearer &lt;token&gt;</code>, confirm in DevTools → Network that the header is
-                present on requests to <code>https://api.human2intelligence.com</code>.
-              </p>
-
-              <pre>curl -i \
-  -H "Authorization: Bearer &lt;ACCESS_TOKEN&gt;" \
-  "{request.url.scheme}://{request.url.netloc}{request.url.path}"</pre>
-            </div>
-          </body>
-        </html>
-        """
-        return HTMLResponse(status_code=401, content=content)
+        # For dashboard/HTML requests, redirect to agency signin page
+        return RedirectResponse(
+            url="https://human2intelligence.com/signin/agency",
+            status_code=302
+        )
 
     return JSONResponse(
         status_code=exc.status_code,
