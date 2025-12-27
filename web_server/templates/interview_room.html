@@ -845,13 +845,8 @@
                 container.style.background = '#000';
                 
                 // Create iframe directly with prebuilt Daily.co URL
-                // Add URL parameters to SKIP Daily's prejoin UI (auto-join without blocking modal)
-                const roomUrlWithParams = ROOM_URL.includes('?') 
-                    ? `${ROOM_URL}&showPreJoinUI=false` 
-                    : `${ROOM_URL}?showPreJoinUI=false`;
-                
                 const iframe = document.createElement('iframe');
-                iframe.src = roomUrlWithParams;
+                iframe.src = ROOM_URL;
                 iframe.style.width = '100%';
                 iframe.style.height = '100%';
                 iframe.style.border = 'none';

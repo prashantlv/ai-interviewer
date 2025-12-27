@@ -69,7 +69,7 @@ class DailyService:
                 "exp": self._calculate_expiry(room_exp_minutes),
                 "eject_at_room_exp": True,  # Eject participants when room expires
                 "owner_only_broadcast": False,  # Allow both bot and candidate to speak
-                "enable_prejoin_ui": True,  # Show prejoin UI for candidates
+                "enable_prejoin_ui": False,  # Disable prejoin UI - using custom proctoring page instead
             }
         }
         
