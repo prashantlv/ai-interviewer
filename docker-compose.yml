@@ -1,4 +1,4 @@
-version: '3.8'
+# version field is obsolete in Docker Compose v2 - removed
 
 services:
   # Redis for job queue
@@ -75,7 +75,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.worker
-    container_name: ai-interviewer-worker
+    # container_name removed - using replicas so Docker auto-generates unique names
     environment:
       - MONGODB_URL=mongodb://admin:${MONGO_PASSWORD:-changeme}@mongodb:27017/?authSource=admin
       - DATABASE_NAME=${DATABASE_NAME:-ai_interviewer}
