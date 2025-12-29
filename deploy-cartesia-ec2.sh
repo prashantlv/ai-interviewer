@@ -4,6 +4,7 @@
 # 
 # This script handles complete deployment including:
 # - Git pull latest code
+# - Port conflict detection and cleanup
 # - Cleanup of old bot processes
 # - Docker rebuild (no cache)
 # - Service startup with health checks
@@ -58,9 +59,54 @@ fi
 echo ""
 
 # ============================================
-# Step 3: Cleanup Old Bot Processes
+# Step 3: Check and Free Port Conflicts
 # ============================================
-echo -e "${YELLOW}🧹 Step 3: Cleaning up old bot processes...${NC}"
+echo -e "${YELLOW}🔌 Step 3: Checking for port conflicts...${NC}"
+
+# Check critical ports: 6379 (Redis), 27017 (MongoDB), 8009 (Web)
+PORTS_TO_CHECK=(6379 27017 8009)
+CONFLICTS_FOUND=0
+
+for PORT in "${PORTS_TO_CHECK[@]}"; do
+    if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
+        echo -e "   ${YELLOW}⚠️  Port $PORT is in use${NC}"
+        CONFLICTS_FOUND=1
+    fi
+done
+
+if [ $CONFLICTS_FOUND -eq 1 ]; then
+    echo ""
+    echo -e "${YELLOW}   Stopping all Docker containers to free ports...${NC}"
+    docker stop $(docker ps -aq) 2>/dev/null || true
+    sleep 3
+    
+    # Check again
+    STILL_IN_USE=0
+    for PORT in "${PORTS_TO_CHECK[@]}"; do
+        if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
+            echo -e "   ${RED}❌ Port $PORT still in use after stopping containers${NC}"
+            PID=$(lsof -Pi :$PORT -sTCP:LISTEN -t)
+            echo -e "   ${YELLOW}   PID: $PID${NC}"
+            STILL_IN_USE=1
+        fi
+    done
+    
+    if [ $STILL_IN_USE -eq 1 ]; then
+        echo ""
+        echo -e "${RED}❌ ERROR: Ports still in use. Manual cleanup required:${NC}"
+        echo "   Run: sudo lsof -i :6379 -i :27017 -i :8009"
+        echo "   Then: sudo kill -9 <PID>"
+        exit 1
+    fi
+fi
+
+echo -e "${GREEN}✅ All ports available${NC}"
+echo ""
+
+# ============================================
+# Step 4: Cleanup Old Bot Processes
+# ============================================
+echo -e "${YELLOW}🧹 Step 4: Cleaning up old bot processes...${NC}"
 
 # Kill all running ai-interviewer.py processes
 KILLED_PROCS=$(pkill -f "ai-interviewer.py" 2>/dev/null && echo "killed" || echo "none")
@@ -71,11 +117,11 @@ else
     echo "   No running bot processes found"
 fi
 
-# Clear Redis bot locks
+# Clear Redis bot locks (if Redis is accessible)
 if command -v redis-cli &> /dev/null; then
-    LOCKS_CLEARED=$(redis-cli --scan --pattern "bot_lock:*" | wc -l)
+    LOCKS_CLEARED=$(redis-cli --scan --pattern "bot_lock:*" 2>/dev/null | wc -l || echo "0")
     if [ "$LOCKS_CLEARED" -gt 0 ]; then
-        redis-cli --scan --pattern "bot_lock:*" | xargs -r redis-cli DEL > /dev/null 2>&1
+        redis-cli --scan --pattern "bot_lock:*" | xargs -r redis-cli DEL > /dev/null 2>&1 || true
         echo "   Cleared $LOCKS_CLEARED Redis bot locks"
     else
         echo "   No Redis locks to clear"
@@ -92,36 +138,38 @@ echo -e "${GREEN}✅ Cleanup complete${NC}"
 echo ""
 
 # ============================================
-# Step 4: Stop All Containers
+# Step 5: Stop All Containers
 # ============================================
-echo -e "${YELLOW}🛑 Step 4: Stopping all containers...${NC}"
-docker compose down -v
-docker rm -f $(docker ps -aq) 2>/dev/null || true
+echo -e "${YELLOW}🛑 Step 5: Stopping all containers...${NC}"
+docker compose down -v 2>/dev/null || true
+docker stop $(docker ps -aq) 2>/dev/null || true
+docker rm $(docker ps -aq) 2>/dev/null || true
+docker network prune -f > /dev/null 2>&1 || true
 echo -e "${GREEN}✅ Containers stopped and removed${NC}"
 echo ""
 
 # ============================================
-# Step 5: Remove Old Images
+# Step 6: Remove Old Images
 # ============================================
-echo -e "${YELLOW}🗑️  Step 5: Removing old Docker images...${NC}"
+echo -e "${YELLOW}🗑️  Step 6: Removing old Docker images...${NC}"
 docker rmi $(docker images -q 'ai-interviewer*' 2>/dev/null) 2>/dev/null || true
-docker system prune -f > /dev/null 2>&1
+docker system prune -f > /dev/null 2>&1 || true
 echo -e "${GREEN}✅ Old images removed${NC}"
 echo ""
 
 # ============================================
-# Step 6: Rebuild Docker Images (No Cache)
+# Step 7: Rebuild Docker Images (No Cache)
 # ============================================
-echo -e "${YELLOW}🔨 Step 6: Building Docker images (this may take 5-10 minutes)...${NC}"
+echo -e "${YELLOW}🔨 Step 7: Building Docker images (this may take 5-10 minutes)...${NC}"
 echo "   Building without cache to ensure latest code is used"
 docker compose build --no-cache
 echo -e "${GREEN}✅ Docker images built successfully${NC}"
 echo ""
 
 # ============================================
-# Step 7: Start Services
+# Step 8: Start Services
 # ============================================
-echo -e "${YELLOW}🚀 Step 7: Starting services...${NC}"
+echo -e "${YELLOW}🚀 Step 8: Starting services...${NC}"
 docker compose up -d
 echo "   Waiting for services to initialize..."
 sleep 10
@@ -129,9 +177,9 @@ echo -e "${GREEN}✅ Services started${NC}"
 echo ""
 
 # ============================================
-# Step 8: Health Checks
+# Step 9: Health Checks
 # ============================================
-echo -e "${YELLOW}🏥 Step 8: Running health checks...${NC}"
+echo -e "${YELLOW}🏥 Step 9: Running health checks...${NC}"
 echo ""
 
 # Check container status
@@ -178,9 +226,9 @@ fi
 echo ""
 
 # ============================================
-# Step 9: Verify Configuration
+# Step 10: Verify Configuration
 # ============================================
-echo -e "${YELLOW}⚙️  Step 9: Verifying configuration...${NC}"
+echo -e "${YELLOW}⚙️  Step 10: Verifying configuration...${NC}"
 echo ""
 
 echo "=== Environment Variables ==="
@@ -261,3 +309,4 @@ echo "docker compose down && docker compose build --no-cache && docker compose u
 echo ""
 echo -e "${GREEN}Deployment script completed successfully!${NC}"
 echo ""
+
