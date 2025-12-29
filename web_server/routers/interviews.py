@@ -2,6 +2,7 @@
 Interviews API Router - REST API endpoints for interview management
 """
 
+import os
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
