@@ -20,7 +20,7 @@ class DailyService:
     def __init__(self):
         self.api_key = os.getenv("DAILY_API_KEY")
         self.api_url = os.getenv("DAILY_API_URL", "https://api.daily.co/v1")
-        self.domain = os.getenv("DAILY_DOMAIN", "hi2inspire.daily.co")
+        self.domain = os.getenv("DAILY_DOMAIN", "human2intelligence.daily.co")
         
         if not self.api_key:
             logger.warning("⚠️ DAILY_API_KEY not set - room creation will fail")

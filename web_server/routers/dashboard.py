@@ -206,7 +206,8 @@ async def interviews_page(
                     join_url = room_url
                 else:
                     # Fallback: construct Daily.co URL from interview_id
-                    join_url = f"https://hi2inspire.daily.co/interview-{interview_id}"
+                    daily_domain = os.getenv("DAILY_DOMAIN", "human2intelligence.daily.co")
+                    join_url = f"https://{daily_domain}/interview-{interview_id}"
             
             interview_list.append({
                 "id": interview.get("id", "unknown"),
@@ -1007,10 +1008,11 @@ async def generate_interview_link(
         
         if not room_url:
             # Construct room URL if missing
+            daily_domain = os.getenv("DAILY_DOMAIN", "human2intelligence.daily.co")
             if room_name:
-                room_url = f"https://hi2inspire.daily.co/{room_name}"
+                room_url = f"https://{daily_domain}/{room_name}"
             else:
-                room_url = f"https://hi2inspire.daily.co/interview-{interview_id}"
+                room_url = f"https://{daily_domain}/interview-{interview_id}"
                 room_name = f"interview-{interview_id}"
         
         # Extract room_name from room_url if not stored

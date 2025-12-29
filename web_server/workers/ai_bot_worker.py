@@ -50,7 +50,8 @@ def start_interview_bot(interview_id: str, config: Optional[Dict[str, Any]] = No
             logger.info(f"📍 Using room URL from config: {room_url}")
         else:
             # Generate default room URL based on interview ID
-            room_url = f"https://hi2inspire.daily.co/interview-{interview_id}"
+            daily_domain = os.getenv("DAILY_DOMAIN", "human2intelligence.daily.co")
+            room_url = f"https://{daily_domain}/interview-{interview_id}"
             logger.info(f"📍 Generated room URL: {room_url}")
         
         # Build the command to start the AI bot

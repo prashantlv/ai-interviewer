@@ -61,9 +61,12 @@ async def test_interview_room(request: Request):
     api_base = str(request.base_url).rstrip('/')
     
 
+    daily_domain = os.getenv("DAILY_DOMAIN", "human2intelligence.daily.co")
+    test_room_url = f"https://{daily_domain}/test-proctoring"
+    
     interview_config = {
         "interview_id": "test-123",
-        "room_url": "https://hi2inspire.daily.co/test-proctoring",
+        "room_url": test_room_url,
         "candidate_name": "Test Candidate",
         "api_base": api_base
     }
@@ -73,7 +76,7 @@ async def test_interview_room(request: Request):
         {
             "request": request,
             "interview_id": "test-123",
-            "room_url": "https://hi2inspire.daily.co/test-proctoring",  # This won't connect but shows the UI
+            "room_url": test_room_url,  # This won't connect but shows the UI
             "candidate_name": "Test Candidate",
             "position": "Software Developer",
             "api_base": api_base,
@@ -108,7 +111,7 @@ async def interview_room(request: Request, interview_id: str):
     
     # Get room name and base URL (WITHOUT candidate token)
     room_name = evaluation.get("room_name") or interview.get("room_name", f"interview-{interview_id}")
-    daily_domain = os.getenv("DAILY_DOMAIN", "hi2inspire.daily.co")
+    daily_domain = os.getenv("DAILY_DOMAIN", "human2intelligence.daily.co")
     base_room_url = f"https://{daily_domain}/{room_name}"
     
     # Get candidate room URL (with candidate token for iframe)

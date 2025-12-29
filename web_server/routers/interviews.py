@@ -249,11 +249,12 @@ async def start_interview(interview_id: str):
     """Start an interview session"""
     # TODO: Notify Pipecat bot to start interview
     # TODO: Update interview status to "in_progress"
+    daily_domain = os.getenv("DAILY_DOMAIN", "human2intelligence.daily.co")
     return {
         "success": True,
         "interview_id": interview_id,
-        "bot_room_url": f"https://hi2inspire.daily.co/interview-{interview_id}",
-        "candidate_join_url": f"https://hi2inspire.daily.co/interview-{interview_id}?participant=candidate"
+        "bot_room_url": f"https://{daily_domain}/interview-{interview_id}",
+        "candidate_join_url": f"https://{daily_domain}/interview-{interview_id}?participant=candidate"
     }
 
 @router.post("/{interview_id}/complete")
