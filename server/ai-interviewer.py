@@ -813,9 +813,15 @@ async def run_bot(
     if quiet_frame:
         await task.queue_frame(quiet_frame)
 
-    @rtvi.event_handler("on_client_ready")
-    async def on_client_ready(rtvi):
-        await rtvi.set_bot_ready()
+    # Track if greeting has been sent (to prevent duplicates)
+    greeting_sent = False
+    
+    async def send_initial_greeting():
+        """Send initial greeting to start the conversation"""
+        nonlocal greeting_sent
+        if greeting_sent:
+            return
+        greeting_sent = True
         
         # Get candidate info for personalized greeting
         candidate_name = "there"
@@ -837,6 +843,11 @@ async def run_bot(
         
         # Kick off the conversation - LLM will respond to above message
         await task.queue_frames([LLMRunFrame()])
+    
+    @rtvi.event_handler("on_client_ready")
+    async def on_client_ready(rtvi):
+        await rtvi.set_bot_ready()
+        await send_initial_greeting()
 
     recording_context = {
         "room_name": room_name,
@@ -1108,7 +1119,7 @@ async def run_bot(
     
     @transport.event_handler("on_participant_joined")
     async def on_participant_joined_safety(_transport, participant):
-        nonlocal participant_joined, participant_left, participant_left_time
+        nonlocal participant_joined, participant_left, participant_left_time, greeting_sent
         # Check if this is a real participant (not the bot itself)
         participant_info = participant if isinstance(participant, dict) else {}
         user_name = participant_info.get("info", {}).get("userName", "") or participant_info.get("userName", "")
@@ -1117,6 +1128,13 @@ async def run_bot(
             participant_left = False  # Reset if they rejoin
             participant_left_time = None
             logger.info(f"👤 Real participant joined: {user_name}")
+            
+            # Fallback: If greeting hasn't been sent yet (on_client_ready didn't fire),
+            # trigger it now when the candidate joins
+            if not greeting_sent:
+                logger.info("🎯 Triggering greeting fallback (on_client_ready didn't fire)")
+                await asyncio.sleep(0.5)  # Small delay to let Tavus stabilize
+                await send_initial_greeting()
     
     async def safety_monitor():
         """Background task to monitor session duration, room expiry, and alone timeout"""

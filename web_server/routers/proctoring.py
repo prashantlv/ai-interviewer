@@ -148,7 +148,6 @@ async def interview_room(request: Request, interview_id: str):
             if interview_id in _bot_start_locks:
                 logger.info(f"⏸️ Bot start already in progress for interview: {interview_id} - skipping")
             else:
-                _bot_start_locks[interview_id] = True
                 try:
                     # Check by interview_id pattern
                     job_id_pattern = f"interview_{interview_id}"
@@ -159,22 +158,18 @@ async def interview_room(request: Request, interview_id: str):
                     if existing_job and job_status not in ["failed", "finished", None]:
                         logger.info(f"ℹ️ Bot already running for interview: {interview_id} (status: {job_status}) - skipping")
                     else:
+                        # Set lock BEFORE scheduling to prevent race condition
+                        _bot_start_locks[interview_id] = True
                         logger.info(f"🤖 Starting bot for interview: {interview_id}")
                         bot_result = bot_manager.schedule_interview(interview_id, config=bot_config)
                         logger.info(f"✅ Bot scheduled: {bot_result}")
+                        
+                        # Keep lock permanently - only cleared when interview ends or bot fails
+                        # Don't auto-remove after 5 seconds to prevent duplicate scheduling
                 except Exception as e:
-                    logger.error(f"⚠️ Error checking bot status: {e} - attempting to start anyway")
-                    try:
-                        bot_result = bot_manager.schedule_interview(interview_id, config=bot_config)
-                        logger.info(f"✅ Bot scheduled (after error): {bot_result}")
-                    except Exception as e2:
-                        logger.error(f"❌ Failed to start bot: {e2}")
-                finally:
-                    # Remove lock after 5 seconds (allows time for job to register)
-                    async def remove_lock():
-                        await asyncio.sleep(5)
-                        _bot_start_locks.pop(interview_id, None)
-                    asyncio.create_task(remove_lock())
+                    logger.error(f"❌ Failed to schedule bot: {e}")
+                    # Don't retry - just log the error to avoid duplicate bots
+                    # The lock is NOT set if scheduling fails, so next request can retry
     except Exception as e:
         logger.error(f"⚠️ Failed to start bot (continuing anyway): {e}")
     
