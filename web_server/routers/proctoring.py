@@ -17,6 +17,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from loguru import logger
+from redis import Redis
 
 from services.database import db_service  # Use the global connected instance
 from services.daily_service import daily_service  # For creating bot tokens
@@ -27,9 +28,9 @@ router = APIRouter(tags=["proctoring"])
 # Templates
 templates = Jinja2Templates(directory="templates")
 
-# Bot scheduling locks (prevent duplicate bot starts)
-_bot_start_locks: Dict[str, bool] = {}
-_lock_semaphore = asyncio.Semaphore(1)
+# Redis connection for distributed locking (shared across all web server workers)
+redis_client = Redis(host='localhost', port=6379, decode_responses=True)
+BOT_LOCK_TTL = 7200  # 2 hours - lock expires if bot crashes
 
 
 # ============= Pydantic Models =============
@@ -143,33 +144,34 @@ async def interview_room(request: Request, interview_id: str):
             "scoring_level": evaluation.get("scoring_level", "intermediate"),
         }
         
-        # Check if job already exists for this interview (prevent duplicates with lock)
-        async with _lock_semaphore:
-            if interview_id in _bot_start_locks:
-                logger.info(f"⏸️ Bot start already in progress for interview: {interview_id} - skipping")
-            else:
-                try:
-                    # Check by interview_id pattern
-                    job_id_pattern = f"interview_{interview_id}"
-                    existing_job = bot_manager.get_job_status(job_id_pattern)
-                    job_status = existing_job.get("status") if existing_job else None
-                    
-                    # Only start if no job exists or job has finished/failed
-                    if existing_job and job_status not in ["failed", "finished", None]:
-                        logger.info(f"ℹ️ Bot already running for interview: {interview_id} (status: {job_status}) - skipping")
-                    else:
-                        # Set lock BEFORE scheduling to prevent race condition
-                        _bot_start_locks[interview_id] = True
-                        logger.info(f"🤖 Starting bot for interview: {interview_id}")
-                        bot_result = bot_manager.schedule_interview(interview_id, config=bot_config)
-                        logger.info(f"✅ Bot scheduled: {bot_result}")
-                        
-                        # Keep lock permanently - only cleared when interview ends or bot fails
-                        # Don't auto-remove after 5 seconds to prevent duplicate scheduling
-                except Exception as e:
-                    logger.error(f"❌ Failed to schedule bot: {e}")
-                    # Don't retry - just log the error to avoid duplicate bots
-                    # The lock is NOT set if scheduling fails, so next request can retry
+        # Check if job already exists for this interview (prevent duplicates with Redis lock)
+        lock_key = f"bot_lock:{interview_id}"
+        
+        # Try to acquire Redis lock (atomic operation - works across all web server workers!)
+        lock_acquired = redis_client.set(lock_key, "locked", nx=True, ex=BOT_LOCK_TTL)
+        
+        if lock_acquired:
+            # We got the lock! Check if job exists and schedule if needed
+            try:
+                job_id = f"interview_{interview_id}"
+                existing_job = bot_manager.get_job_status(job_id)
+                job_status = existing_job.get("status") if existing_job else None
+                
+                # Only start if no job exists or job has finished/failed
+                if existing_job and job_status not in ["failed", "finished", None]:
+                    logger.info(f"ℹ️ Bot already running for interview: {interview_id} (status: {job_status}) - releasing lock")
+                    redis_client.delete(lock_key)  # Release lock since bot is already running
+                else:
+                    logger.info(f"🤖 Starting bot for interview: {interview_id}")
+                    bot_result = bot_manager.schedule_interview(interview_id, config=bot_config)
+                    logger.info(f"✅ Bot scheduled: {bot_result}")
+                    # Lock will auto-expire after BOT_LOCK_TTL or be cleared when interview ends
+            except Exception as e:
+                logger.error(f"❌ Failed to schedule bot: {e}")
+                redis_client.delete(lock_key)  # Release lock on error so retry is possible
+        else:
+            # Lock already held by another request/worker - bot is being scheduled or already running
+            logger.info(f"⏸️ Bot start already in progress for interview: {interview_id} - skipping (Redis lock held)")
     except Exception as e:
         logger.error(f"⚠️ Failed to start bot (continuing anyway): {e}")
     
@@ -430,6 +432,11 @@ async def end_interview(interview_id: str, request: Request):
                 }
             }
         )
+        
+        # Release Redis lock to allow cleanup/rerun if needed
+        lock_key = f"bot_lock:{interview_id}"
+        redis_client.delete(lock_key)
+        logger.info(f"🔓 Released bot lock for {interview_id}")
         
         if result.modified_count > 0:
             logger.info(f"✅ Interview {interview_id} marked as ended by candidate")
