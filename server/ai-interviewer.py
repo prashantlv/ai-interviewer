@@ -816,7 +816,26 @@ async def run_bot(
     @rtvi.event_handler("on_client_ready")
     async def on_client_ready(rtvi):
         await rtvi.set_bot_ready()
-        # Kick off the conversation
+        
+        # Get candidate info for personalized greeting
+        candidate_name = "there"
+        position = "this position"
+        if interview_config:
+            candidate_info = interview_config.get("candidate_info", {})
+            candidate_name = candidate_info.get("name", "there")
+            job_desc = interview_config.get("job_description", {})
+            position = job_desc.get("title", "this position")
+        
+        # Add initial user message to LLM context to trigger greeting
+        # This simulates the candidate "joining" and prompts the AI to speak first
+        context.add_message({
+            "role": "user",
+            "content": f"[Candidate {candidate_name} has joined the interview call for {position}. Begin the interview by greeting them.]"
+        })
+        
+        logger.info(f"🎙️ Bot ready - starting interview for {candidate_name}")
+        
+        # Kick off the conversation - LLM will respond to above message
         await task.queue_frames([LLMRunFrame()])
 
     recording_context = {

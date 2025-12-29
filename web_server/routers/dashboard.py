@@ -347,7 +347,17 @@ async def interview_detail(
             "duration": "N/A",
             "transcript": interview_result.get("transcript", "No transcript available"),
             "recording": interview_result.get("recording"),
-            "proctoring": interview_result.get("proctoring"),  # Proctoring data (violations, risk level, etc.)
+        # DEBUG: Check proctoring data
+        proctoring_data = interview_result.get("proctoring")
+        if proctoring_data:
+            print(f"✅ PROCTORING DATA FOUND for {interview_id}")
+            print(f"   Violations: {len(proctoring_data.get('violations', []))}")
+            print(f"   Risk Level: {proctoring_data.get('risk_level', 'N/A')}")
+            print(f"   Summary: {proctoring_data.get('summary', {})}")
+        else:
+            print(f"❌ NO PROCTORING DATA for interview {interview_id}")
+        
+        "proctoring": proctoring_data,  # Proctoring data (violations, risk level, etc.)
             "evaluation": {
                 "correctness": individual_scores.get("correctness", 0),
                 "terminology": individual_scores.get("terminology", 0),

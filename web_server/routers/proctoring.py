@@ -369,6 +369,15 @@ async def save_proctoring_summary(data: ProctoringSummary, request: Request):
         
         if result:
             logger.info(f"✅ Proctoring summary saved. Risk level: {risk_level}, Violations: {total_violations}")
+            
+            # VERIFY: Read back the data to confirm it was saved
+            verify_interview = await db.get_interview_result(data.interview_id)
+            if verify_interview and verify_interview.get("proctoring"):
+                logger.info(f"✅ VERIFIED: Proctoring data is in DB")
+                logger.info(f"   DB Risk Level: {verify_interview.get('proctoring', {}).get('risk_level')}")
+                logger.info(f"   DB Violations: {len(verify_interview.get('proctoring', {}).get('violations', []))}")
+            else:
+                logger.error(f"❌ FAILED: Proctoring data NOT found in DB after save!")
         else:
             logger.warning(f"⚠️ Proctoring update returned False for {data.interview_id}")
         
