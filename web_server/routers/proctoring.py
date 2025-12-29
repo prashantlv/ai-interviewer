@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from loguru import logger
 
 from services.database import db_service  # Use the global connected instance
+from services.daily_service import daily_service  # For creating bot tokens
 
 
 router = APIRouter(tags=["proctoring"])
@@ -105,23 +106,34 @@ async def interview_room(request: Request, interview_id: str):
     # Interview data is nested in "evaluation" sub-document
     evaluation = interview.get("evaluation", {})
     
-    # Get Daily.co room URL (prefer URL with token for authenticated access)
-    room_url = (
+    # Get room name and base URL (WITHOUT candidate token)
+    room_name = evaluation.get("room_name") or interview.get("room_name", f"interview-{interview_id}")
+    daily_domain = os.getenv("DAILY_DOMAIN", "hi2inspire.daily.co")
+    base_room_url = f"https://{daily_domain}/{room_name}"
+    
+    # Get candidate room URL (with candidate token for iframe)
+    candidate_room_url = (
         evaluation.get("daily_room_url_with_token") or 
         evaluation.get("room_url") or
         interview.get("daily_room_url_with_token") or 
-        interview.get("room_url")
+        interview.get("room_url") or
+        base_room_url
     )
-    if not room_url:
-        room_name = evaluation.get("room_name") or interview.get("room_name", f"interview-{interview_id}")
-        daily_domain = os.getenv("DAILY_DOMAIN", "hi2inspire.daily.co")
-        room_url = f"https://{daily_domain}/{room_name}"
     
     # Trigger bot to join when candidate opens the room (if not already running)
     try:
+        # Create BOT token (separate from candidate token)
+        bot_token = await daily_service.create_bot_token(room_name=room_name)
+        
+        # Bot joins with its own token (has "AI Interviewer Bot" as user_name)
+        bot_room_url = f"{base_room_url}?t={bot_token}" if bot_token else base_room_url
+        
+        logger.info(f"🤖 Bot URL: {bot_room_url[:50]}... (with bot token)")
+        logger.info(f"👤 Candidate URL: {candidate_room_url[:50]}... (with candidate token)")
+        
         # Build bot config from interview data
         bot_config = {
-            "room_url": room_url,
+            "room_url": bot_room_url,  # ← Now using BOT token!
             "interview_id": interview_id,
             "candidate_name": evaluation.get("candidate_name", "Candidate"),
             "position": evaluation.get("position", "Position"),
@@ -170,11 +182,11 @@ async def interview_room(request: Request, interview_id: str):
     # Get API base URL
     api_base = str(request.base_url).rstrip('/')
     
-    logger.info(f"✅ Serving interview room: candidate={candidate_name}, room={room_url}")
+    logger.info(f"✅ Serving interview room: candidate={candidate_name}, room={candidate_room_url}")
 
     interview_config = {
         "interview_id": interview_id,
-        "room_url": room_url,
+        "room_url": candidate_room_url,  # Candidate uses their own token
         "candidate_name": candidate_name,
         "api_base": api_base
     }
@@ -185,7 +197,7 @@ async def interview_room(request: Request, interview_id: str):
         {
             "request": request,
             "interview_id": interview_id,
-            "room_url": room_url,
+            "room_url": candidate_room_url,  # Candidate iframe URL
             "candidate_name": candidate_name,
             "position": position,
             "api_base": api_base,
