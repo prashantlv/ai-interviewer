@@ -43,22 +43,17 @@ services:
     container_name: ai-interviewer-web
     ports:
       - "8009:8009"
+    env_file:
+      - ./.env
+      - ./server/.env
     environment:
       - MONGODB_URL=${MONGODB_URL:-mongodb+srv://root:XejrWinDai6SUHJc@cluster0.1rbkzbp.mongodb.net/hire2inspire_dev_db?retryWrites=true&w=majority}
       - DATABASE_NAME=${DATABASE_NAME:-hire2inspire_dev_db}
       - REDIS_URL=redis://redis:6379/0
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - DAILY_API_KEY=${DAILY_API_KEY}
       - DAILY_DOMAIN=${DAILY_DOMAIN:-human2intelligence.daily.co}
-      - TAVUS_API_KEY=${TAVUS_API_KEY:-}
-      - TAVUS_REPLICA_ID=${TAVUS_REPLICA_ID:-}
-      - HEYGEN_API_KEY=${HEYGEN_API_KEY:-}
-      - HEYGEN_AVATAR_ID=${HEYGEN_AVATAR_ID:-}
       - VIDEO_SERVICE=${VIDEO_SERVICE:-tavus}
       - BOT_IMPLEMENTATION=${BOT_IMPLEMENTATION:-openai}
       - TTS_SERVICE=${TTS_SERVICE:-cartesia}
-      - CARTESIA_API_KEY=${CARTESIA_API_KEY:-}
-      - CARTESIA_VOICE_ID=${CARTESIA_VOICE_ID:-}
     volumes:
       - ./web_server:/app
       - ./server:/app/server
@@ -79,23 +74,18 @@ services:
       context: .
       dockerfile: Dockerfile.worker
     # container_name removed - using replicas so Docker auto-generates unique names
+    env_file:
+      - ./.env
+      - ./server/.env
     environment:
       - MONGODB_URL=${MONGODB_URL:-mongodb+srv://root:XejrWinDai6SUHJc@cluster0.1rbkzbp.mongodb.net/hire2inspire_dev_db?retryWrites=true&w=majority}
       - DATABASE_NAME=${DATABASE_NAME:-hire2inspire_dev_db}
       - REDIS_URL=redis://redis:6379/0
       - WEB_SERVER_URL=http://web-server:8009
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - DAILY_API_KEY=${DAILY_API_KEY}
       - DAILY_DOMAIN=${DAILY_DOMAIN:-human2intelligence.daily.co}
-      - TAVUS_API_KEY=${TAVUS_API_KEY:-}
-      - TAVUS_REPLICA_ID=${TAVUS_REPLICA_ID:-}
-      - HEYGEN_API_KEY=${HEYGEN_API_KEY:-}
-      - HEYGEN_AVATAR_ID=${HEYGEN_AVATAR_ID:-}
       - VIDEO_SERVICE=${VIDEO_SERVICE:-tavus}
       - BOT_IMPLEMENTATION=${BOT_IMPLEMENTATION:-openai}
       - TTS_SERVICE=${TTS_SERVICE:-cartesia}
-      - CARTESIA_API_KEY=${CARTESIA_API_KEY:-}
-      - CARTESIA_VOICE_ID=${CARTESIA_VOICE_ID:-}
     volumes:
       - ./web_server:/app/web_server
       - ./server:/app/server
