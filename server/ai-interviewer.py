@@ -287,29 +287,8 @@ if TTS_SERVICE == "cartesia":
 # Import video services based on configuration
 if VIDEO_SERVICE == "tavus":
     try:
-        from pipecat.services.tavus.video import TavusVideoService as _TavusVideoService
-        from pipecat.transports.tavus.transport import TavusTransportClient
-        from pipecat.transports.daily.transport import DailyParams
-        
-        # Monkey-patch TavusTransportClient to disable audio BEFORE transport creation
-        _original_init = TavusTransportClient.__init__
-        
-        def _patched_init(self, *args, **kwargs):
-            # Call original init
-            _original_init(self, *args, **kwargs)
-            
-            # Disable audio on the transport params BEFORE it starts
-            if hasattr(self, '_params') and self._params:
-                self._params.audio_out_enabled = False
-                logger.info("✅ Tavus audio disabled via monkey-patch - Cartesia handles audio")
-        
-        TavusTransportClient.__init__ = _patched_init
-        
-        # Use the original TavusVideoService (now with patched transport)
-        TavusVideoService = _TavusVideoService
-        
-        logger.info("🎥 Using Tavus service with audio disabled (Cartesia for audio)")
-        
+        from pipecat.services.tavus.video import TavusVideoService
+        logger.info("🎥 Using Tavus for video (Cartesia handles audio)")
     except ImportError:
         logger.error("Tavus integration not available. Install with: pip install pipecat-ai[tavus]")
         sys.exit(1)
@@ -1236,13 +1215,20 @@ async def bot(runner_args: RunnerArguments):
             "room_name": extract_room_name(room_url),
         }
         
+        # When using Tavus, disable audio output on main transport
+        # Tavus handles audio bundling with video internally
+        video_service_type = os.getenv("VIDEO_SERVICE", "none").lower()
+        audio_out = video_service_type != "tavus"
+        
+        logger.info(f"🔧 DailyTransport config: audio_out_enabled={audio_out} (VIDEO_SERVICE={video_service_type})")
+        
         transport = DailyTransport(
             runner_args.room_url,
             runner_args.token,
             "AI Interviewer Bot",
             params=DailyParams(
                 audio_in_enabled=True,
-                audio_out_enabled=True,
+                audio_out_enabled=audio_out,  # Disabled when using Tavus
                 video_out_enabled=True,
                 video_out_is_live=True,           # Real-time video streaming
                 video_out_width=video_width,
@@ -1307,6 +1293,13 @@ if __name__ == "__main__":
                     "room_name": extract_room_name(room_url),
                 }
                 
+                # When using Tavus, disable audio output on main transport
+                # Tavus handles audio bundling with video internally
+                video_service_type = os.getenv("VIDEO_SERVICE", "none").lower()
+                audio_out = video_service_type != "tavus"
+                
+                logger.info(f"🔧 DailyTransport config: audio_out_enabled={audio_out} (VIDEO_SERVICE={video_service_type})")
+                
                 # Create Daily transport
                 transport = DailyTransport(
                     room_url,
@@ -1314,7 +1307,7 @@ if __name__ == "__main__":
                     "AI Interviewer Bot",
                     params=DailyParams(
                         audio_in_enabled=True,
-                        audio_out_enabled=True,
+                        audio_out_enabled=audio_out,  # Disabled when using Tavus
                         video_out_enabled=True,
                         video_out_is_live=True,
                         video_out_width=video_width,
