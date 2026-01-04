@@ -288,24 +288,8 @@ if TTS_SERVICE == "cartesia":
 if VIDEO_SERVICE == "tavus":
     try:
         from pipecat.services.tavus.video import TavusVideoService
-        from pipecat.transports.tavus.transport import TavusTransportClient
         
-        # Monkey-patch TavusTransportClient to prevent duplicate audio track creation
-        # Issue: start() is called twice by Pipecat framework, causing "TrackNameAlreadyInUse" error
-        _original_start = TavusTransportClient.start
-        
-        async def _patched_start(self, *args, **kwargs):
-            # Track if we've already started to prevent duplicate audio track creation
-            if hasattr(self, '_audio_track_added') and self._audio_track_added:
-                logger.info("✅ Tavus transport already started - skipping duplicate start()")
-                return
-            
-            self._audio_track_added = True
-            await _original_start(self, *args, **kwargs)
-        
-        TavusTransportClient.start = _patched_start
-        
-        logger.info("🎥 Using Tavus for video (Cartesia audio) - with start() guard to prevent track conflict")
+        logger.info("🎥 Using Tavus for video (Cartesia handles audio)")
     except ImportError:
         logger.error("Tavus integration not available. Install with: pip install pipecat-ai[tavus]")
         sys.exit(1)
