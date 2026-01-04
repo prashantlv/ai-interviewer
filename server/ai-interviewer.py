@@ -513,6 +513,78 @@ class AITranscriptCollector(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
+class TextFrameChunker(FrameProcessor):
+    """
+    Batches streaming TextFrames (often word/token sized) into larger chunks
+    before sending to TTS. This prevents "broken" audio caused by generating
+    one TTS segment per word.
+    """
+
+    def __init__(
+        self,
+        *,
+        flush_on_chars: int = 140,
+        flush_on_silence_s: float = 0.45,
+    ):
+        super().__init__()
+        self._buf: str = ""
+        self._last_t: float = 0.0
+        self._flush_on_chars = flush_on_chars
+        self._flush_on_silence_s = flush_on_silence_s
+
+    def _now(self) -> float:
+        return time.time()
+
+    def _append(self, piece: str) -> None:
+        if not piece:
+            return
+        # Add spacing between streamed words/tokens when needed
+        if self._buf and not self._buf.endswith((" ", "\n")) and not piece.startswith((" ", "\n", ".", ",", "!", "?", ":", ";")):
+            self._buf += " "
+        self._buf += piece
+
+    def _should_flush(self, text: str) -> bool:
+        if not self._buf:
+            return False
+        if len(self._buf) >= self._flush_on_chars:
+            return True
+        if self._buf.endswith((".", "!", "?", "\n")):
+            return True
+        # If LLM paused, flush what we have so TTS starts speaking
+        if (self._now() - self._last_t) >= self._flush_on_silence_s:
+            return True
+        # Also flush if the incoming piece ends a sentence
+        if text.endswith((".", "!", "?", "\n")):
+            return True
+        return False
+
+    async def _flush(self, direction: FrameDirection) -> None:
+        out = self._buf.strip()
+        self._buf = ""
+        if out:
+            await self.push_frame(TextFrame(text=out), direction)
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+
+        # On end, flush any pending text
+        if isinstance(frame, EndFrame):
+            await self._flush(direction)
+            await self.push_frame(frame, direction)
+            return
+
+        if isinstance(frame, TextFrame):
+            text = (frame.text or "").strip()
+            self._last_t = self._now()
+            self._append(text)
+            if self._should_flush(text):
+                await self._flush(direction)
+            return
+
+        # pass-through everything else
+        await self.push_frame(frame, direction)
+
+
 class TranscriptCollector(FrameProcessor):
     """Collects conversation transcript for later analysis with advanced filtering."""
     
@@ -848,6 +920,7 @@ async def run_bot(
         # Pipeline for OpenAI with separate STT/TTS
         # user_collector BEFORE context_aggregator (to capture TranscriptionFrame)
         # ai_collector AFTER llm (to capture TextFrame)
+        text_chunker = TextFrameChunker()
         pipeline_processors = [
             transport.input(),
             stt,
@@ -855,7 +928,8 @@ async def run_bot(
             rtvi,
             context_aggregator.user(),
             llm,
-            ai_collector,  # Capture AI responses AFTER llm generates them
+            text_chunker,  # Batch streaming TextFrames to avoid word-by-word TTS
+            ai_collector,  # Capture AI responses AFTER llm generates them (now chunked)
             tts,
         ]
         
@@ -872,13 +946,15 @@ async def run_bot(
         
     else:  # BOT_IMPLEMENTATION == "gemini"
         # Pipeline for Gemini (built-in STT/TTS)
+        text_chunker = TextFrameChunker()
         pipeline_processors = [
             transport.input(),
             user_collector,  # Capture user speech
             rtvi,
             context_aggregator.user(),
             llm,
-            ai_collector,  # Capture AI responses
+            text_chunker,  # Batch streaming TextFrames to avoid word-by-word audio
+            ai_collector,  # Capture AI responses (now chunked)
         ]
         
         # Add video processing (Video services work with Gemini audio)
