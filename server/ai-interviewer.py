@@ -287,7 +287,25 @@ if TTS_SERVICE == "cartesia":
 # Import video services based on configuration
 if VIDEO_SERVICE == "tavus":
     try:
-        from pipecat.services.tavus.video import TavusVideoService
+        from pipecat.services.tavus.video import TavusVideoService as _TavusVideoService
+        from pipecat.transports.daily.transport import DailyParams
+        
+        # Wrapper class to disable Tavus audio (Cartesia handles audio instead)
+        class TavusVideoService(_TavusVideoService):
+            """Custom Tavus service that disables audio to prevent track conflicts with Cartesia"""
+            
+            async def start(self, frame):
+                """Override start to configure transport params before starting"""
+                await super().start(frame)
+                
+                # Disable audio output on Tavus transport (video only)
+                if hasattr(self, '_transport') and self._transport:
+                    if hasattr(self._transport, '_params'):
+                        self._transport._params.audio_out_enabled = False
+                        logger.info("✅ Tavus audio disabled - Cartesia will handle all audio")
+        
+        logger.info("🎥 Using custom Tavus service (video-only, Cartesia for audio)")
+        
     except ImportError:
         logger.error("Tavus integration not available. Install with: pip install pipecat-ai[tavus]")
         sys.exit(1)
