@@ -1216,10 +1216,11 @@ async def bot(runner_args: RunnerArguments):
             "room_name": extract_room_name(room_url),
         }
         
-        # Enable audio output - Cartesia audio goes directly to candidate
-        # Note: Tavus may log a non-fatal TrackNameAlreadyInUse error for its internal transport
+        # Audio output configuration based on video service
+        # When using Tavus: audio flows through Tavus for lip-sync (disable main transport audio)
+        # When NOT using Tavus: audio goes directly through main transport
         video_service_type = os.getenv("VIDEO_SERVICE", "none").lower()
-        audio_out = True  # Always enable audio output
+        audio_out = video_service_type != "tavus"  # Disable main audio when Tavus handles it
         
         logger.info(f"🔧 DailyTransport config: audio_out_enabled={audio_out} (VIDEO_SERVICE={video_service_type})")
         
@@ -1294,10 +1295,11 @@ if __name__ == "__main__":
                     "room_name": extract_room_name(room_url),
                 }
                 
-                # Enable audio output - Cartesia audio goes directly to candidate
-                # Note: Tavus may log a non-fatal TrackNameAlreadyInUse error for its internal transport
+                # Audio output configuration based on video service
+                # When using Tavus: audio flows through Tavus for lip-sync (disable main transport audio)
+                # When NOT using Tavus: audio goes directly through main transport
                 video_service_type = os.getenv("VIDEO_SERVICE", "none").lower()
-                audio_out = True  # Always enable audio output
+                audio_out = video_service_type != "tavus"  # Disable main audio when Tavus handles it
                 
                 logger.info(f"🔧 DailyTransport config: audio_out_enabled={audio_out} (VIDEO_SERVICE={video_service_type})")
                 
@@ -1328,16 +1330,8 @@ if __name__ == "__main__":
                 
                 logger.info("🚀 Starting bot in direct join mode...")
                 
-                # Temporarily disable video service for direct join to avoid conflicts
-                original_video_service = os.getenv("VIDEO_SERVICE")
-                os.environ["VIDEO_SERVICE"] = "none"
-                
-                try:
-                    await run_bot(transport, session, room_meta)
-                finally:
-                    # Restore original video service
-                    if original_video_service:
-                        os.environ["VIDEO_SERVICE"] = original_video_service
+                # Keep VIDEO_SERVICE enabled (e.g., tavus) for proper audio/video pipeline
+                await run_bot(transport, session, room_meta)
         
         # Run the async function
         asyncio.run(direct_join())
