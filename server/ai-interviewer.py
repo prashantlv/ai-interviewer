@@ -288,8 +288,26 @@ if TTS_SERVICE == "cartesia":
 if VIDEO_SERVICE == "tavus":
     try:
         from pipecat.services.tavus.video import TavusVideoService
+        from pipecat.transports.tavus.transport import TavusTransportClient
+        from pipecat.frames.base_frame import StartFrame
         
-        logger.info("🎥 Using Tavus for video (Cartesia handles audio)")
+        # Monkey-patch to prevent duplicate start() calls on Tavus's internal transport
+        # Issue: Pipecat calls start() twice, causing TrackNameAlreadyInUse error
+        _original_tavus_start = TavusTransportClient.start
+        
+        async def _guarded_tavus_start(self, frame: StartFrame):
+            # Skip if already started
+            if hasattr(self, '_tavus_started') and self._tavus_started:
+                logger.info("✅ Tavus already started - skipping duplicate start() call")
+                return
+            
+            self._tavus_started = True
+            logger.info("🎬 Starting Tavus transport (first call)")
+            await _original_tavus_start(self, frame)
+        
+        TavusTransportClient.start = _guarded_tavus_start
+        
+        logger.info("🎥 Using Tavus for video with start() guard (Cartesia handles audio)")
     except ImportError:
         logger.error("Tavus integration not available. Install with: pip install pipecat-ai[tavus]")
         sys.exit(1)
