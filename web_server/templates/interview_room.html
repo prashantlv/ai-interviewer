@@ -223,6 +223,49 @@
             margin-bottom: 4px;
         }
         
+        /* Camera Preview */
+        .camera-preview-container {
+            margin: 20px 0;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            aspect-ratio: 4/3;
+            max-height: 300px;
+        }
+        
+        .camera-preview-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .camera-preview-container .preview-status {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: white;
+            font-size: 0.9rem;
+        }
+        
+        .camera-preview-container .preview-status .icon {
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+        
+        .permission-error {
+            background: #fee;
+            border: 1px solid var(--danger);
+            border-radius: 8px;
+            padding: 12px;
+            margin: 12px 0;
+            color: var(--danger);
+            font-size: 0.85rem;
+            display: none;
+        }
+        
         .btn-primary {
             background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
             color: white;
@@ -379,12 +422,26 @@
                     </ul>
                 </div>
                 
+                <!-- Camera Preview -->
+                <div class="camera-preview-container" id="camera-preview-container">
+                    <video id="preview-video" autoplay muted playsinline></video>
+                    <div class="preview-status" id="preview-status">
+                        <div class="icon">📹</div>
+                        <div>Requesting camera access...</div>
+                    </div>
+                </div>
+                
+                <div class="permission-error" id="permission-error">
+                    <strong>⚠️ Permission Denied</strong><br>
+                    Please allow camera and microphone access to continue. Click the camera icon in your browser's address bar to grant permissions.
+                </div>
+                
                 <div class="warning-box">
                     <strong>⚠️ Proctoring Notice</strong>
                     This interview is monitored. Tab switches, window changes, and fullscreen exits will be recorded and may affect your evaluation.
                 </div>
                 
-                <button class="btn-primary" id="join-btn" onclick="startInterview()">
+                <button class="btn-primary" id="join-btn" onclick="startInterview()" disabled>
                     Join Interview
                 </button>
                 
@@ -439,6 +496,81 @@
         if (!INTERVIEW_ID || !ROOM_URL) {
             console.error('Missing required interview configuration', { INTERVIEW_ID, ROOM_URL, CANDIDATE_NAME, API_BASE });
         }
+        
+        // ============= CAMERA/MIC PREVIEW (Before Proctoring) =============
+        
+        let previewStream = null; // Store the preview stream to stop it later
+        
+        // Request camera/mic permissions immediately when page loads
+        async function requestPermissionsAndShowPreview() {
+            const previewVideo = document.getElementById('preview-video');
+            const previewStatus = document.getElementById('preview-status');
+            const permissionError = document.getElementById('permission-error');
+            const joinBtn = document.getElementById('join-btn');
+            
+            try {
+                console.log('📹 Requesting camera and microphone permissions...');
+                
+                // Request both camera and microphone
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: true
+                });
+                
+                // Store stream reference to stop it later
+                previewStream = stream;
+                
+                // Show preview
+                previewVideo.srcObject = stream;
+                previewStatus.style.display = 'none';
+                permissionError.style.display = 'none';
+                
+                // Enable join button
+                joinBtn.disabled = false;
+                joinBtn.textContent = 'Join Interview';
+                
+                console.log('✅ Camera and microphone access granted');
+                showToast('✅ Camera and microphone ready!', 'success');
+                
+            } catch (error) {
+                console.error('❌ Failed to get media permissions:', error);
+                
+                // Show error message
+                previewStatus.innerHTML = `
+                    <div class="icon">🚫</div>
+                    <div>Camera access required</div>
+                `;
+                permissionError.style.display = 'block';
+                
+                // Keep button disabled
+                joinBtn.disabled = true;
+                joinBtn.textContent = 'Camera Access Required';
+                
+                showToast('❌ Camera/microphone access denied', 'warning');
+            }
+        }
+        
+        // Stop preview stream before starting interview
+        function stopPreviewStream() {
+            if (previewStream) {
+                previewStream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log('🛑 Stopped preview track:', track.kind);
+                });
+                previewStream = null;
+            }
+        }
+        
+        // Start permission request when page loads (but BEFORE proctoring activates)
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('📄 Page loaded - requesting permissions (proctoring NOT active yet)');
+            requestPermissionsAndShowPreview();
+        });
+        
+        // ============= PROCTORING STATE =============
         
         // Proctoring State
         const proctoring = {
@@ -819,14 +951,18 @@
             spinner.style.display = 'block';
             
             try {
-                // Request fullscreen (optional)
+                // STEP 1: Stop preview stream (release camera/mic for Daily.co)
+                console.log('🛑 Stopping preview stream...');
+                stopPreviewStream();
+                
+                // STEP 2: Request fullscreen (optional)
                 try {
                     await requestFullscreen();
                 } catch (fsError) {
                     console.warn('Fullscreen not available:', fsError);
                 }
                 
-                // Start proctoring IMMEDIATELY (before iframe loads)
+                // STEP 3: Activate proctoring AFTER permissions are handled
                 proctoring.isActive = true;
                 proctoring.startTime = new Date().toISOString();
                 console.log('🛡️ PROCTORING ACTIVATED - isActive:', proctoring.isActive);
