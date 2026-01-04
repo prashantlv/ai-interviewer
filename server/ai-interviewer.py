@@ -319,6 +319,26 @@ if VIDEO_SERVICE == "tavus":
             logger.info("🩹 Applied Tavus start() idempotency guard to prevent duplicate audio track creation")
         except Exception as _exc:
             logger.warning(f"Could not apply Tavus start() guard (continuing): {_exc}")
+
+        class TavusVideoServicePassthrough(TavusVideoService):
+            """
+            Tavus needs the bot audio frames for lip-sync, but we also must deliver
+            those same audio frames to the main Daily output transport so the
+            candidate can actually hear the bot.
+            
+            Pipecat pipelines are linear; putting Tavus between TTS and Daily output
+            can swallow audio frames. This wrapper forwards StartFrame + any *Audio*
+            frames downstream after Tavus processes them.
+            """
+
+            async def process_frame(self, frame: Frame, direction: FrameDirection):
+                await super().process_frame(frame, direction)
+
+                # Ensure downstream processors (DailyOutputTransport) are started
+                # and receive bot audio frames even when Tavus is in the chain.
+                frame_name = frame.__class__.__name__
+                if frame_name == "StartFrame" or "Audio" in frame_name:
+                    await self.push_frame(frame, direction)
         
         logger.info("🎥 Using Tavus for video (Cartesia handles audio)")
     except ImportError:
@@ -723,7 +743,7 @@ async def run_bot(
             logger.error("TAVUS_REPLICA_ID is required when VIDEO_SERVICE=tavus")
             sys.exit(1)
             
-        video_service = TavusVideoService(
+        video_service = TavusVideoServicePassthrough(
             api_key=os.getenv("TAVUS_API_KEY"),
             replica_id=os.getenv("TAVUS_REPLICA_ID"),
             session=session,
