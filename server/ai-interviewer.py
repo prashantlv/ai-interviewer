@@ -586,6 +586,27 @@ class TextFrameChunker(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
+class InterruptionFrameFilter(FrameProcessor):
+    """
+    Prevent Pipecat's 'user started speaking' interruption frames from repeatedly
+    cutting bot audio mid-stream, which produces audible syllable-splitting
+    (e.g. 'He llo Jo hn').
+    
+    We keep raw audio frames flowing for STT; we only drop interruption *signal*
+    frames emitted by BaseInput.
+    """
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+
+        name = frame.__class__.__name__
+        if name in ("UserStartedSpeakingFrame", "UserStoppedSpeakingFrame"):
+            # Drop interruption signals to avoid chopping bot output audio
+            return
+
+        await self.push_frame(frame, direction)
+
+
 class TranscriptCollector(FrameProcessor):
     """Collects conversation transcript for later analysis with advanced filtering."""
     
@@ -924,9 +945,11 @@ async def run_bot(
         # Pipeline for OpenAI with separate STT/TTS
         # user_collector BEFORE context_aggregator (to capture TranscriptionFrame)
         # ai_collector AFTER llm (to capture TextFrame)
+        interruption_filter = InterruptionFrameFilter()
         text_chunker = TextFrameChunker()
         pipeline_processors = [
             transport.input(),
+            interruption_filter,
             stt,
             user_collector,  # Capture user speech BEFORE context consumes it
             rtvi,
@@ -950,9 +973,11 @@ async def run_bot(
         
     else:  # BOT_IMPLEMENTATION == "gemini"
         # Pipeline for Gemini (built-in STT/TTS)
+        interruption_filter = InterruptionFrameFilter()
         text_chunker = TextFrameChunker()
         pipeline_processors = [
             transport.input(),
+            interruption_filter,
             user_collector,  # Capture user speech
             rtvi,
             context_aggregator.user(),
