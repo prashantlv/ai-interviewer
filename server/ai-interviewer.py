@@ -422,7 +422,6 @@ if VIDEO_SERVICE == "tavus":
                 return await _orig_register(self, dest)
 
             TavusOutputTransport.register_audio_destination = _register_audio_destination_unique
->
             _orig_tavus_start = TavusTransportClient.start
 
             async def _tavus_start_once(self, *args, **kwargs):
