@@ -118,34 +118,25 @@ _cartesia_key = os.getenv("CARTESIA_API_KEY") or ""
 logger.info(f"🔑 CARTESIA_API_KEY present={bool(_cartesia_key)} len={len(_cartesia_key)}")
 
 # ---------------------------------------------------------------------------
-# Disable "user interruption" cutting bot audio mid-stream
+# NOTE on interruption handling / STT:
 #
-# Your logs show frequent:
-#   pipecat.transports.base_input:_handle_user_interruption - User started/stopped speaking
-# Those signals are used by Pipecat to interrupt bot audio playback, which can
-# produce audible syllable-splitting ("He llo Jo hn") and large perceived latency.
-# We still keep audio flowing for STT; we only disable the *interrupt* behavior.
+# Pipecat uses VAD "user started/stopped speaking" signals for end-of-turn and
+# (in some configs) STT segmentation. If we no-op the internal handler,
+# STT can stop producing TranscriptionFrames → bot appears "not listening".
+#
+# We avoid audio chopping by dropping the interruption *signal* frames later in
+# the pipeline (after STT) so STT still works.
+#
 # ---------------------------------------------------------------------------
-try:
-    import pipecat.transports.base_input as _pipecat_base_input
-
-    _patched = False
-
-    async def _noop_handle_user_interruption(self, *args, **kwargs):
-        return
-
-    for _cls_name in ("BaseInputTransport", "BaseInput"):
-        _cls = getattr(_pipecat_base_input, _cls_name, None)
-        if _cls is not None and hasattr(_cls, "_handle_user_interruption"):
-            setattr(_cls, "_handle_user_interruption", _noop_handle_user_interruption)
-            _patched = True
-
-    if _patched:
-        logger.info("🛑 Disabled Pipecat interruption handling (_handle_user_interruption) to prevent chopped bot audio")
-    else:
-        logger.warning("Could not patch Pipecat interruption handling (class not found). Continuing.")
-except Exception as _e:
-    logger.warning(f"Could not patch Pipecat interruption handling (continuing): {_e}")
+# IMPORTANT:
+# Do NOT monkey-patch Pipecat's `_handle_user_interruption` here.
+#
+# In practice it can break STT segmentation in `OpenAISTTService` (no transcripts),
+# which matches your current symptom: bot greets, then never "listens"/responds.
+#
+# We already prevent audio chopping by dropping interruption *signal* frames in
+# `InterruptionFrameFilter` (placed AFTER STT in the pipeline).
+# ---------------------------------------------------------------------------
 
 # Web server integration configuration
 # In Docker: the web service is reachable via the Compose service name `web-server`
@@ -377,16 +368,19 @@ if VIDEO_SERVICE == "tavus":
     try:
         from pipecat.services.tavus.video import TavusVideoService
 
+        # Tavus transport can be started twice by the framework lifecycle, which can
+        # attempt to add the same Daily custom audio track name ("stream") twice.
+        #
+        # Confirmed in your container: pipecat-ai 0.0.98 defaults TavusOutputTransport
+        # `_transport_destination = \"stream\"`. When registered twice, Daily errors:
+        #   TrackNameAlreadyInUse(\"stream\")
+        #
+        # Fix:
+        # - Generate a unique per-run destination: stream-{INTERVIEW_ID}-{suffix}
+        # - Patch BOTH TavusOutputTransport.register_audio_destination() and
+        #   TavusTransportClient.register_audio_destination() to rewrite \"stream\" -> unique
+        # - Make both registrations idempotent.
         try:
-            # IMPORTANT (confirmed in your running container):
-            # In pipecat-ai 0.0.98 the Tavus Daily custom audio track destination is
-            # hardcoded in TavusOutputTransport as "stream".
-            # That is exactly what triggers:
-            #   TrackNameAlreadyInUse("stream")
-            # and prevents Tavus from receiving the bot audio → lips don't move.
-            #
-            # Fix: Patch TavusOutputTransport to always use a unique destination per run,
-            # and rewrite any registration requests for "stream" to that unique value.
             from pipecat.transports.tavus.transport import TavusTransportClient, TavusOutputTransport
 
             def _make_tavus_dest() -> str:
@@ -409,28 +403,34 @@ if VIDEO_SERVICE == "tavus":
 
             TavusOutputTransport.__init__ = _out_init_unique_destination
 
-            _orig_register = TavusOutputTransport.register_audio_destination
+            _orig_out_register = TavusOutputTransport.register_audio_destination
 
-            async def _register_audio_destination_unique(self, destination: str):
-                # Idempotency: TavusOutputTransport.start() may call this twice in the same session.
-                # Daily will error TrackNameAlreadyInUse("stream") when attempting to add the same
-                # custom track twice. Skip duplicates.
+            async def _out_register_unique(self, destination: str):
                 if getattr(self, "_h2i_dest_registered", False):
                     logger.info("🎧 Tavus audio destination already registered - skipping duplicate register")
                     return
-
                 dest = _TAVUS_DEST if (destination == "stream" or not destination) else destination
-                try:
-                    self._transport_destination = dest
-                except Exception:
-                    pass
                 if destination != dest:
-                    logger.info(f"🎧 Rewriting Tavus audio destination '{destination}' -> '{dest}'")
-                await _orig_register(self, dest)
+                    logger.info(f"🎧 Rewriting Tavus transport destination '{destination}' -> '{dest}'")
+                await _orig_out_register(self, dest)
                 setattr(self, "_h2i_dest_registered", True)
-                return
 
-            TavusOutputTransport.register_audio_destination = _register_audio_destination_unique
+            TavusOutputTransport.register_audio_destination = _out_register_unique
+
+            _orig_client_register = TavusTransportClient.register_audio_destination
+
+            async def _client_register_unique(self, destination: str):
+                if getattr(self, "_h2i_client_dest_registered", False):
+                    logger.info("🎧 Tavus client audio destination already registered - skipping duplicate register")
+                    return
+                dest = _TAVUS_DEST if (destination == "stream" or not destination) else destination
+                if destination != dest:
+                    logger.info(f"🎧 Rewriting Tavus CLIENT destination '{destination}' -> '{dest}'")
+                await _orig_client_register(self, dest)
+                setattr(self, "_h2i_client_dest_registered", True)
+
+            TavusTransportClient.register_audio_destination = _client_register_unique
+
             _orig_tavus_start = TavusTransportClient.start
 
             async def _tavus_start_once(self, *args, **kwargs):
@@ -442,14 +442,13 @@ if VIDEO_SERVICE == "tavus":
                     logger.info(f"🎧 Tavus start() using destination: {getattr(self, '_transport_destination', None)}")
                     return await _orig_tavus_start(self, *args, **kwargs)
                 except Exception:
-                    # allow retry if first start failed
                     self._start_called = False
                     raise
 
             TavusTransportClient.start = _tavus_start_once
-            logger.info("🩹 Patched TavusOutputTransport destination + start() idempotency guard")
+            logger.info("🩹 Patched Tavus destinations + register idempotency + start() idempotency guard")
         except Exception as _exc:
-            logger.warning(f"Could not apply Tavus start() guard (continuing): {_exc}")
+            logger.warning(f"Could not apply Tavus transport patch (continuing): {_exc}")
 
         class TavusVideoServicePassthrough(TavusVideoService):
             """
@@ -699,18 +698,12 @@ class InterruptionFrameFilter(FrameProcessor):
 
 class SilenceBasedLLMTrigger(FrameProcessor):
     """
-    Trigger LLM runs from STT output without relying on UserStarted/StoppedSpeakingFrame.
+    Trigger an LLM run after the user stops talking, without relying on
+    UserStarted/StoppedSpeakingFrame reaching the context aggregator.
 
     Why:
-    - We intentionally suppress Pipecat's interruption frames to prevent bot audio
-      from being chopped mid-stream.
-    - Some context aggregators rely on those frames to detect end-of-turn and
-      queue an LLMRunFrame. If they're missing, the bot may never respond after
-      the candidate speaks.
-
-    Approach:
-    - Watch for TranscriptionFrame.
-    - After a short silence window with no new transcriptions, inject LLMRunFrame.
+    - We drop interruption signal frames (after STT) to prevent bot audio chopping.
+    - We still need a reliable end-of-turn trigger so the bot responds.
     """
 
     def __init__(self, *, silence_s: float = 0.9, min_text_len: int = 2):
@@ -732,8 +725,8 @@ class SilenceBasedLLMTrigger(FrameProcessor):
             try:
                 await asyncio.sleep(self._silence_s)
                 if self._pending_turn:
-                    logger.info(f"🟦 Turn detected (silence {self._silence_s:.2f}s) → queue LLMRunFrame")
                     self._pending_turn = False
+                    logger.info(f"🟦 Turn detected (silence {self._silence_s:.2f}s) → queue LLMRunFrame")
                     await self.push_frame(LLMRunFrame(), FrameDirection.DOWNSTREAM)
             except asyncio.CancelledError:
                 return
@@ -753,9 +746,7 @@ class SilenceBasedLLMTrigger(FrameProcessor):
         if isinstance(frame, TranscriptionFrame):
             text = (frame.text or "").strip()
             if len(text) >= self._min_text_len:
-                # Mark that we have user content that should trigger a response.
                 self._pending_turn = True
-                logger.debug(f"🟦 STT activity: '{text[:80]}' (pending_turn={self._pending_turn})")
                 self._schedule()
 
         await self.push_frame(frame, direction)
@@ -1108,9 +1099,9 @@ async def run_bot(
         pipeline_processors = [
             transport.input(),
             stt,
-            # Drop interruption signal frames AFTER STT so STT can still segment on VAD.
+            # Drop interruption signals AFTER STT so STT can still segment on VAD.
             interruption_filter,
-            llm_trigger,      # Turn-taking when interruption frames are suppressed
+            llm_trigger,
             user_collector,  # Capture user speech BEFORE context consumes it
             rtvi,
             context_aggregator.user(),
