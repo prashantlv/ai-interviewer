@@ -536,25 +536,19 @@ class TextFrameChunker(FrameProcessor):
         return time.time()
 
     def _append(self, piece: str) -> None:
-        if not piece:
-            return
-        # Add spacing between streamed words/tokens when needed
-        if self._buf and not self._buf.endswith((" ", "\n")) and not piece.startswith((" ", "\n", ".", ",", "!", "?", ":", ";")):
-            self._buf += " "
-        self._buf += piece
+        # IMPORTANT: Do NOT strip tokens and do NOT auto-insert spaces.
+        # OpenAI streaming tokens often include leading whitespace to preserve
+        # word boundaries. Stripping/re-spacing causes "Pr ash ant" artifacts.
+        if piece:
+            self._buf += piece
 
     def _should_flush(self, text: str) -> bool:
         if not self._buf:
             return False
-        if len(self._buf) >= self._flush_on_chars:
+        tail = self._buf.rstrip()
+        if len(tail) >= self._flush_on_chars:
             return True
-        if self._buf.endswith((".", "!", "?", "\n")):
-            return True
-        # If LLM paused, flush what we have so TTS starts speaking
-        if (self._now() - self._last_t) >= self._flush_on_silence_s:
-            return True
-        # Also flush if the incoming piece ends a sentence
-        if text.endswith((".", "!", "?", "\n")):
+        if tail.endswith((".", "!", "?", "\n")):
             return True
         return False
 
@@ -574,9 +568,16 @@ class TextFrameChunker(FrameProcessor):
             return
 
         if isinstance(frame, TextFrame):
-            text = (frame.text or "").strip()
-            self._last_t = self._now()
+            now = self._now()
+            # If there was a pause since the last token, flush what we had so far
+            # BEFORE appending the new token.
+            if self._buf and self._last_t and (now - self._last_t) >= self._flush_on_silence_s:
+                await self._flush(direction)
+
+            text = frame.text or ""  # preserve original whitespace
             self._append(text)
+            self._last_t = now
+
             if self._should_flush(text):
                 await self._flush(direction)
             return
