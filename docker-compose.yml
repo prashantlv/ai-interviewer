@@ -16,24 +16,24 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # MongoDB database
-  mongodb:
-    image: mongo:7
-    container_name: ai-interviewer-mongodb
-    ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-changeme}
-      MONGO_INITDB_DATABASE: ${DATABASE_NAME:-ai_interviewer}
-    volumes:
-      - mongodb-data:/data/db
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
+  # MongoDB database - DISABLED (using Atlas cloud)
+  # mongodb:
+  #   image: mongo:7
+  #   container_name: ai-interviewer-mongodb
+  #   ports:
+  #     - "27017:27017"
+  #   environment:
+  #     MONGO_INITDB_ROOT_USERNAME: admin
+  #     MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-changeme}
+  #     MONGO_INITDB_DATABASE: ${DATABASE_NAME:-ai_interviewer}
+  #   volumes:
+  #     - mongodb-data:/data/db
+  #   healthcheck:
+  #     test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   restart: unless-stopped
 
   # Web Server (FastAPI)
   web-server:
@@ -44,25 +44,27 @@ services:
     ports:
       - "8009:8009"
     environment:
-      - MONGODB_URL=mongodb://admin:${MONGO_PASSWORD:-changeme}@mongodb:27017/?authSource=admin
-      - DATABASE_NAME=${DATABASE_NAME:-ai_interviewer}
+      - MONGODB_URL=${MONGODB_URL:-mongodb+srv://root:XejrWinDai6SUHJc@cluster0.1rbkzbp.mongodb.net/hire2inspire_dev_db?retryWrites=true&w=majority}
+      - DATABASE_NAME=${DATABASE_NAME:-hire2inspire_dev_db}
       - REDIS_URL=redis://redis:6379/0
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DAILY_API_KEY=${DAILY_API_KEY}
+      - DAILY_DOMAIN=${DAILY_DOMAIN:-human2intelligence.daily.co}
       - TAVUS_API_KEY=${TAVUS_API_KEY:-}
       - TAVUS_REPLICA_ID=${TAVUS_REPLICA_ID:-}
       - HEYGEN_API_KEY=${HEYGEN_API_KEY:-}
       - HEYGEN_AVATAR_ID=${HEYGEN_AVATAR_ID:-}
       - VIDEO_SERVICE=${VIDEO_SERVICE:-none}
       - BOT_IMPLEMENTATION=${BOT_IMPLEMENTATION:-openai}
+      - CARTESIA_API_KEY=${CARTESIA_API_KEY:-}
+      - CARTESIA_VOICE_ID=${CARTESIA_VOICE_ID:-}
     volumes:
       - ./web_server:/app
       - ./server:/app/server
     depends_on:
       redis:
         condition: service_healthy
-      mongodb:
-        condition: service_healthy
+      # mongodb removed - using Atlas
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8009/health"]
@@ -77,26 +79,28 @@ services:
       dockerfile: Dockerfile.worker
     # container_name removed - using replicas so Docker auto-generates unique names
     environment:
-      - MONGODB_URL=mongodb://admin:${MONGO_PASSWORD:-changeme}@mongodb:27017/?authSource=admin
-      - DATABASE_NAME=${DATABASE_NAME:-ai_interviewer}
+      - MONGODB_URL=${MONGODB_URL:-mongodb+srv://root:XejrWinDai6SUHJc@cluster0.1rbkzbp.mongodb.net/hire2inspire_dev_db?retryWrites=true&w=majority}
+      - DATABASE_NAME=${DATABASE_NAME:-hire2inspire_dev_db}
       - REDIS_URL=redis://redis:6379/0
       - WEB_SERVER_URL=http://web-server:8009
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DAILY_API_KEY=${DAILY_API_KEY}
+      - DAILY_DOMAIN=${DAILY_DOMAIN:-human2intelligence.daily.co}
       - TAVUS_API_KEY=${TAVUS_API_KEY:-}
       - TAVUS_REPLICA_ID=${TAVUS_REPLICA_ID:-}
       - HEYGEN_API_KEY=${HEYGEN_API_KEY:-}
       - HEYGEN_AVATAR_ID=${HEYGEN_AVATAR_ID:-}
       - VIDEO_SERVICE=${VIDEO_SERVICE:-none}
       - BOT_IMPLEMENTATION=${BOT_IMPLEMENTATION:-openai}
+      - CARTESIA_API_KEY=${CARTESIA_API_KEY:-}
+      - CARTESIA_VOICE_ID=${CARTESIA_VOICE_ID:-}
     volumes:
       - ./web_server:/app/web_server
       - ./server:/app/server
     depends_on:
       redis:
         condition: service_healthy
-      mongodb:
-        condition: service_healthy
+      # mongodb removed - using Atlas
       web-server:
         condition: service_healthy
     restart: unless-stopped
@@ -105,5 +109,4 @@ services:
 
 volumes:
   redis-data:
-  mongodb-data:
-
+  # mongodb-data:  # Not needed - using Atlas
