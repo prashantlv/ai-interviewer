@@ -792,7 +792,10 @@ async def run_bot(
                 api_key=os.getenv("CARTESIA_API_KEY"),
                 voice_id=os.getenv("CARTESIA_VOICE_ID", "a0e99841-438c-4a64-b679-ae501e7d6091"),
                 model=os.getenv("CARTESIA_MODEL", "sonic-english"),
-                sample_rate=16000,  # Match audio pipeline
+                # IMPORTANT:
+                # Daily/WebRTC output runs at 48kHz. Using 16kHz here can cause audible
+                # "stuttering"/gaps (e.g. "He llo Jo hn") due to timing/packetization.
+                sample_rate=48000,
             )
             logger.info(f"✅ Initialized Cartesia TTS (WebSocket) with voice: {os.getenv('CARTESIA_VOICE_ID', 'default')}")
         else:
