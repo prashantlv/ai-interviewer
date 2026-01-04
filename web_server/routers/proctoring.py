@@ -29,7 +29,8 @@ router = APIRouter(tags=["proctoring"])
 templates = Jinja2Templates(directory="templates")
 
 # Redis connection for distributed locking (shared across all web server workers)
-redis_client = Redis(host='localhost', port=6379, decode_responses=True)
+# Use 'redis' hostname in Docker, 'localhost' for local dev
+redis_client = Redis(host=os.getenv('REDIS_HOST', 'redis'), port=6379, decode_responses=True)
 BOT_LOCK_TTL = 7200  # 2 hours - lock expires if bot crashes
 
 
