@@ -59,6 +59,33 @@ from pipecat.runner.types import RunnerArguments
 from pipecat.transports.base_transport import BaseTransport
 from pipecat.transports.daily.transport import DailyParams, DailyTransport
 
+# ---------------------------------------------------------------------------
+# Fix "cracking"/syllable-splitting by increasing output audio chunk size.
+#
+# Pipecat BaseOutputTransport chunks outgoing PCM before writing to Daily.
+# Some environments crackle badly with the default chunk size; setting it to
+# 6400 bytes has been reported to solve it (matches the snippet you shared).
+# ---------------------------------------------------------------------------
+try:
+    import pipecat.transports.base_output as _pipecat_base_output
+
+    _orig_start = getattr(_pipecat_base_output.BaseOutputTransport, "start", None)
+
+    if _orig_start is not None and not getattr(_pipecat_base_output.BaseOutputTransport, "_chunk_patch_applied", False):
+        async def _patched_start(self, frame, *args, **kwargs):
+            res = await _orig_start(self, frame, *args, **kwargs)
+            try:
+                self._audio_chunk_size = 6400
+                logger.info("🔊 Patched BaseOutputTransport._audio_chunk_size = 6400 (reduce crackling)")
+            except Exception as _e:
+                logger.warning(f"Failed to set _audio_chunk_size (continuing): {_e}")
+            return res
+
+        _pipecat_base_output.BaseOutputTransport.start = _patched_start
+        _pipecat_base_output.BaseOutputTransport._chunk_patch_applied = True
+except Exception as _e:
+    logger.warning(f"Could not patch BaseOutputTransport chunk size (continuing): {_e}")
+
 # IMPORTANT:
 # - In Docker Compose, environment variables are injected by the container runtime.
 # - We must NOT override them from a local `.env` file inside the image (that would
