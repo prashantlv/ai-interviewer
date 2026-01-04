@@ -366,111 +366,9 @@ if TTS_SERVICE == "cartesia":
 # Import video services based on configuration
 if VIDEO_SERVICE == "tavus":
     try:
+        # Use Pipecat's Tavus integration as-is (no runtime monkey patches).
         from pipecat.services.tavus.video import TavusVideoService
-
-        # Tavus transport can be started twice by the framework lifecycle, which can
-        # attempt to add the same Daily custom audio track name ("stream") twice.
-        #
-        # Confirmed in your container: pipecat-ai 0.0.98 defaults TavusOutputTransport
-        # `_transport_destination = \"stream\"`. When registered twice, Daily errors:
-        #   TrackNameAlreadyInUse(\"stream\")
-        #
-        # Fix:
-        # - Generate a unique per-run destination: stream-{INTERVIEW_ID}-{suffix}
-        # - Patch BOTH TavusOutputTransport.register_audio_destination() and
-        #   TavusTransportClient.register_audio_destination() to rewrite \"stream\" -> unique
-        # - Make both registrations idempotent.
-        try:
-            from pipecat.transports.tavus.transport import TavusTransportClient, TavusOutputTransport
-
-            def _make_tavus_dest() -> str:
-                interview_id = os.getenv("INTERVIEW_ID", "default")
-                safe = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in interview_id)
-                suffix = uuid.uuid4().hex[:6]
-                return f"stream-{safe}-{suffix}"[:48]
-
-            _TAVUS_DEST = _make_tavus_dest()
-
-            _orig_out_init = TavusOutputTransport.__init__
-
-            def _out_init_unique_destination(self, *args, **kwargs):
-                _orig_out_init(self, *args, **kwargs)
-                try:
-                    self._transport_destination = _TAVUS_DEST
-                    logger.info(f"🎧 TavusOutputTransport destination set to: {self._transport_destination}")
-                except Exception as _e:
-                    logger.warning(f"Failed to set TavusOutputTransport destination (continuing): {_e}")
-
-            TavusOutputTransport.__init__ = _out_init_unique_destination
-
-            _orig_out_register = TavusOutputTransport.register_audio_destination
-
-            async def _out_register_unique(self, destination: str):
-                if getattr(self, "_h2i_dest_registered", False):
-                    logger.info("🎧 Tavus audio destination already registered - skipping duplicate register")
-                    return
-                dest = _TAVUS_DEST if (destination == "stream" or not destination) else destination
-                if destination != dest:
-                    logger.info(f"🎧 Rewriting Tavus transport destination '{destination}' -> '{dest}'")
-                await _orig_out_register(self, dest)
-                setattr(self, "_h2i_dest_registered", True)
-
-            TavusOutputTransport.register_audio_destination = _out_register_unique
-
-            _orig_client_register = TavusTransportClient.register_audio_destination
-
-            async def _client_register_unique(self, destination: str):
-                if getattr(self, "_h2i_client_dest_registered", False):
-                    logger.info("🎧 Tavus client audio destination already registered - skipping duplicate register")
-                    return
-                dest = _TAVUS_DEST if (destination == "stream" or not destination) else destination
-                if destination != dest:
-                    logger.info(f"🎧 Rewriting Tavus CLIENT destination '{destination}' -> '{dest}'")
-                await _orig_client_register(self, dest)
-                setattr(self, "_h2i_client_dest_registered", True)
-
-            TavusTransportClient.register_audio_destination = _client_register_unique
-
-            _orig_tavus_start = TavusTransportClient.start
-
-            async def _tavus_start_once(self, *args, **kwargs):
-                if getattr(self, "_start_called", False):
-                    logger.info("✅ TavusTransportClient.start already called - skipping duplicate start()")
-                    return
-                self._start_called = True
-                try:
-                    logger.info(f"🎧 Tavus start() using destination: {getattr(self, '_transport_destination', None)}")
-                    return await _orig_tavus_start(self, *args, **kwargs)
-                except Exception:
-                    self._start_called = False
-                    raise
-
-            TavusTransportClient.start = _tavus_start_once
-            logger.info("🩹 Patched Tavus destinations + register idempotency + start() idempotency guard")
-        except Exception as _exc:
-            logger.warning(f"Could not apply Tavus transport patch (continuing): {_exc}")
-
-        class TavusVideoServicePassthrough(TavusVideoService):
-            """
-            Tavus needs the bot audio frames for lip-sync, but we also must deliver
-            those same audio frames to the main Daily output transport so the
-            candidate can actually hear the bot.
-            
-            Pipecat pipelines are linear; putting Tavus between TTS and Daily output
-            can swallow audio frames. This wrapper forwards StartFrame + any *Audio*
-            frames downstream after Tavus processes them.
-            """
-
-            async def process_frame(self, frame: Frame, direction: FrameDirection):
-                await super().process_frame(frame, direction)
-
-                # Ensure downstream processors (DailyOutputTransport) are started
-                # and receive bot audio frames even when Tavus is in the chain.
-                frame_name = frame.__class__.__name__
-                if frame_name == "StartFrame" or "Audio" in frame_name:
-                    await self.push_frame(frame, direction)
-        
-        logger.info("🎥 Using Tavus for video (Cartesia handles audio)")
+        logger.info("🎥 Using Tavus for video")
     except ImportError:
         logger.error("Tavus integration not available. Install with: pip install pipecat-ai[tavus]")
         sys.exit(1)
@@ -1010,12 +908,9 @@ async def run_bot(
     context = OpenAILLMContext(messages)
     context_aggregator = llm.create_context_aggregator(context)
     
-    # Transcript collection temporarily disabled due to pipeline issues
-    # Initialize transcript collection
+    # Initialize transcript collection (with echo filtering to prevent bot self-loops)
     interview_transcript = []
-    # Two collectors: one for user speech (before context), one for AI (after LLM)
-    user_collector = UserTranscriptCollector(interview_transcript)
-    ai_collector = AITranscriptCollector(interview_transcript)
+    transcript_collector = TranscriptCollector(interview_transcript)
     
     # Initialize RTVI processor
     rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
@@ -1030,7 +925,7 @@ async def run_bot(
             logger.error("TAVUS_REPLICA_ID is required when VIDEO_SERVICE=tavus")
             sys.exit(1)
             
-        video_service = TavusVideoServicePassthrough(
+        video_service = TavusVideoService(
             api_key=os.getenv("TAVUS_API_KEY"),
             replica_id=os.getenv("TAVUS_REPLICA_ID"),
             session=session,
@@ -1087,27 +982,18 @@ async def run_bot(
 
     # Build pipeline based on configuration
     if BOT_IMPLEMENTATION == "openai":
-        # Pipeline for OpenAI with separate STT/TTS
-        # user_collector BEFORE context_aggregator (to capture TranscriptionFrame)
-        # ai_collector AFTER llm (to capture TextFrame)
-        interruption_filter = InterruptionFrameFilter()
-        llm_trigger = SilenceBasedLLMTrigger(
-            silence_s=float(os.getenv("TURN_SILENCE_SECONDS", "0.9")),
-            min_text_len=int(os.getenv("TURN_MIN_TEXT_LEN", "2")),
-        )
+        # Pipeline for OpenAI with separate STT/TTS (Pipecat-native turn-taking).
+        # Important: use TranscriptCollector to filter candidate echo of AI, preventing
+        # the bot from "answering its own question" in speaker-echo scenarios.
         text_chunker = TextFrameChunker()
         pipeline_processors = [
             transport.input(),
             stt,
-            # Drop interruption signals AFTER STT so STT can still segment on VAD.
-            interruption_filter,
-            llm_trigger,
-            user_collector,  # Capture user speech BEFORE context consumes it
             rtvi,
             context_aggregator.user(),
             llm,
             text_chunker,  # Batch streaming TextFrames to avoid word-by-word TTS
-            ai_collector,  # Capture AI responses AFTER llm generates them (now chunked)
+            transcript_collector,  # Capture + filter BOTH user transcriptions and AI responses
             tts,
         ]
         
@@ -1124,17 +1010,14 @@ async def run_bot(
         
     else:  # BOT_IMPLEMENTATION == "gemini"
         # Pipeline for Gemini (built-in STT/TTS)
-        interruption_filter = InterruptionFrameFilter()
         text_chunker = TextFrameChunker()
         pipeline_processors = [
             transport.input(),
-            interruption_filter,
-            user_collector,  # Capture user speech
             rtvi,
             context_aggregator.user(),
             llm,
             text_chunker,  # Batch streaming TextFrames to avoid word-by-word audio
-            ai_collector,  # Capture AI responses (now chunked)
+            transcript_collector,  # Capture + filter user/AI
         ]
         
         # Add video processing (Video services work with Gemini audio)
@@ -1160,48 +1043,16 @@ async def run_bot(
         observers=[RTVIObserver(rtvi)],
     )
 
-    # Queue StartFrame first to initialize the pipeline (required before processing audio frames)
-    await task.queue_frame(StartFrame())    
-
     # Queue initial frame if available
     if quiet_frame:
         await task.queue_frame(quiet_frame)
-
-    # Track if greeting has been sent (to prevent duplicates)
-    greeting_sent = False
-    
-    async def send_initial_greeting():
-        """Send initial greeting to start the conversation"""
-        nonlocal greeting_sent
-        if greeting_sent:
-            return
-        greeting_sent = True
-        
-        # Get candidate info for personalized greeting
-        candidate_name = "there"
-        position = "this position"
-        if interview_config:
-            candidate_info = interview_config.get("candidate_info", {})
-            candidate_name = candidate_info.get("name", "there")
-            job_desc = interview_config.get("job_description", {})
-            position = job_desc.get("title", "this position")
-        
-        # Add initial user message to LLM context to trigger greeting
-        # This simulates the candidate "joining" and prompts the AI to speak first
-        context.add_message({
-            "role": "user",
-            "content": f"[Candidate {candidate_name} has joined the interview call for {position}. Begin the interview by greeting them.]"
-        })
-        
-        logger.info(f"🎙️ Bot ready - starting interview for {candidate_name}")
-        
-        # Kick off the conversation - LLM will respond to above message
-        await task.queue_frames([LLMRunFrame()])
     
     @rtvi.event_handler("on_client_ready")
     async def on_client_ready(rtvi):
         await rtvi.set_bot_ready()
-        await send_initial_greeting()
+        # Kick off the conversation; the system prompt already instructs the
+        # model to greet and start Q1.
+        await task.queue_frames([LLMRunFrame()])
 
     recording_context = {
         "room_name": room_name,
@@ -1473,7 +1324,7 @@ async def run_bot(
     
     @transport.event_handler("on_participant_joined")
     async def on_participant_joined_safety(_transport, participant):
-        nonlocal participant_joined, participant_left, participant_left_time, greeting_sent
+        nonlocal participant_joined, participant_left, participant_left_time
         # Check if this is a real participant (not the bot itself)
         participant_info = participant if isinstance(participant, dict) else {}
         user_name = participant_info.get("info", {}).get("userName", "") or participant_info.get("userName", "")
@@ -1482,13 +1333,6 @@ async def run_bot(
             participant_left = False  # Reset if they rejoin
             participant_left_time = None
             logger.info(f"👤 Real participant joined: {user_name}")
-            
-            # Fallback: If greeting hasn't been sent yet (on_client_ready didn't fire),
-            # trigger it now when the candidate joins
-            if not greeting_sent:
-                logger.info("🎯 Triggering greeting fallback (on_client_ready didn't fire)")
-                await asyncio.sleep(0.5)  # Small delay to let Tavus stabilize
-                await send_initial_greeting()
     
     async def safety_monitor():
         """Background task to monitor session duration, room expiry, and alone timeout"""
