@@ -27,6 +27,7 @@ import aiohttp
 import json
 from urllib.parse import urlparse
 from typing import Dict, Any, Optional
+import re
 
 from dotenv import load_dotenv, dotenv_values
 from loguru import logger
@@ -86,6 +87,36 @@ for _k in ("CARTESIA_API_KEY", "OPENAI_API_KEY", "DAILY_API_KEY", "TAVUS_API_KEY
 # Minimal visibility for debugging (never print the key itself)
 _cartesia_key = os.getenv("CARTESIA_API_KEY") or ""
 logger.info(f"🔑 CARTESIA_API_KEY present={bool(_cartesia_key)} len={len(_cartesia_key)}")
+
+# ---------------------------------------------------------------------------
+# Disable "user interruption" cutting bot audio mid-stream
+#
+# Your logs show frequent:
+#   pipecat.transports.base_input:_handle_user_interruption - User started/stopped speaking
+# Those signals are used by Pipecat to interrupt bot audio playback, which can
+# produce audible syllable-splitting ("He llo Jo hn") and large perceived latency.
+# We still keep audio flowing for STT; we only disable the *interrupt* behavior.
+# ---------------------------------------------------------------------------
+try:
+    import pipecat.transports.base_input as _pipecat_base_input
+
+    _patched = False
+
+    async def _noop_handle_user_interruption(self, *args, **kwargs):
+        return
+
+    for _cls_name in ("BaseInputTransport", "BaseInput"):
+        _cls = getattr(_pipecat_base_input, _cls_name, None)
+        if _cls is not None and hasattr(_cls, "_handle_user_interruption"):
+            setattr(_cls, "_handle_user_interruption", _noop_handle_user_interruption)
+            _patched = True
+
+    if _patched:
+        logger.info("🛑 Disabled Pipecat interruption handling (_handle_user_interruption) to prevent chopped bot audio")
+    else:
+        logger.warning("Could not patch Pipecat interruption handling (class not found). Continuing.")
+except Exception as _e:
+    logger.warning(f"Could not patch Pipecat interruption handling (continuing): {_e}")
 
 # Web server integration configuration
 # In Docker: the web service is reachable via the Compose service name `web-server`
@@ -556,6 +587,10 @@ class TextFrameChunker(FrameProcessor):
         out = self._buf.strip()
         self._buf = ""
         if out:
+            # Normalize spacing for TTS so sentence boundaries aren't run together.
+            # Example: "Hello John!Thank you..." -> "Hello John! Thank you..."
+            out = re.sub(r"([.!?])([A-Za-z0-9])", r"\1 \2", out)
+            out = re.sub(r"\s+", " ", out).strip()
             await self.push_frame(TextFrame(text=out), direction)
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
