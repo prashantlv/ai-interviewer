@@ -23,6 +23,7 @@ the conversation flow.
 import os
 import sys
 import time
+import asyncio
 import aiohttp
 import json
 from urllib.parse import urlparse
@@ -669,6 +670,70 @@ class InterruptionFrameFilter(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
+class SilenceBasedLLMTrigger(FrameProcessor):
+    """
+    Trigger LLM runs from STT output without relying on UserStarted/StoppedSpeakingFrame.
+
+    Why:
+    - We intentionally suppress Pipecat's interruption frames to prevent bot audio
+      from being chopped mid-stream.
+    - Some context aggregators rely on those frames to detect end-of-turn and
+      queue an LLMRunFrame. If they're missing, the bot may never respond after
+      the candidate speaks.
+
+    Approach:
+    - Watch for TranscriptionFrame.
+    - After a short silence window with no new transcriptions, inject LLMRunFrame.
+    """
+
+    def __init__(self, *, silence_s: float = 0.9, min_text_len: int = 2):
+        super().__init__()
+        self._silence_s = silence_s
+        self._min_text_len = min_text_len
+        self._pending_turn = False
+        self._timer_task: Optional[asyncio.Task] = None
+
+    def _cancel_timer(self) -> None:
+        if self._timer_task and not self._timer_task.done():
+            self._timer_task.cancel()
+        self._timer_task = None
+
+    def _schedule(self) -> None:
+        self._cancel_timer()
+
+        async def _fire():
+            try:
+                await asyncio.sleep(self._silence_s)
+                if self._pending_turn:
+                    logger.info(f"🟦 Turn detected (silence {self._silence_s:.2f}s) → queue LLMRunFrame")
+                    self._pending_turn = False
+                    await self.push_frame(LLMRunFrame(), FrameDirection.DOWNSTREAM)
+            except asyncio.CancelledError:
+                return
+            except Exception as e:
+                logger.warning(f"SilenceBasedLLMTrigger timer error (continuing): {e}")
+
+        self._timer_task = asyncio.create_task(_fire())
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+
+        if isinstance(frame, EndFrame):
+            self._cancel_timer()
+            await self.push_frame(frame, direction)
+            return
+
+        if isinstance(frame, TranscriptionFrame):
+            text = (frame.text or "").strip()
+            if len(text) >= self._min_text_len:
+                # Mark that we have user content that should trigger a response.
+                self._pending_turn = True
+                logger.debug(f"🟦 STT activity: '{text[:80]}' (pending_turn={self._pending_turn})")
+                self._schedule()
+
+        await self.push_frame(frame, direction)
+
+
 class TranscriptCollector(FrameProcessor):
     """Collects conversation transcript for later analysis with advanced filtering."""
     
@@ -1008,11 +1073,16 @@ async def run_bot(
         # user_collector BEFORE context_aggregator (to capture TranscriptionFrame)
         # ai_collector AFTER llm (to capture TextFrame)
         interruption_filter = InterruptionFrameFilter()
+        llm_trigger = SilenceBasedLLMTrigger(
+            silence_s=float(os.getenv("TURN_SILENCE_SECONDS", "0.9")),
+            min_text_len=int(os.getenv("TURN_MIN_TEXT_LEN", "2")),
+        )
         text_chunker = TextFrameChunker()
         pipeline_processors = [
             transport.input(),
             interruption_filter,
             stt,
+            llm_trigger,      # Turn-taking when interruption frames are suppressed
             user_collector,  # Capture user speech BEFORE context consumes it
             rtvi,
             context_aggregator.user(),
