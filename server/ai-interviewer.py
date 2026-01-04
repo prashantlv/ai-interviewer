@@ -58,10 +58,16 @@ from pipecat.runner.types import RunnerArguments
 from pipecat.transports.base_transport import BaseTransport
 from pipecat.transports.daily.transport import DailyParams, DailyTransport
 
-load_dotenv(override=True)
+# IMPORTANT:
+# - In Docker Compose, environment variables are injected by the container runtime.
+# - We must NOT override them from a local `.env` file inside the image (that would
+#   reintroduce `localhost` URLs and break inter-container networking).
+_IN_DOCKER = os.path.exists("/.dockerenv")
+load_dotenv(override=not _IN_DOCKER)
 
 # Web server integration configuration
-WEB_SERVER_URL = os.getenv("WEB_SERVER_URL", "http://localhost:8009")
+# In Docker: the web service is reachable via the Compose service name `web-server`
+WEB_SERVER_URL = os.getenv("WEB_SERVER_URL", "http://web-server:8009" if _IN_DOCKER else "http://localhost:8009")
 INTERVIEW_ID = os.getenv("INTERVIEW_ID", "default_interview")
 DAILY_API_URL = os.getenv("DAILY_API_URL", "https://api.daily.co/v1")
 DAILY_API_KEY = os.getenv("DAILY_API_KEY")
@@ -288,6 +294,31 @@ if TTS_SERVICE == "cartesia":
 if VIDEO_SERVICE == "tavus":
     try:
         from pipecat.services.tavus.video import TavusVideoService
+
+        # Tavus transport can be started twice by the framework lifecycle, which can
+        # attempt to add the same Daily custom audio track name ("stream") twice.
+        # Make Tavus start idempotent to prevent TrackNameAlreadyInUse → mute/no-audio.
+        try:
+            from pipecat.transports.tavus.transport import TavusTransportClient
+
+            _orig_tavus_start = TavusTransportClient.start
+
+            async def _tavus_start_once(self, *args, **kwargs):
+                if getattr(self, "_start_called", False):
+                    logger.info("✅ TavusTransportClient.start already called - skipping duplicate start()")
+                    return
+                self._start_called = True
+                try:
+                    return await _orig_tavus_start(self, *args, **kwargs)
+                except Exception:
+                    # allow retry if first start failed
+                    self._start_called = False
+                    raise
+
+            TavusTransportClient.start = _tavus_start_once
+            logger.info("🩹 Applied Tavus start() idempotency guard to prevent duplicate audio track creation")
+        except Exception as _exc:
+            logger.warning(f"Could not apply Tavus start() guard (continuing): {_exc}")
         
         logger.info("🎥 Using Tavus for video (Cartesia handles audio)")
     except ImportError:
@@ -1216,11 +1247,12 @@ async def bot(runner_args: RunnerArguments):
             "room_name": extract_room_name(room_url),
         }
         
-        # Audio output: Always enabled for Cartesia audio delivery
-        # Note: When using Tavus, you may see a non-fatal TrackNameAlreadyInUse error
-        # from Tavus's internal transport - this is expected and audio will still work
+        # Audio output:
+        # Keep enabled so the candidate hears Cartesia audio in the main Daily room.
+        # Tavus still receives audio frames from the pipeline for lip-sync; the Tavus
+        # start() guard above prevents the duplicate "stream" track creation error.
         video_service_type = os.getenv("VIDEO_SERVICE", "none").lower()
-        audio_out = True  # Always enable - audio must reach candidate
+        audio_out = True
         
         logger.info(f"🔧 DailyTransport config: audio_out_enabled={audio_out} (VIDEO_SERVICE={video_service_type})")
         
@@ -1295,11 +1327,12 @@ if __name__ == "__main__":
                     "room_name": extract_room_name(room_url),
                 }
                 
-                # Audio output: Always enabled for Cartesia audio delivery
-                # Note: When using Tavus, you may see a non-fatal TrackNameAlreadyInUse error
-                # from Tavus's internal transport - this is expected and audio will still work
+                # Audio output:
+                # Keep enabled so the candidate hears Cartesia audio in the main Daily room.
+                # Tavus still receives audio frames from the pipeline for lip-sync; the Tavus
+                # start() guard above prevents the duplicate "stream" track creation error.
                 video_service_type = os.getenv("VIDEO_SERVICE", "none").lower()
-                audio_out = True  # Always enable - audio must reach candidate
+                audio_out = True
                 
                 logger.info(f"🔧 DailyTransport config: audio_out_enabled={audio_out} (VIDEO_SERVICE={video_service_type})")
                 
