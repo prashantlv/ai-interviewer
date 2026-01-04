@@ -1216,11 +1216,11 @@ async def bot(runner_args: RunnerArguments):
             "room_name": extract_room_name(room_url),
         }
         
-        # Audio output configuration based on video service
-        # When using Tavus: audio flows through Tavus for lip-sync (disable main transport audio)
-        # When NOT using Tavus: audio goes directly through main transport
+        # Audio output: Always enabled for Cartesia audio delivery
+        # Note: When using Tavus, you may see a non-fatal TrackNameAlreadyInUse error
+        # from Tavus's internal transport - this is expected and audio will still work
         video_service_type = os.getenv("VIDEO_SERVICE", "none").lower()
-        audio_out = video_service_type != "tavus"  # Disable main audio when Tavus handles it
+        audio_out = True  # Always enable - audio must reach candidate
         
         logger.info(f"🔧 DailyTransport config: audio_out_enabled={audio_out} (VIDEO_SERVICE={video_service_type})")
         
@@ -1295,11 +1295,11 @@ if __name__ == "__main__":
                     "room_name": extract_room_name(room_url),
                 }
                 
-                # Audio output configuration based on video service
-                # When using Tavus: audio flows through Tavus for lip-sync (disable main transport audio)
-                # When NOT using Tavus: audio goes directly through main transport
+                # Audio output: Always enabled for Cartesia audio delivery
+                # Note: When using Tavus, you may see a non-fatal TrackNameAlreadyInUse error
+                # from Tavus's internal transport - this is expected and audio will still work
                 video_service_type = os.getenv("VIDEO_SERVICE", "none").lower()
-                audio_out = video_service_type != "tavus"  # Disable main audio when Tavus handles it
+                audio_out = True  # Always enable - audio must reach candidate
                 
                 logger.info(f"🔧 DailyTransport config: audio_out_enabled={audio_out} (VIDEO_SERVICE={video_service_type})")
                 
