@@ -107,7 +107,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     deploy:
-      replicas: 2  # Run 2 worker instances for better throughput
+      replicas: 1  # Run 1 worker to prevent duplicate bots
 
 volumes:
   redis-data:
