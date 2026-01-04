@@ -381,31 +381,29 @@ if VIDEO_SERVICE == "tavus":
         # attempt to add the same Daily custom audio track name ("stream") twice.
         # Make Tavus start idempotent to prevent TrackNameAlreadyInUse → mute/no-audio.
         try:
-            from pipecat.transports.tavus.transport import TavusTransportClient
+            from pipecat.transports.tavus.transport import TavusTransportClient, TavusOutputTransport
 
-            # Tavus uses an internal Daily custom audio track destination name.
-            # In pipecat 0.0.98 this defaults to "stream" (see transport.py: _transport_destination="stream").
-            # If the Tavus lifecycle attempts to add the custom track twice, Daily errors with:
-            #   TrackNameAlreadyInUse("stream")
-            # which leaves the bot effectively muted.
+            # IMPORTANT: The Daily custom audio *track name* is controlled by TavusOutputTransport
+            # (it defaults to "stream" in pipecat-ai 0.0.98), not TavusTransportClient.
+            # If any previous Tavus session left a "stream" track around, or if Tavus starts twice,
+            # Daily errors with TrackNameAlreadyInUse("stream") which breaks Tavus lip-sync.
             #
-            # Fix: Make the destination unique per interview so even a duplicate add attempt
-            # cannot collide with an existing "stream" track.
-            _orig_tavus_init = TavusTransportClient.__init__
+            # Fix: Monkey-patch TavusOutputTransport to use a unique destination per run.
+            _orig_tavus_out_init = TavusOutputTransport.__init__
 
-            def _tavus_init_unique_destination(self, *args, **kwargs):
-                _orig_tavus_init(self, *args, **kwargs)
+            def _tavus_out_init_unique_destination(self, *args, **kwargs):
+                _orig_tavus_out_init(self, *args, **kwargs)
                 try:
                     interview_id = os.getenv("INTERVIEW_ID", "default")
                     safe = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in interview_id)
                     # Keep it short to avoid any backend limits
                     suffix = uuid.uuid4().hex[:8]
                     self._transport_destination = f"stream-{safe}-{suffix}"[:48]
-                    logger.info(f"🎧 Tavus custom audio destination set to: {self._transport_destination}")
+                    logger.info(f"🎧 TavusOutputTransport destination set to: {self._transport_destination}")
                 except Exception as _e:
-                    logger.warning(f"Failed to set Tavus custom audio destination (continuing): {_e}")
+                    logger.warning(f"Failed to set TavusOutputTransport destination (continuing): {_e}")
 
-            TavusTransportClient.__init__ = _tavus_init_unique_destination
+            TavusOutputTransport.__init__ = _tavus_out_init_unique_destination
 
             _orig_tavus_start = TavusTransportClient.start
 
@@ -423,7 +421,7 @@ if VIDEO_SERVICE == "tavus":
                     raise
 
             TavusTransportClient.start = _tavus_start_once
-            logger.info("🩹 Applied Tavus start() idempotency guard to prevent duplicate audio track creation")
+            logger.info("🩹 Patched TavusOutputTransport destination + start() idempotency guard")
         except Exception as _exc:
             logger.warning(f"Could not apply Tavus start() guard (continuing): {_exc}")
 
