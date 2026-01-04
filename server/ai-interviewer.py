@@ -1216,10 +1216,10 @@ async def bot(runner_args: RunnerArguments):
             "room_name": extract_room_name(room_url),
         }
         
-        # When using Tavus, disable audio output on main transport
-        # Tavus handles audio bundling with video internally
+        # Enable audio output - Cartesia audio goes directly to candidate
+        # Note: Tavus may log a non-fatal TrackNameAlreadyInUse error for its internal transport
         video_service_type = os.getenv("VIDEO_SERVICE", "none").lower()
-        audio_out = video_service_type != "tavus"
+        audio_out = True  # Always enable audio output
         
         logger.info(f"🔧 DailyTransport config: audio_out_enabled={audio_out} (VIDEO_SERVICE={video_service_type})")
         
@@ -1229,7 +1229,7 @@ async def bot(runner_args: RunnerArguments):
             "AI Interviewer Bot",
             params=DailyParams(
                 audio_in_enabled=True,
-                audio_out_enabled=audio_out,  # Disabled when using Tavus
+                audio_out_enabled=audio_out,  # Enabled for Cartesia audio delivery
                 video_out_enabled=True,
                 video_out_is_live=True,           # Real-time video streaming
                 video_out_width=video_width,
@@ -1294,10 +1294,10 @@ if __name__ == "__main__":
                     "room_name": extract_room_name(room_url),
                 }
                 
-                # When using Tavus, disable audio output on main transport
-                # Tavus handles audio bundling with video internally
+                # Enable audio output - Cartesia audio goes directly to candidate
+                # Note: Tavus may log a non-fatal TrackNameAlreadyInUse error for its internal transport
                 video_service_type = os.getenv("VIDEO_SERVICE", "none").lower()
-                audio_out = video_service_type != "tavus"
+                audio_out = True  # Always enable audio output
                 
                 logger.info(f"🔧 DailyTransport config: audio_out_enabled={audio_out} (VIDEO_SERVICE={video_service_type})")
                 
@@ -1308,7 +1308,7 @@ if __name__ == "__main__":
                     "AI Interviewer Bot",
                     params=DailyParams(
                         audio_in_enabled=True,
-                        audio_out_enabled=audio_out,  # Disabled when using Tavus
+                        audio_out_enabled=audio_out,  # Enabled for Cartesia audio delivery
                         video_out_enabled=True,
                         video_out_is_live=True,
                         video_out_width=video_width,
