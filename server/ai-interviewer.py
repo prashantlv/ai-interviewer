@@ -294,14 +294,14 @@ if VIDEO_SERVICE == "tavus":
         # Issue: start() is called twice by Pipecat framework, causing "TrackNameAlreadyInUse" error
         _original_start = TavusTransportClient.start
         
-        async def _patched_start(self):
+        async def _patched_start(self, *args, **kwargs):
             # Track if we've already started to prevent duplicate audio track creation
             if hasattr(self, '_audio_track_added') and self._audio_track_added:
                 logger.info("✅ Tavus transport already started - skipping duplicate start()")
                 return
             
             self._audio_track_added = True
-            await _original_start(self)
+            await _original_start(self, *args, **kwargs)
         
         TavusTransportClient.start = _patched_start
         
