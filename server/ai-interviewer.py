@@ -29,6 +29,7 @@ import json
 from urllib.parse import urlparse
 from typing import Dict, Any, Optional
 import re
+import uuid
 
 from dotenv import load_dotenv, dotenv_values
 from loguru import logger
@@ -398,7 +399,8 @@ if VIDEO_SERVICE == "tavus":
                     interview_id = os.getenv("INTERVIEW_ID", "default")
                     safe = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in interview_id)
                     # Keep it short to avoid any backend limits
-                    self._transport_destination = f"stream-{safe}"[:48]
+                    suffix = uuid.uuid4().hex[:8]
+                    self._transport_destination = f"stream-{safe}-{suffix}"[:48]
                     logger.info(f"🎧 Tavus custom audio destination set to: {self._transport_destination}")
                 except Exception as _e:
                     logger.warning(f"Failed to set Tavus custom audio destination (continuing): {_e}")
@@ -413,6 +415,7 @@ if VIDEO_SERVICE == "tavus":
                     return
                 self._start_called = True
                 try:
+                    logger.info(f"🎧 Tavus start() using destination: {getattr(self, '_transport_destination', None)}")
                     return await _orig_tavus_start(self, *args, **kwargs)
                 except Exception:
                     # allow retry if first start failed
