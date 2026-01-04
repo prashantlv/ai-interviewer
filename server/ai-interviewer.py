@@ -412,6 +412,13 @@ if VIDEO_SERVICE == "tavus":
             _orig_register = TavusOutputTransport.register_audio_destination
 
             async def _register_audio_destination_unique(self, destination: str):
+                # Idempotency: TavusOutputTransport.start() may call this twice in the same session.
+                # Daily will error TrackNameAlreadyInUse("stream") when attempting to add the same
+                # custom track twice. Skip duplicates.
+                if getattr(self, "_h2i_dest_registered", False):
+                    logger.info("🎧 Tavus audio destination already registered - skipping duplicate register")
+                    return
+
                 dest = _TAVUS_DEST if (destination == "stream" or not destination) else destination
                 try:
                     self._transport_destination = dest
@@ -419,7 +426,9 @@ if VIDEO_SERVICE == "tavus":
                     pass
                 if destination != dest:
                     logger.info(f"🎧 Rewriting Tavus audio destination '{destination}' -> '{dest}'")
-                return await _orig_register(self, dest)
+                await _orig_register(self, dest)
+                setattr(self, "_h2i_dest_registered", True)
+                return
 
             TavusOutputTransport.register_audio_destination = _register_audio_destination_unique
             _orig_tavus_start = TavusTransportClient.start
@@ -1098,8 +1107,9 @@ async def run_bot(
         text_chunker = TextFrameChunker()
         pipeline_processors = [
             transport.input(),
-            interruption_filter,
             stt,
+            # Drop interruption signal frames AFTER STT so STT can still segment on VAD.
+            interruption_filter,
             llm_trigger,      # Turn-taking when interruption frames are suppressed
             user_collector,  # Capture user speech BEFORE context consumes it
             rtvi,
