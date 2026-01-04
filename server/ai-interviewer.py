@@ -28,7 +28,7 @@ import json
 from urllib.parse import urlparse
 from typing import Dict, Any, Optional
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv, dotenv_values
 from loguru import logger
 
 # Import scoring engine
@@ -64,6 +64,28 @@ from pipecat.transports.daily.transport import DailyParams, DailyTransport
 #   reintroduce `localhost` URLs and break inter-container networking).
 _IN_DOCKER = os.path.exists("/.dockerenv")
 load_dotenv(override=not _IN_DOCKER)
+
+# In Docker Compose we often pass empty-string placeholders for secrets like
+# CARTESIA_API_KEY (e.g. ${CARTESIA_API_KEY:-}), which prevents `load_dotenv`
+# from populating them (override=False won't replace an existing empty env var).
+# Fix: if a secret env var is missing OR empty, read it from `/app/server/.env`.
+_DOTENV = dotenv_values(".env")
+
+def _fill_env_from_dotenv_if_empty(key: str) -> None:
+    val = os.getenv(key)
+    if val is not None and val != "":
+        return
+    file_val = _DOTENV.get(key)
+    if file_val:
+        os.environ[key] = file_val
+
+# Fill critical API keys (do not touch networking vars like WEB_SERVER_URL).
+for _k in ("CARTESIA_API_KEY", "OPENAI_API_KEY", "DAILY_API_KEY", "TAVUS_API_KEY"):
+    _fill_env_from_dotenv_if_empty(_k)
+
+# Minimal visibility for debugging (never print the key itself)
+_cartesia_key = os.getenv("CARTESIA_API_KEY") or ""
+logger.info(f"🔑 CARTESIA_API_KEY present={bool(_cartesia_key)} len={len(_cartesia_key)}")
 
 # Web server integration configuration
 # In Docker: the web service is reachable via the Compose service name `web-server`
