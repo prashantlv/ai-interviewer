@@ -288,23 +288,27 @@ if TTS_SERVICE == "cartesia":
 if VIDEO_SERVICE == "tavus":
     try:
         from pipecat.services.tavus.video import TavusVideoService as _TavusVideoService
+        from pipecat.transports.tavus.transport import TavusTransportClient
         from pipecat.transports.daily.transport import DailyParams
         
-        # Wrapper class to disable Tavus audio (Cartesia handles audio instead)
-        class TavusVideoService(_TavusVideoService):
-            """Custom Tavus service that disables audio to prevent track conflicts with Cartesia"""
-            
-            async def start(self, frame):
-                """Override start to configure transport params before starting"""
-                await super().start(frame)
-                
-                # Disable audio output on Tavus transport (video only)
-                if hasattr(self, '_transport') and self._transport:
-                    if hasattr(self._transport, '_params'):
-                        self._transport._params.audio_out_enabled = False
-                        logger.info("✅ Tavus audio disabled - Cartesia will handle all audio")
+        # Monkey-patch TavusTransportClient to disable audio BEFORE transport creation
+        _original_init = TavusTransportClient.__init__
         
-        logger.info("🎥 Using custom Tavus service (video-only, Cartesia for audio)")
+        def _patched_init(self, *args, **kwargs):
+            # Call original init
+            _original_init(self, *args, **kwargs)
+            
+            # Disable audio on the transport params BEFORE it starts
+            if hasattr(self, '_params') and self._params:
+                self._params.audio_out_enabled = False
+                logger.info("✅ Tavus audio disabled via monkey-patch - Cartesia handles audio")
+        
+        TavusTransportClient.__init__ = _patched_init
+        
+        # Use the original TavusVideoService (now with patched transport)
+        TavusVideoService = _TavusVideoService
+        
+        logger.info("🎥 Using Tavus service with audio disabled (Cartesia for audio)")
         
     except ImportError:
         logger.error("Tavus integration not available. Install with: pip install pipecat-ai[tavus]")
