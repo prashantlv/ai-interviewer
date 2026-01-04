@@ -136,7 +136,7 @@ async def interview_room(request: Request, interview_id: str):
         logger.info(f"🤖 Bot URL: {bot_room_url[:50]}... (with bot token)")
         logger.info(f"👤 Candidate URL: {candidate_room_url[:50]}... (with candidate token)")
         
-        # Build bot config from interview data
+        # Build bot config from interview data (for display only - bot already started from dashboard)
         bot_config = {
             "room_url": bot_room_url,  # ← Now using BOT token!
             "interview_id": interview_id,
@@ -145,36 +145,12 @@ async def interview_room(request: Request, interview_id: str):
             "scoring_level": evaluation.get("scoring_level", "intermediate"),
         }
         
-        # Check if job already exists for this interview (prevent duplicates with Redis lock)
-        lock_key = f"bot_lock:{interview_id}"
+        # NOTE: Bot scheduling removed from here! Bot is scheduled ONCE from dashboard.py
+        # when the interview is created. This page just displays the room.
+        logger.info(f"📍 Interview room ready. Bot should already be running (started from dashboard).")
         
-        # Try to acquire Redis lock (atomic operation - works across all web server workers!)
-        lock_acquired = redis_client.set(lock_key, "locked", nx=True, ex=BOT_LOCK_TTL)
-        
-        if lock_acquired:
-            # We got the lock! Check if job exists and schedule if needed
-            try:
-                job_id = f"interview_{interview_id}"
-                existing_job = bot_manager.get_job_status(job_id)
-                job_status = existing_job.get("status") if existing_job else None
-                
-                # Only start if no job exists or job has finished/failed
-                if existing_job and job_status not in ["failed", "finished", None]:
-                    logger.info(f"ℹ️ Bot already running for interview: {interview_id} (status: {job_status}) - releasing lock")
-                    redis_client.delete(lock_key)  # Release lock since bot is already running
-                else:
-                    logger.info(f"🤖 Starting bot for interview: {interview_id}")
-                    bot_result = bot_manager.schedule_interview(interview_id, config=bot_config)
-                    logger.info(f"✅ Bot scheduled: {bot_result}")
-                    # Lock will auto-expire after BOT_LOCK_TTL or be cleared when interview ends
-            except Exception as e:
-                logger.error(f"❌ Failed to schedule bot: {e}")
-                redis_client.delete(lock_key)  # Release lock on error so retry is possible
-        else:
-            # Lock already held by another request/worker - bot is being scheduled or already running
-            logger.info(f"⏸️ Bot start already in progress for interview: {interview_id} - skipping (Redis lock held)")
     except Exception as e:
-        logger.error(f"⚠️ Failed to start bot (continuing anyway): {e}")
+        logger.error(f"⚠️ Failed to prepare interview room (continuing anyway): {e}")
     
     # Extract interview details from evaluation
     candidate_name = evaluation.get("candidate_name") or interview.get("candidate_name", "Candidate")
