@@ -24,12 +24,12 @@ import os
 import sys
 import time
 import asyncio
+import uuid
 import aiohttp
 import json
 from urllib.parse import urlparse
 from typing import Dict, Any, Optional
 import re
-import uuid
 
 from dotenv import load_dotenv, dotenv_values
 from loguru import logger
@@ -377,34 +377,52 @@ if VIDEO_SERVICE == "tavus":
     try:
         from pipecat.services.tavus.video import TavusVideoService
 
-        # Tavus transport can be started twice by the framework lifecycle, which can
-        # attempt to add the same Daily custom audio track name ("stream") twice.
-        # Make Tavus start idempotent to prevent TrackNameAlreadyInUse → mute/no-audio.
         try:
+            # IMPORTANT (confirmed in your running container):
+            # In pipecat-ai 0.0.98 the Tavus Daily custom audio track destination is
+            # hardcoded in TavusOutputTransport as "stream".
+            # That is exactly what triggers:
+            #   TrackNameAlreadyInUse("stream")
+            # and prevents Tavus from receiving the bot audio → lips don't move.
+            #
+            # Fix: Patch TavusOutputTransport to always use a unique destination per run,
+            # and rewrite any registration requests for "stream" to that unique value.
             from pipecat.transports.tavus.transport import TavusTransportClient, TavusOutputTransport
 
-            # IMPORTANT: The Daily custom audio *track name* is controlled by TavusOutputTransport
-            # (it defaults to "stream" in pipecat-ai 0.0.98), not TavusTransportClient.
-            # If any previous Tavus session left a "stream" track around, or if Tavus starts twice,
-            # Daily errors with TrackNameAlreadyInUse("stream") which breaks Tavus lip-sync.
-            #
-            # Fix: Monkey-patch TavusOutputTransport to use a unique destination per run.
-            _orig_tavus_out_init = TavusOutputTransport.__init__
+            def _make_tavus_dest() -> str:
+                interview_id = os.getenv("INTERVIEW_ID", "default")
+                safe = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in interview_id)
+                suffix = uuid.uuid4().hex[:6]
+                return f"stream-{safe}-{suffix}"[:48]
 
-            def _tavus_out_init_unique_destination(self, *args, **kwargs):
-                _orig_tavus_out_init(self, *args, **kwargs)
+            _TAVUS_DEST = _make_tavus_dest()
+
+            _orig_out_init = TavusOutputTransport.__init__
+
+            def _out_init_unique_destination(self, *args, **kwargs):
+                _orig_out_init(self, *args, **kwargs)
                 try:
-                    interview_id = os.getenv("INTERVIEW_ID", "default")
-                    safe = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in interview_id)
-                    # Keep it short to avoid any backend limits
-                    suffix = uuid.uuid4().hex[:8]
-                    self._transport_destination = f"stream-{safe}-{suffix}"[:48]
+                    self._transport_destination = _TAVUS_DEST
                     logger.info(f"🎧 TavusOutputTransport destination set to: {self._transport_destination}")
                 except Exception as _e:
                     logger.warning(f"Failed to set TavusOutputTransport destination (continuing): {_e}")
 
-            TavusOutputTransport.__init__ = _tavus_out_init_unique_destination
+            TavusOutputTransport.__init__ = _out_init_unique_destination
 
+            _orig_register = TavusOutputTransport.register_audio_destination
+
+            async def _register_audio_destination_unique(self, destination: str):
+                dest = _TAVUS_DEST if (destination == "stream" or not destination) else destination
+                try:
+                    self._transport_destination = dest
+                except Exception:
+                    pass
+                if destination != dest:
+                    logger.info(f"🎧 Rewriting Tavus audio destination '{destination}' -> '{dest}'")
+                return await _orig_register(self, dest)
+
+            TavusOutputTransport.register_audio_destination = _register_audio_destination_unique
+>
             _orig_tavus_start = TavusTransportClient.start
 
             async def _tavus_start_once(self, *args, **kwargs):
