@@ -302,7 +302,7 @@ async def log_violation(data: ViolationData):
             proctoring_data["summary"] = data.summary
         
         # Update interview record
-        await db.update_interview(
+        await db_svc.update_interview(
             data.interview_id,
             {"proctoring": proctoring_data}
         )
@@ -428,7 +428,7 @@ async def end_interview(interview_id: str, request: Request):
 
 
 @router.get("/api/proctoring/{interview_id}")
-async def get_proctoring_data(interview_id: str):
+async def get_proctoring_data(interview_id: str, request: Request):
     """
     Get proctoring data for an interview.
     """

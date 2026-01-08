@@ -165,63 +165,52 @@ class DatabaseService:
         recording: Optional[Dict[str, Any]] = None
     ) -> bool:
         """Update interview with results"""
-        # Check if this interview already exists
-        existing_interview = None
-        if self.database is not None:
-            try:
-                existing_interview = await self.database.interview_results.find_one(
-                    {"interview_id": interview_id}
-                )
-            except Exception as e:
-                print(f"⚠️ Error checking existing interview: {e}")
-        
-        # Build result data
-        result_data = {
-            "interview_id": interview_id,
-            "transcript": transcript,
-            "evaluation": evaluation,
-            "status": status,
-        }
-        
-        # Set created_at only if this is a new interview
-        if existing_interview:
-            # Preserve existing created_at
-            result_data["created_at"] = existing_interview.get("created_at", datetime.now())
-        else:
-            # New interview - set created_at
-            result_data["created_at"] = datetime.now()
-        
-        # Persist recording information
-        if recording:
-            result_data["recording"] = recording
-        elif existing_interview and existing_interview.get("recording"):
-            result_data["recording"] = existing_interview.get("recording")
-        
-        # Set completed_at only if status is "completed"
-        if status == "completed":
-            result_data["completed_at"] = datetime.now()
-        elif existing_interview:
-            # Preserve existing completed_at if interview isn't being marked as completed
-            if "completed_at" in existing_interview:
-                result_data["completed_at"] = existing_interview["completed_at"]
-        
-        if self.database is not None:
-            try:
-                # Store in MongoDB using upsert
-                await self.database.interview_results.replace_one(
-                    {"interview_id": interview_id},
-                    result_data,
-                    upsert=True
-                )
+        if self.database is None:
+            # Mock mode: pretend success
+            return True
+
+        now = datetime.now()
+
+        # IMPORTANT: Do NOT replace the whole document.
+        # We must preserve fields written by other parts of the system (e.g. `proctoring`).
+        try:
+            update_set: Dict[str, Any] = {
+                "transcript": transcript,
+                "evaluation": evaluation,
+                "status": status,
+            }
+
+            # Only overwrite recording if explicitly provided (otherwise preserve existing).
+            if recording is not None:
+                update_set["recording"] = recording
+
+            # Only set completed_at when we are marking completed (otherwise preserve).
+            if status == "completed":
+                update_set["completed_at"] = now
+
+            result = await self.database.interview_results.update_one(
+                {"interview_id": interview_id},
+                {
+                    "$set": update_set,
+                    "$setOnInsert": {
+                        "interview_id": interview_id,
+                        "created_at": now,
+                    },
+                },
+                upsert=True,
+            )
+
+            ok = (result.modified_count > 0) or (result.upserted_id is not None) or (result.matched_count > 0)
+            if ok:
                 print(f"✅ Stored interview result: {interview_id} (status: {status})")
-                return True
-            except Exception as e:
-                print(f"❌ Error storing interview result: {e}")
-                import traceback
-                traceback.print_exc()
-        
-        # Fallback: return success even in mock mode
-        return True
+            else:
+                print(f"⚠️ Interview result not modified (but may already be up-to-date): {interview_id}")
+            return True
+        except Exception as e:
+            print(f"❌ Error storing interview result: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
     
     async def get_interview_result(self, interview_id: str) -> Optional[Dict[str, Any]]:
         """Get interview result by ID"""
