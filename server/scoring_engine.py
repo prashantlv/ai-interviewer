@@ -164,7 +164,26 @@ Provide your evaluation now as valid JSON only (no other text):"""
         """Score an interview using LLM analysis"""
         
         # Validate inputs
-        if not transcript or len(transcript) < MIN_TRANSCRIPT_EXCHANGES:
+        if not transcript:
+            logger.warning("Empty transcript - returning default scores")
+            return self._get_default_scores("Insufficient transcript for scoring")
+
+        # Require at least some candidate content. If we only have AI messages
+        # (e.g. candidate left immediately or STT failed), scoring would be meaningless.
+        candidate_entries = [
+            e for e in transcript
+            if (e.get("role") == "candidate") and (e.get("content") or "").strip()
+        ]
+        candidate_word_count = sum(len((e.get("content") or "").strip().split()) for e in candidate_entries)
+
+        if len(candidate_entries) == 0 or candidate_word_count < 3:
+            logger.warning(
+                "No/insufficient candidate responses in transcript "
+                f"(candidate_entries={len(candidate_entries)}, candidate_words={candidate_word_count}) - returning default scores"
+            )
+            return self._get_default_scores("Insufficient candidate responses for scoring")
+
+        if len(transcript) < MIN_TRANSCRIPT_EXCHANGES:
             logger.warning(f"Transcript too short ({len(transcript)} exchanges) - returning default scores")
             return self._get_default_scores("Insufficient transcript for scoring")
         

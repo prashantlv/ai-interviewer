@@ -908,9 +908,12 @@ async def run_bot(
     context = OpenAILLMContext(messages)
     context_aggregator = llm.create_context_aggregator(context)
     
-    # Initialize transcript collection (with echo filtering to prevent bot self-loops)
+    # Initialize transcript collection
+    # NOTE: `context_aggregator.user()` may consume TranscriptionFrames, so we must
+    # capture candidate speech BEFORE it reaches the context aggregator.
     interview_transcript = []
-    transcript_collector = TranscriptCollector(interview_transcript)
+    user_collector = UserTranscriptCollector(interview_transcript)
+    ai_collector = AITranscriptCollector(interview_transcript)
     
     # Initialize RTVI processor
     rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
@@ -989,11 +992,12 @@ async def run_bot(
         pipeline_processors = [
             transport.input(),
             stt,
+            user_collector,  # Capture candidate speech BEFORE context_aggregator.user()
             rtvi,
             context_aggregator.user(),
             llm,
             text_chunker,  # Batch streaming TextFrames to avoid word-by-word TTS
-            transcript_collector,  # Capture + filter BOTH user transcriptions and AI responses
+            ai_collector,  # Capture AI responses after LLM (now chunked)
             tts,
         ]
         
@@ -1013,11 +1017,12 @@ async def run_bot(
         text_chunker = TextFrameChunker()
         pipeline_processors = [
             transport.input(),
+            user_collector,  # Capture candidate speech (if TranscriptionFrames are emitted)
             rtvi,
             context_aggregator.user(),
             llm,
             text_chunker,  # Batch streaming TextFrames to avoid word-by-word audio
-            transcript_collector,  # Capture + filter user/AI
+            ai_collector,  # Capture AI responses (now chunked)
         ]
         
         # Add video processing (Video services work with Gemini audio)
