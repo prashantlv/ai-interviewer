@@ -95,11 +95,13 @@
 
 <script>
 function copyInterviewLink(event) {
-    const link = "{{ interview.join_url }}";
+    // Copy an ABSOLUTE URL (more reliable for sharing) even if join_url is relative.
+    const raw = "{{ interview.join_url }}";
+    const link = new URL(raw, window.location.origin).toString();
     const btn = event.currentTarget;  // Use currentTarget for proper button reference
     const originalHTML = btn.innerHTML;
     
-    navigator.clipboard.writeText(link).then(function() {
+    function onSuccess() {
         // Show success message
         btn.innerHTML = '<i class="bi bi-check"></i> Copied!';
         btn.classList.remove('btn-success');
@@ -112,7 +114,9 @@ function copyInterviewLink(event) {
             btn.classList.add('btn-success');
             btn.disabled = false;
         }, 2000);
-    }).catch(function(err) {
+    }
+
+    function onError(err) {
         // Show error message
         btn.innerHTML = '<i class="bi bi-x-circle"></i> Failed!';
         btn.classList.remove('btn-success');
@@ -125,7 +129,33 @@ function copyInterviewLink(event) {
         }, 2000);
         
         console.error('Failed to copy link:', err);
-    });
+        // Fallback: prompt user to manually copy
+        window.prompt("Copy this interview link:", link);
+    }
+
+    // Modern clipboard API (requires secure context); fall back if unavailable.
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(link).then(onSuccess).catch(onError);
+        return;
+    }
+
+    // Fallback for non-secure contexts / older browsers
+    try {
+        const ta = document.createElement('textarea');
+        ta.value = link;
+        ta.style.position = 'fixed';
+        ta.style.top = '-1000px';
+        ta.style.left = '-1000px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (ok) onSuccess();
+        else onError(new Error('execCommand(copy) returned false'));
+    } catch (e) {
+        onError(e);
+    }
 }
 </script>
 {% endblock %}
