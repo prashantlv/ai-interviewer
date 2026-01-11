@@ -179,7 +179,8 @@
                                     </span>
                                 </td>
                                 <td>
-                                    {% if interview.score is not none and interview.score > 0 %}
+                                    {# Show score for completed interviews even if it's 0 (so it doesn't appear as '-') #}
+                                    {% if interview.score is not none and interview.status in ['completed', 'ended_by_candidate'] %}
                                         <span class="score-badge {% if interview.score >= 90 %}score-excellent{% elif interview.score >= 75 %}score-good{% elif interview.score >= 60 %}score-average{% else %}score-poor{% endif %}">
                                             {{ "%.1f"|format(interview.score) }}%
                                         </span>
