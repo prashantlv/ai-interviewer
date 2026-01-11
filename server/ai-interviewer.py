@@ -280,6 +280,9 @@ def serialize_recording_context(recording_context: Dict[str, Any]) -> Dict[str, 
     return {
         "room_name": recording_context.get("room_name"),
         "recording_id": recording_context.get("recording_id"),
+        # Daily emits both a recordingId (used for /recordings/:id) and a streamId (not usable for access-link).
+        # Keep them separate to avoid accidentally persisting the streamId as recording_id.
+        "stream_id": recording_context.get("stream_id"),
         "status": recording_context.get("status"),
         "started_at": recording_context.get("started_at"),
         "stopped_at": recording_context.get("stopped_at"),
@@ -1062,6 +1065,7 @@ async def run_bot(
     recording_context = {
         "room_name": room_name,
         "recording_id": None,
+        "stream_id": None,
         "status": "not_started",
         "started_at": None,
         "stopped_at": None,
@@ -1095,25 +1099,31 @@ async def run_bot(
         rid = data.get("recordingId") or data.get("recording_id")
         if rid:
             recording_context["recording_id"] = rid
+        sid = data.get("streamId") or data.get("stream_id")
+        if sid:
+            recording_context["stream_id"] = sid
         recording_context["status"] = data.get("state", "recording")
         recording_context["started_at"] = data.get("created_at") or recording_context["started_at"]
         recording_context["start_response"] = data
 
     @transport.event_handler("on_recording_stopped")
     async def on_recording_stopped(_transport, data):
-        # Handle both dict and string (recording ID) formats
+        # Handle both dict and string formats.
+        # NOTE: Daily may emit a *streamId* string here. Do NOT overwrite recording_id with it.
         if isinstance(data, str):
-            # If data is just a string (recording ID), use it directly
-            recording_context["recording_id"] = data
+            recording_context["stream_id"] = recording_context.get("stream_id") or data
             recording_context["status"] = "stopped"
             from datetime import datetime
             recording_context["stopped_at"] = datetime.now().isoformat()
-            recording_context["stop_response"] = {"recording_id": data}
+            recording_context["stop_response"] = {"stream_id": data}
         else:
             # If data is a dict, extract fields normally
             rid = data.get("recordingId") or data.get("recording_id")
             if rid:
                 recording_context["recording_id"] = rid
+            sid = data.get("streamId") or data.get("stream_id")
+            if sid:
+                recording_context["stream_id"] = sid
             recording_context["status"] = data.get("state", "stopped")
             recording_context["stopped_at"] = data.get("created_at") or data.get("updated_at")
             recording_context["stop_response"] = data

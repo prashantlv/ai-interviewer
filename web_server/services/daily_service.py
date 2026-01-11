@@ -256,6 +256,15 @@ class DailyService:
             return None
         
         try:
+            # Daily supports `valid_for_secs` query param (default 3600s, max 12h).
+            # See: GET /recordings/:id/access-link docs.
+            max_secs = 12 * 60 * 60
+            min_secs = 15 * 60
+            desired_secs = int(os.getenv("DAILY_RECORDING_LINK_VALID_FOR_SECS", str(max_secs)))
+            valid_for_secs = max(min_secs, min(max_secs, desired_secs))
+
+            params = {"valid_for_secs": valid_for_secs}
+
             async with httpx.AsyncClient() as client:
                 response = await client.get(
                     f"{self.api_url}/recordings/{recording_id}/access-link",
@@ -263,6 +272,7 @@ class DailyService:
                         "Authorization": f"Bearer {self.api_key}",
                         "Content-Type": "application/json"
                     },
+                    params=params,
                     timeout=10.0
                 )
                 
@@ -328,7 +338,17 @@ class DailyService:
                 val = obj.get(key)
                 if val is None:
                     continue
-                # Keep as-is (string or numeric) for template display
+                # Prefer ISO if this looks like an epoch timestamp (seconds or ms).
+                try:
+                    if isinstance(val, (int, float)) or (isinstance(val, str) and val.strip().isdigit()):
+                        n = int(float(val))
+                        # Heuristic: treat huge values as milliseconds
+                        if n > 10_000_000_000:
+                            n = int(n / 1000)
+                        from datetime import datetime, timezone
+                        return datetime.fromtimestamp(n, tz=timezone.utc).isoformat()
+                except Exception:
+                    pass
                 return str(val)
             nested = obj.get("data") or obj.get("payload") or obj.get("result")
             if isinstance(nested, dict):
