@@ -649,10 +649,16 @@ async def get_interview_config(interview_id: str, scoring_level: Optional[str] =
             print(f"⚠️ Scoring config not found for level '{scoring_level}', using default")
             scoring_config = await scoring_config_service.get_default_config()
         
+        # Get replica_id from interview if specified (for per-interview replica selection)
+        replica_id = None
+        if interview and interview.get("evaluation"):
+            replica_id = interview.get("evaluation", {}).get("replica_id")
+        
         return {
             "interview_id": interview_id,
             "questions": questions,
             "scoring_config": scoring_config,  # Full DB-based scoring config
+            "replica_id": replica_id,  # Optional: allows per-interview replica selection
             "candidate_info": {
                 "name": candidate_resume.get("personal_info", {}).get("name", "Unknown"),
                 "email": candidate_resume.get("personal_info", {}).get("email", "N/A"),
@@ -665,6 +671,57 @@ async def get_interview_config(interview_id: str, scoring_level: Optional[str] =
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get interview config: {str(e)}")
+
+@app.get("/api/v1/bot/replica-config")
+async def get_replica_config(replica_id: Optional[str] = None):
+    """
+    Get replica-voice configuration for bot.
+    
+    If replica_id is provided, returns config for that replica.
+    Otherwise, returns the default replica config.
+    
+    Falls back to environment variables if database lookup fails.
+    """
+    try:
+        config = None
+        
+        if replica_id:
+            # Get specific replica config
+            config = await db_service.get_replica_config(replica_id)
+        else:
+            # Get default config
+            config = await db_service.get_default_replica_config()
+        
+        # Fallback to environment variables if no database config found
+        if not config:
+            replica_id_env = os.getenv("TAVUS_REPLICA_ID")
+            voice_id_env = os.getenv("CARTESIA_VOICE_ID", "a0e99841-438c-4a64-b679-ae501e7d6091")
+            
+            if replica_id_env:
+                config = {
+                    "replica_id": replica_id_env,
+                    "voice_id": voice_id_env,
+                    "is_default": True,
+                    "source": "environment"  # Indicate this came from env vars
+                }
+        
+        if config:
+            return {
+                "replica_id": config.get("replica_id"),
+                "voice_id": config.get("voice_id"),
+                "is_default": config.get("is_default", False),
+                "source": config.get("source", "database")
+            }
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail="No replica configuration found. Please configure a default replica."
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error getting replica config: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get replica config: {str(e)}")
 
 # ============================================================================
 # SCORING CONFIGURATION API ENDPOINTS

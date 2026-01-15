@@ -125,6 +125,22 @@ class DatabaseService:
             await self.database.cloned_voices.create_index("owner_id")
             await self.database.cloned_voices.create_index("created_at")
             print("✅ Created 'cloned_voices' collection with indexes")
+        
+        # replica_voice_mappings - stores replica to voice mappings
+        if "replica_voice_mappings" not in collections:
+            await self.database.create_collection("replica_voice_mappings")
+            await self.database.replica_voice_mappings.create_index("replica_id", unique=True)
+            await self.database.replica_voice_mappings.create_index("is_default")
+            await self.database.replica_voice_mappings.create_index("is_active")
+            print("✅ Created 'replica_voice_mappings' collection with indexes")
+        
+        # replica_voice_mappings - stores replica to voice mappings
+        if "replica_voice_mappings" not in collections:
+            await self.database.create_collection("replica_voice_mappings")
+            await self.database.replica_voice_mappings.create_index("replica_id", unique=True)
+            await self.database.replica_voice_mappings.create_index("is_default")
+            await self.database.replica_voice_mappings.create_index("is_active")
+            print("✅ Created 'replica_voice_mappings' collection with indexes")
     
     def _load_json_data(self, filename: str) -> Dict[str, Any]:
         """Load data from JSON file"""
@@ -332,6 +348,146 @@ class DatabaseService:
                 print(f"❌ Error updating interview: {e}")
                 return False
         return False
+
+    # ============================================================================
+    # Replica-Voice Mapping Methods
+    # ============================================================================
+    
+    async def get_default_replica_config(self) -> Optional[Dict[str, Any]]:
+        """Get the default replica-voice mapping configuration"""
+        if self.database is None:
+            return None
+        
+        try:
+            config = await self.database.replica_voice_mappings.find_one({
+                "is_default": True,
+                "is_active": True
+            })
+            if config:
+                config.pop('_id', None)
+            return config
+        except Exception as e:
+            print(f"❌ Error getting default replica config: {e}")
+            return None
+    
+    async def get_replica_config(self, replica_id: str) -> Optional[Dict[str, Any]]:
+        """Get replica-voice mapping for a specific replica"""
+        if self.database is None:
+            return None
+        
+        try:
+            config = await self.database.replica_voice_mappings.find_one({
+                "replica_id": replica_id,
+                "is_active": True
+            })
+            if config:
+                config.pop('_id', None)
+            return config
+        except Exception as e:
+            print(f"❌ Error getting replica config: {e}")
+            return None
+    
+    async def list_replica_configs(self) -> List[Dict[str, Any]]:
+        """List all replica-voice mappings"""
+        if self.database is None:
+            return []
+        
+        try:
+            configs = []
+            cursor = self.database.replica_voice_mappings.find({"is_active": True}).sort("created_at", -1)
+            async for config in cursor:
+                config.pop('_id', None)
+                configs.append(config)
+            return configs
+        except Exception as e:
+            print(f"❌ Error listing replica configs: {e}")
+            return []
+    
+    async def create_replica_mapping(
+        self,
+        replica_id: str,
+        voice_id: str,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        is_default: bool = False
+    ) -> bool:
+        """Create or update a replica-voice mapping"""
+        if self.database is None:
+            return False
+        
+        try:
+            # If setting as default, unset other defaults first
+            if is_default:
+                await self.database.replica_voice_mappings.update_many(
+                    {"is_default": True},
+                    {"$set": {"is_default": False}}
+                )
+            
+            # Check if mapping already exists
+            existing = await self.database.replica_voice_mappings.find_one({"replica_id": replica_id})
+            
+            mapping_data = {
+                "replica_id": replica_id,
+                "voice_id": voice_id,
+                "name": name or f"Replica {replica_id[:8]}",
+                "description": description or "",
+                "is_default": is_default,
+                "is_active": True,
+                "updated_at": datetime.now()
+            }
+            
+            if existing:
+                # Update existing
+                result = await self.database.replica_voice_mappings.update_one(
+                    {"replica_id": replica_id},
+                    {"$set": mapping_data}
+                )
+                return result.modified_count > 0
+            else:
+                # Create new
+                mapping_data["created_at"] = datetime.now()
+                await self.database.replica_voice_mappings.insert_one(mapping_data)
+                return True
+        except Exception as e:
+            print(f"❌ Error creating replica mapping: {e}")
+            return False
+    
+    async def set_default_replica(self, replica_id: str) -> bool:
+        """Set a replica as the default (unset others)"""
+        if self.database is None:
+            return False
+        
+        try:
+            # Unset all defaults
+            await self.database.replica_voice_mappings.update_many(
+                {"is_default": True},
+                {"$set": {"is_default": False}}
+            )
+            
+            # Set this one as default
+            result = await self.database.replica_voice_mappings.update_one(
+                {"replica_id": replica_id, "is_active": True},
+                {"$set": {"is_default": True, "updated_at": datetime.now()}}
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"❌ Error setting default replica: {e}")
+            return False
+    
+    async def delete_replica_mapping(self, replica_id: str) -> bool:
+        """Soft delete a replica mapping (set is_active=False)"""
+        if self.database is None:
+            return False
+        
+        try:
+            result = await self.database.replica_voice_mappings.update_one(
+                {"replica_id": replica_id},
+                {"$set": {"is_active": False, "updated_at": datetime.now()}}
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"❌ Error deleting replica mapping: {e}")
+            return False
 
 
 # Global database instance

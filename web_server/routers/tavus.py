@@ -10,6 +10,8 @@ from fastapi.templating import Jinja2Templates
 from typing import Optional
 from pydantic import BaseModel
 from services.tavus_service import tavus_service
+from services.voice_cloning_service import voice_cloning_service
+from dependencies import DbServiceDep
 from loguru import logger
 
 router = APIRouter()
@@ -72,6 +74,36 @@ async def replicas_page(request: Request, page: int = 1, limit: int = 20, replic
             replicas = result.get('data', [])
             total_count = result.get('total_count', 0)
         
+        # Fetch voice mappings from database and merge with replicas
+        from dependencies import get_db_service
+        try:
+            db = get_db_service(request)
+            voice_mappings = await db.list_replica_configs()
+        except Exception as e:
+            logger.warning(f"⚠️ Could not fetch voice mappings: {e}")
+            voice_mappings = []
+        
+        # Create a lookup dict: replica_id -> voice mapping
+        mapping_lookup = {m.get("replica_id"): m for m in voice_mappings}
+        default_replica_id = None
+        for m in voice_mappings:
+            if m.get("is_default"):
+                default_replica_id = m.get("replica_id")
+                break
+        
+        # Merge voice mapping data into replicas
+        for replica in replicas:
+            replica_id = replica.get("replica_id")
+            mapping = mapping_lookup.get(replica_id)
+            if mapping:
+                replica["voice_id"] = mapping.get("voice_id")
+                replica["voice_name"] = mapping.get("name", "Unknown Voice")
+                replica["is_default"] = mapping.get("is_default", False)
+            else:
+                replica["voice_id"] = None
+                replica["voice_name"] = "Not configured"
+                replica["is_default"] = False
+        
         total_pages = (total_count + limit - 1) // limit  # Ceiling division
         
         return templates.TemplateResponse(
@@ -84,7 +116,8 @@ async def replicas_page(request: Request, page: int = 1, limit: int = 20, replic
                 "current_page": page,
                 "limit": limit,
                 "total_pages": total_pages,
-                "replica_type": replica_type or "all"
+                "replica_type": replica_type or "all",
+                "default_replica_id": default_replica_id
             }
         )
     except Exception as e:
@@ -333,4 +366,184 @@ async def tavus_health_check():
                 "error": str(e)
             }
         )
+
+
+# ============================================================================
+# Replica-Voice Mapping API Endpoints
+# ============================================================================
+
+class CreateReplicaMappingRequest(BaseModel):
+    """Request model for creating a replica-voice mapping"""
+    replica_id: str
+    voice_id: str
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_default: bool = False
+
+
+@router.get("/api/v1/tavus/replica-mappings")
+async def list_replica_mappings(db: DbServiceDep):
+    """List all replica-voice mappings"""
+    try:
+        mappings = await db.list_replica_configs()
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "data": mappings,
+                "count": len(mappings)
+            }
+        )
+    except Exception as e:
+        logger.error(f"❌ Error listing replica mappings: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/v1/tavus/replica-mappings/default")
+async def get_default_replica_mapping(db: DbServiceDep):
+    """Get the default replica-voice mapping"""
+    try:
+        config = await db.get_default_replica_config()
+        if config:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "data": config
+                }
+            )
+        else:
+            raise HTTPException(status_code=404, detail="No default replica mapping found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error getting default replica mapping: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/v1/tavus/replica-mappings/{replica_id}")
+async def get_replica_mapping(replica_id: str, db: DbServiceDep):
+    """Get replica-voice mapping for a specific replica"""
+    try:
+        config = await db.get_replica_config(replica_id)
+        if config:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "data": config
+                }
+            )
+        else:
+            raise HTTPException(status_code=404, detail=f"Replica mapping not found: {replica_id}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error getting replica mapping: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/v1/tavus/replica-mappings")
+async def create_replica_mapping(request: CreateReplicaMappingRequest, db: DbServiceDep):
+    """
+    Create or update a replica-voice mapping
+    
+    Validates that:
+    - replica_id exists in Tavus
+    - voice_id exists in Cartesia
+    """
+    try:
+        # Validate replica exists in Tavus
+        replica = await tavus_service.get_replica(request.replica_id, verbose=False)
+        if not replica:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Replica not found in Tavus: {request.replica_id}"
+            )
+        
+        # Validate voice exists in Cartesia
+        voice = await voice_cloning_service.get_voice(request.voice_id)
+        if not voice:
+            # Try to list all voices to see if it's a pre-built voice
+            all_voices = await voice_cloning_service.list_voices()
+            voice_found = any(v.get("id") == request.voice_id for v in all_voices)
+            if not voice_found:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Voice not found in Cartesia: {request.voice_id}"
+                )
+        
+        # Create mapping
+        success = await db.create_replica_mapping(
+            replica_id=request.replica_id,
+            voice_id=request.voice_id,
+            name=request.name,
+            description=request.description,
+            is_default=request.is_default
+        )
+        
+        if success:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "message": f"Replica mapping created/updated: {request.replica_id}"
+                }
+            )
+        else:
+            raise HTTPException(status_code=500, detail="Failed to create replica mapping")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error creating replica mapping: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/api/v1/tavus/replica-mappings/{replica_id}/set-default")
+async def set_default_replica_mapping(replica_id: str, db: DbServiceDep):
+    """Set a replica as the default (unset others)"""
+    try:
+        # Verify replica mapping exists
+        config = await db.get_replica_config(replica_id)
+        if not config:
+            raise HTTPException(status_code=404, detail=f"Replica mapping not found: {replica_id}")
+        
+        success = await db.set_default_replica(replica_id)
+        if success:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "message": f"Replica {replica_id} set as default"
+                }
+            )
+        else:
+            raise HTTPException(status_code=500, detail="Failed to set default replica")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error setting default replica: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/api/v1/tavus/replica-mappings/{replica_id}")
+async def delete_replica_mapping(replica_id: str, db: DbServiceDep):
+    """Delete a replica-voice mapping (soft delete)"""
+    try:
+        success = await db.delete_replica_mapping(replica_id)
+        if success:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "message": f"Replica mapping deleted: {replica_id}"
+                }
+            )
+        else:
+            raise HTTPException(status_code=404, detail=f"Replica mapping not found: {replica_id}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error deleting replica mapping: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 

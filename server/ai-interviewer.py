@@ -168,6 +168,29 @@ async def fetch_interview_config(session: aiohttp.ClientSession, interview_id: s
         logger.error(f"Error fetching interview config: {e}")
         return None
 
+async def fetch_replica_config(session: aiohttp.ClientSession, replica_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Fetch replica-voice configuration from web server"""
+    try:
+        url = f"{WEB_SERVER_URL}/api/v1/bot/replica-config"
+        if replica_id:
+            url += f"?replica_id={replica_id}"
+        logger.info(f"Fetching replica config from: {url}")
+        
+        async with session.get(url) as response:
+            if response.status == 200:
+                config = await response.json()
+                logger.info(f"✅ Retrieved replica config: replica={config.get('replica_id')}, voice={config.get('voice_id')}, source={config.get('source', 'database')}")
+                return config
+            elif response.status == 404:
+                logger.warning("No replica config found in database, will fallback to env vars")
+                return None
+            else:
+                logger.warning(f"Failed to fetch replica config: {response.status}")
+                return None
+    except Exception as e:
+        logger.warning(f"Error fetching replica config (will use env vars): {e}")
+        return None
+
 async def send_interview_result(
     session: aiohttp.ClientSession, 
     interview_id: str, 
@@ -837,6 +860,23 @@ async def run_bot(
         logger.info(f"🎯 Using dynamic interview config with {len(interview_config.get('questions', []))} questions")
     else:
         logger.warning("⚠️ Using fallback interview configuration")
+    
+    # Fetch replica-voice configuration from web server
+    # Check if interview config specifies a replica_id, otherwise use default
+    interview_replica_id = interview_config.get("replica_id") if interview_config else None
+    replica_config = await fetch_replica_config(session, replica_id=interview_replica_id)
+    
+    # Extract replica_id and voice_id (fallback to env vars if not in database)
+    if replica_config:
+        replica_id = replica_config.get("replica_id")
+        voice_id = replica_config.get("voice_id")
+        config_source = replica_config.get("source", "database")
+        logger.info(f"📋 Using replica config from {config_source}: replica={replica_id}, voice={voice_id}")
+    else:
+        # Fallback to environment variables
+        replica_id = os.getenv("TAVUS_REPLICA_ID")
+        voice_id = os.getenv("CARTESIA_VOICE_ID", "a0e99841-438c-4a64-b679-ae501e7d6091")
+        logger.info(f"📋 Using replica config from environment: replica={replica_id}, voice={voice_id}")
 
     # Initialize AI services based on configuration
     if BOT_IMPLEMENTATION == "openai":
@@ -854,17 +894,17 @@ async def run_bot(
                 logger.error("CARTESIA_API_KEY is required when TTS_SERVICE=cartesia")
                 sys.exit(1)
             
-            # Use Pipecat's built-in Cartesia with WebSocket streaming for low latency
+            # Use voice_id from database config (or env var fallback)
             tts = CartesiaTTSService(
                 api_key=os.getenv("CARTESIA_API_KEY"),
-                voice_id=os.getenv("CARTESIA_VOICE_ID", "a0e99841-438c-4a64-b679-ae501e7d6091"),
+                voice_id=voice_id,  # From database or env var
                 model=os.getenv("CARTESIA_MODEL", "sonic-english"),
                 # IMPORTANT:
                 # Daily/WebRTC output runs at 48kHz. Using 16kHz here can cause audible
                 # "stuttering"/gaps (e.g. "He llo Jo hn") due to timing/packetization.
                 sample_rate=48000,
             )
-            logger.info(f"✅ Initialized Cartesia TTS (WebSocket) with voice: {os.getenv('CARTESIA_VOICE_ID', 'default')}")
+            logger.info(f"✅ Initialized Cartesia TTS (WebSocket) with voice: {voice_id}")
         else:
             # Default to OpenAI TTS
             tts = OpenAITTSService(
@@ -927,16 +967,16 @@ async def run_bot(
         if not os.getenv("TAVUS_API_KEY"):
             logger.error("TAVUS_API_KEY is required when VIDEO_SERVICE=tavus")
             sys.exit(1)
-        if not os.getenv("TAVUS_REPLICA_ID"):
-            logger.error("TAVUS_REPLICA_ID is required when VIDEO_SERVICE=tavus")
+        if not replica_id:
+            logger.error("Replica ID is required when VIDEO_SERVICE=tavus (check database config or TAVUS_REPLICA_ID env var)")
             sys.exit(1)
             
         video_service = TavusVideoService(
             api_key=os.getenv("TAVUS_API_KEY"),
-            replica_id=os.getenv("TAVUS_REPLICA_ID"),
+            replica_id=replica_id,  # From database or env var
             session=session,
         )
-        logger.info(f"Initialized Tavus with replica: {os.getenv('TAVUS_REPLICA_ID')}")
+        logger.info(f"Initialized Tavus with replica: {replica_id}")
         
     elif VIDEO_SERVICE == "simli":
         if not os.getenv("SIMLI_API_KEY"):
