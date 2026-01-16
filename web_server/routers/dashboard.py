@@ -429,7 +429,8 @@ async def create_interview(
     notes: str = Form(""),
     auto_start: bool = Form(False),  # Sprint 1.2: Auto-start bot option
     job_description: str = Form(...),  # NEW: JD text for GPT parsing
-    candidate_resume: str = Form(...)  # NEW: Resume text for GPT parsing
+    candidate_resume: str = Form(...),  # NEW: Resume text for GPT parsing
+    replica_id: str = Form("")  # NEW: Optional replica selection
 ):
     """Create a new interview"""
     import uuid
@@ -541,7 +542,9 @@ async def create_interview(
                 "job_description_parsed": parsed_jd,
                 "candidate_resume_parsed": parsed_resume,
                 "job_description_raw": job_description,
-                "candidate_resume_raw": candidate_resume
+                "candidate_resume_raw": candidate_resume,
+                # NEW: Store replica_id if specified (bot will read this from interview_config)
+                "replica_id": replica_id if replica_id else None
             },
             status="scheduled"
         )

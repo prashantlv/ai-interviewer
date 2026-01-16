@@ -124,6 +124,23 @@
                             </div>
                         </div>
 
+                        <!-- Replica Selection -->
+                        <div class="row">
+                            <div class="col-md-12 mb-3">
+                                <label for="replica_id" class="form-label">
+                                    <i class="bi bi-person-video2 me-1"></i> Avatar Replica
+                                    <span class="badge bg-info">Optional</span>
+                                </label>
+                                <select class="form-select" id="replica_id" name="replica_id">
+                                    <option value="">Use Default Replica</option>
+                                    <!-- Replicas will be loaded via JavaScript -->
+                                </select>
+                                <div class="form-text">
+                                    <i class="bi bi-info-circle"></i> Select a specific replica for this interview, or leave as "Default" to use the configured default replica
+                                </div>
+                            </div>
+                        </div>
+
                         <script>
                             // Update scoring info based on selection
                             document.getElementById('scoring_level').addEventListener('change', function() {
@@ -539,9 +556,46 @@ document.getElementById('h2i_candidate').addEventListener('change', function() {
     }
 });
 
+// Load replicas for replica selector
+async function loadReplicas() {
+    try {
+        const response = await fetch('/api/v1/tavus/replicas?limit=100&replica_type=all');
+        const result = await response.json();
+        const select = document.getElementById('replica_id');
+        
+        if (select && result.data) {
+            // Get default replica from mappings
+            const mappingsResponse = await fetch('/api/v1/tavus/replica-mappings/default');
+            let defaultReplicaId = null;
+            try {
+                const mappingsResult = await mappingsResponse.json();
+                if (mappingsResult.success && mappingsResult.data) {
+                    defaultReplicaId = mappingsResult.data.replica_id;
+                }
+            } catch (e) {
+                // No default set, that's fine
+            }
+            
+            // Add replicas to dropdown
+            result.data.forEach(replica => {
+                const option = document.createElement('option');
+                option.value = replica.replica_id;
+                option.textContent = replica.replica_name + (replica.replica_id === defaultReplicaId ? ' (Default)' : '');
+                if (replica.replica_id === defaultReplicaId) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Failed to load replicas:', error);
+    }
+}
+
 // Load jobs on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadJobs();
+    loadReplicas();
     
     // Add loading state to form submission
     const form = document.querySelector('form');
