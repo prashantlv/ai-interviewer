@@ -815,7 +815,12 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadDefaultReplicaSelector() {
         const select = document.getElementById("defaultReplicaSelect");
         const nameSpan = document.getElementById("currentDefaultName");
-        if (!select) return;
+        if (!select) {
+            console.log("Select element not found");
+            return;
+        }
+        
+        console.log("Loading default replica selector...");
         
         try {
             // First fetch current default to get the replica_id
@@ -832,49 +837,74 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 } else {
                     console.log("No default replica set (404)");
-                    if (nameSpan) nameSpan.textContent = "None set";
                 }
             } catch (e) {
                 console.log("Error fetching default:", e);
-                if (nameSpan) nameSpan.textContent = "None set";
             }
             
-            // Now fetch all replicas
-            const response = await fetch("/api/v1/tavus/replicas?limit=100&replica_type=all");
-            const result = await response.json();
+            // Now fetch all replicas - use the replicas already on the page
+            // This is more reliable than making another API call
+            const replicas = [
+                {% for replica in replicas %}
+                {
+                    replica_id: "{{ replica.replica_id }}",
+                    replica_name: "{{ replica.replica_name }}",
+                    is_default: {{ 'true' if replica.is_default else 'false' }}
+                },
+                {% endfor %}
+            ];
             
-            if (result.success && result.data) {
-                select.innerHTML = "<option value=\"\">-- Select Default Replica --</option>";
-                
-                // Sort replicas: default first, then by name
-                const sortedReplicas = [...result.data].sort((a, b) => {
-                    if (a.replica_id === currentDefaultId) return -1;
-                    if (b.replica_id === currentDefaultId) return 1;
-                    return (a.replica_name || "").localeCompare(b.replica_name || "");
-                });
-                
-                sortedReplicas.forEach(replica => {
-                    const option = document.createElement("option");
-                    option.value = replica.replica_id;
-                    const isDefault = replica.replica_id === currentDefaultId;
-                    option.textContent = replica.replica_name + (isDefault ? " ★ (Default)" : "");
-                    if (isDefault) {
-                        option.selected = true;
-                        currentDefaultReplicaName = replica.replica_name;
-                    }
-                    select.appendChild(option);
-                });
-                
-                // Update the name display
-                if (nameSpan) {
-                    if (currentDefaultReplicaName) {
-                        nameSpan.textContent = currentDefaultReplicaName;
-                    } else if (currentDefaultId) {
-                        nameSpan.textContent = currentDefaultId.substring(0, 12) + "...";
-                    } else {
-                        nameSpan.textContent = "None set";
-                    }
+            console.log("Loaded " + replicas.length + " replicas from page");
+            
+            // If no replicas from page, try API
+            if (replicas.length === 0) {
+                console.log("No replicas from page, trying API...");
+                const response = await fetch("/api/v1/tavus/replicas?limit=100&replica_type=all");
+                const result = await response.json();
+                if (result.success && result.data) {
+                    result.data.forEach(r => replicas.push({
+                        replica_id: r.replica_id,
+                        replica_name: r.replica_name,
+                        is_default: r.replica_id === currentDefaultId
+                    }));
                 }
+            }
+            
+            // Build select options
+            select.innerHTML = "<option value=\"\">-- Select Default Replica --</option>";
+            
+            // Sort replicas: default first, then by name
+            const sortedReplicas = [...replicas].sort((a, b) => {
+                if (a.is_default || a.replica_id === currentDefaultId) return -1;
+                if (b.is_default || b.replica_id === currentDefaultId) return 1;
+                return (a.replica_name || "").localeCompare(b.replica_name || "");
+            });
+            
+            sortedReplicas.forEach(replica => {
+                const option = document.createElement("option");
+                option.value = replica.replica_id;
+                const isDefault = replica.is_default || replica.replica_id === currentDefaultId;
+                option.textContent = replica.replica_name + (isDefault ? " ★ (Default)" : "");
+                if (isDefault) {
+                    option.selected = true;
+                    currentDefaultReplicaName = replica.replica_name;
+                    currentDefaultId = replica.replica_id;  // Sync from page data
+                }
+                select.appendChild(option);
+            });
+            
+            console.log("Added " + sortedReplicas.length + " options to select");
+            
+            // Update the name display
+            if (nameSpan) {
+                if (currentDefaultReplicaName) {
+                    nameSpan.textContent = currentDefaultReplicaName;
+                } else if (currentDefaultId) {
+                    nameSpan.textContent = currentDefaultId.substring(0, 12) + "...";
+                } else {
+                    nameSpan.textContent = "None set";
+                }
+            }
                 
                 // Add change handler (only once)
                 if (!select.dataset.listenerAdded) {
@@ -901,9 +931,15 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } catch (error) {
             console.error("Failed to load replicas:", error);
-            select.innerHTML = "<option value=\"\">Error loading replicas</option>";
-            if (nameSpan) nameSpan.textContent = "Error";
+            select.innerHTML = "<option value=\"\">Error loading - try refreshing</option>";
+            if (nameSpan) nameSpan.textContent = "Error - refresh page";
         }
+    }
+    
+    // Also run immediately in case DOMContentLoaded already fired
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        console.log("Document already loaded, running loadDefaultReplicaSelector immediately");
+        loadDefaultReplicaSelector();
     }
     
     // Run on page load
