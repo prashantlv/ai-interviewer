@@ -834,40 +834,62 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (defaultResult.success && defaultResult.data) {
                         currentDefaultId = defaultResult.data.replica_id;
                         console.log("Found default replica:", currentDefaultId);
+                        
+                        // Try to get replica name - first check page replicas
+                        const pageReplica = [
+                            {% for replica in replicas %}
+                            { replica_id: "{{ replica.replica_id }}", replica_name: "{{ replica.replica_name }}" },
+                            {% endfor %}
+                        ].find(r => r.replica_id === currentDefaultId);
+                        
+                        if (pageReplica) {
+                            currentDefaultReplicaName = pageReplica.replica_name;
+                        } else {
+                            // Default not on this page - fetch from API
+                            try {
+                                const replicaResponse = await fetch(`/api/v1/tavus/replicas/${currentDefaultId}`);
+                                if (replicaResponse.ok) {
+                                    const replicaResult = await replicaResponse.json();
+                                    if (replicaResult.success && replicaResult.data) {
+                                        currentDefaultReplicaName = replicaResult.data.replica_name;
+                                    }
+                                }
+                            } catch (e) {
+                                console.log("Could not fetch default replica name:", e);
+                            }
+                        }
+                        
+                        // Update green box immediately with the name
+                        if (nameSpan && currentDefaultReplicaName) {
+                            nameSpan.textContent = currentDefaultReplicaName;
+                        } else if (nameSpan && currentDefaultId) {
+                            nameSpan.textContent = currentDefaultId.substring(0, 12) + "...";
+                        }
                     }
                 } else {
                     console.log("No default replica set (404)");
+                    if (nameSpan) nameSpan.textContent = "None set";
                 }
             } catch (e) {
                 console.log("Error fetching default:", e);
+                if (nameSpan) nameSpan.textContent = "None set";
             }
             
-            // Now fetch all replicas - use the replicas already on the page
-            // This is more reliable than making another API call
-            const replicas = [
-                {% for replica in replicas %}
-                {
-                    replica_id: "{{ replica.replica_id }}",
-                    replica_name: "{{ replica.replica_name }}",
-                    is_default: {{ 'true' if replica.is_default else 'false' }}
-                },
-                {% endfor %}
-            ];
-            
-            console.log("Loaded " + replicas.length + " replicas from page");
-            
-            // If no replicas from page, try API
-            if (replicas.length === 0) {
-                console.log("No replicas from page, trying API...");
+            // For dropdown: fetch ALL replicas (not just page replicas)
+            // This ensures the default is always in the list
+            let replicas = [];
+            try {
                 const response = await fetch("/api/v1/tavus/replicas?limit=100&replica_type=all");
                 const result = await response.json();
                 if (result.success && result.data) {
-                    result.data.forEach(r => replicas.push({
+                    replicas = result.data.map(r => ({
                         replica_id: r.replica_id,
                         replica_name: r.replica_name,
                         is_default: r.replica_id === currentDefaultId
                     }));
                 }
+            } catch (e) {
+                console.log("Error fetching replicas for dropdown:", e);
             }
             
             // Build select options
