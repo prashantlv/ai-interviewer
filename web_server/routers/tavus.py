@@ -104,6 +104,9 @@ async def replicas_page(request: Request, page: int = 1, limit: int = 20, replic
                 replica["voice_name"] = "Not configured"
                 replica["is_default"] = False
         
+        # Sort replicas: default first, then by name
+        replicas = sorted(replicas, key=lambda r: (not r.get("is_default", False), r.get("replica_name", "").lower()))
+        
         total_pages = (total_count + limit - 1) // limit  # Ceiling division
         
         return templates.TemplateResponse(
@@ -501,28 +504,181 @@ async def create_replica_mapping(request: CreateReplicaMappingRequest, db: DbSer
 
 @router.patch("/api/v1/tavus/replica-mappings/{replica_id}/set-default")
 async def set_default_replica_mapping(replica_id: str, db: DbServiceDep):
-    """Set a replica as the default (unset others)"""
+    """Set a replica as the default (unset others)
+    
+    If no mapping exists for this replica, creates one with auto-cloned voice.
+    """
     try:
-        # Verify replica mapping exists
+        # Verify replica exists in Tavus
+        replica = await tavus_service.get_replica(replica_id, verbose=False)
+        if not replica:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Replica not found in Tavus: {replica_id}"
+            )
+        
+        replica_name = replica.get("replica_name", replica_id)
+        
+        # Check if mapping exists
         config = await db.get_replica_config(replica_id)
         if not config:
-            raise HTTPException(status_code=404, detail=f"Replica mapping not found: {replica_id}")
-        
-        success = await db.set_default_replica(replica_id)
-        if success:
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "success": True,
-                    "message": f"Replica {replica_id} set as default"
-                }
+            # No mapping exists - create one with auto-cloned voice
+            # The bot will auto-clone the voice when needed, but we need a mapping entry
+            logger.info(f"🔄 No mapping found for {replica_id}, creating default mapping...")
+            
+            # Create a basic mapping (voice will be auto-cloned by bot when used)
+            # Use None/empty voice_id - bot will auto-clone from video when needed
+            # We need to modify create_replica_mapping to accept optional voice_id
+            # For now, create mapping with a placeholder that bot will replace
+            success = await db.create_replica_mapping(
+                replica_id=replica_id,
+                voice_id="auto-clone",  # Special marker - bot will auto-clone when used
+                name=f"{replica_name} Voice",
+                description="Auto-created when set as default (voice will be auto-cloned)",
+                is_default=True
             )
+            
+            if not success:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to create replica mapping"
+                )
         else:
-            raise HTTPException(status_code=500, detail="Failed to set default replica")
+            # Mapping exists - just set as default
+            success = await db.set_default_replica(replica_id)
+            if not success:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to set default replica"
+                )
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "message": f"Replica {replica_name} set as default"
+            }
+        )
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"❌ Error setting default replica: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/v1/tavus/replica-mappings/{replica_id}/clone-voice")
+async def clone_voice_for_replica(replica_id: str, db: DbServiceDep):
+    """
+    Manually clone voice from replica's thumbnail video.
+    
+    This extracts audio from the replica's video and creates a Cartesia voice clone.
+    The cloned voice is then saved as a mapping for this replica.
+    """
+    try:
+        import httpx
+        import tempfile
+        import subprocess
+        from services.voice_cloning_service import VoiceCloningService
+        
+        # Verify replica exists
+        replica = await tavus_service.get_replica(replica_id, verbose=True)
+        if not replica:
+            raise HTTPException(status_code=404, detail=f"Replica not found: {replica_id}")
+        
+        replica_name = replica.get("replica_name", "Unknown")
+        video_url = replica.get("thumbnail_video_url")
+        
+        if not video_url:
+            raise HTTPException(status_code=400, detail="No video URL found for this replica")
+        
+        logger.info(f"🎤 Cloning voice for replica: {replica_name} ({replica_id})")
+        
+        # Download video
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.get(video_url)
+            if response.status_code != 200:
+                raise HTTPException(status_code=500, detail=f"Failed to download video: {response.status_code}")
+            video_data = response.content
+        
+        # Extract audio with ffmpeg
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as vf:
+            vf.write(video_data)
+            video_path = vf.name
+        
+        audio_path = video_path.replace(".mp4", ".wav")
+        
+        try:
+            result = subprocess.run([
+                "ffmpeg", "-i", video_path,
+                "-vn", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "1",
+                "-t", "10", "-y", audio_path
+            ], capture_output=True, timeout=30)
+            
+            if result.returncode != 0:
+                error_msg = result.stderr.decode()[:200] if result.stderr else "Unknown error"
+                raise HTTPException(status_code=500, detail=f"FFmpeg error: {error_msg}")
+            
+            with open(audio_path, "rb") as f:
+                audio_data = f.read()
+            
+            # Clone voice using Cartesia
+            voice_service = VoiceCloningService()
+            voice_name = f"{replica_name} Voice"
+            
+            clone_result = await voice_service.clone_voice(
+                audio_data=audio_data,
+                voice_name=voice_name,
+                language="en",
+                mode="similarity"
+            )
+            
+            cloned_voice_id = clone_result.get("voice_id")
+            
+            if not cloned_voice_id:
+                raise HTTPException(status_code=500, detail="Voice cloning failed - no voice_id returned")
+            
+            # Check if this replica is currently the default
+            current_default = await db.get_default_replica_config()
+            is_default = current_default and current_default.get("replica_id") == replica_id
+            
+            # Save the mapping
+            success = await db.create_replica_mapping(
+                replica_id=replica_id,
+                voice_id=cloned_voice_id,
+                name=voice_name,
+                description=f"Cloned from {replica_name} video",
+                is_default=is_default
+            )
+            
+            if not success:
+                raise HTTPException(status_code=500, detail="Failed to save voice mapping")
+            
+            logger.info(f"✅ Voice cloned successfully: {voice_name} ({cloned_voice_id})")
+            
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "message": f"Voice cloned successfully for {replica_name}",
+                    "voice_id": cloned_voice_id,
+                    "voice_name": voice_name
+                }
+            )
+            
+        finally:
+            import os as _os
+            try:
+                _os.unlink(video_path)
+                _os.unlink(audio_path)
+            except:
+                pass
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error cloning voice: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 

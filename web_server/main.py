@@ -677,22 +677,62 @@ async def get_replica_config(replica_id: Optional[str] = None):
     """
     Get replica-voice configuration for bot.
     
-    If replica_id is provided, returns config for that replica.
+    If replica_id is provided, returns config for that replica (auto-cloning voice if needed).
     Otherwise, returns the default replica config.
     
-    Falls back to environment variables if database lookup fails.
+    Falls back to environment variables only if no replica_id specified and no default exists.
     """
     try:
         config = None
+        target_replica_id = replica_id
         
         if replica_id:
-            # Get specific replica config
+            # Specific replica requested - try to get its mapping
             config = await db_service.get_replica_config(replica_id)
+            
+            # If no mapping exists for this replica, auto-clone its voice
+            if not config:
+                print(f"🔄 No mapping for replica {replica_id}, will auto-clone voice")
+                cloned_voice_id = await _auto_clone_voice_for_replica(replica_id)
+                
+                if cloned_voice_id:
+                    print(f"✅ Voice auto-cloned for {replica_id}: {cloned_voice_id}")
+                    config = {
+                        "replica_id": replica_id,
+                        "voice_id": cloned_voice_id,
+                        "is_default": False,
+                        "source": "auto-cloned"
+                    }
+                else:
+                    # Use fallback voice but still use the requested replica
+                    fallback_voice = os.getenv("CARTESIA_VOICE_ID", "a0e99841-438c-4a64-b679-ae501e7d6091")
+                    print(f"⚠️ Auto-clone failed for {replica_id}, using fallback voice: {fallback_voice}")
+                    config = {
+                        "replica_id": replica_id,
+                        "voice_id": fallback_voice,
+                        "is_default": False,
+                        "source": "fallback"
+                    }
         else:
-            # Get default config
+            # No specific replica - get default config
             config = await db_service.get_default_replica_config()
+            if config:
+                target_replica_id = config.get("replica_id")
         
-        # Fallback to environment variables if no database config found
+        # Handle auto-clone marker for existing mappings
+        if config and config.get("voice_id") == "auto-clone" and target_replica_id:
+            print(f"🔄 Voice needs auto-cloning for replica: {target_replica_id}")
+            cloned_voice_id = await _auto_clone_voice_for_replica(target_replica_id)
+            if cloned_voice_id:
+                config["voice_id"] = cloned_voice_id
+                print(f"✅ Auto-cloned voice: {cloned_voice_id}")
+            else:
+                # Fallback to default Cartesia voice
+                fallback = os.getenv("CARTESIA_VOICE_ID", "a0e99841-438c-4a64-b679-ae501e7d6091")
+                config["voice_id"] = fallback
+                print(f"⚠️ Auto-clone failed, using fallback: {fallback}")
+        
+        # Fallback to environment variables ONLY if no replica specified and no default
         if not config:
             replica_id_env = os.getenv("TAVUS_REPLICA_ID")
             voice_id_env = os.getenv("CARTESIA_VOICE_ID", "a0e99841-438c-4a64-b679-ae501e7d6091")
@@ -702,7 +742,7 @@ async def get_replica_config(replica_id: Optional[str] = None):
                     "replica_id": replica_id_env,
                     "voice_id": voice_id_env,
                     "is_default": True,
-                    "source": "environment"  # Indicate this came from env vars
+                    "source": "environment"
                 }
         
         if config:
@@ -722,6 +762,105 @@ async def get_replica_config(replica_id: Optional[str] = None):
     except Exception as e:
         print(f"❌ Error getting replica config: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get replica config: {str(e)}")
+
+
+async def _auto_clone_voice_for_replica(replica_id: str) -> Optional[str]:
+    """
+    Auto-clone a voice from the replica's thumbnail video.
+    Returns the cloned voice_id if successful, None otherwise.
+    """
+    try:
+        from services.tavus_service import TavusService
+        from services.voice_cloning_service import VoiceCloningService
+        import httpx
+        import tempfile
+        import subprocess
+        
+        tavus = TavusService()
+        voice_service = VoiceCloningService()
+        
+        # Get replica details
+        replica = await tavus.get_replica(replica_id, verbose=True)
+        if not replica:
+            print(f"❌ Replica not found: {replica_id}")
+            return None
+        
+        replica_name = replica.get("replica_name", "Unknown")
+        video_url = replica.get("thumbnail_video_url")
+        
+        if not video_url:
+            print(f"❌ No video URL for replica: {replica_id}")
+            return None
+        
+        print(f"🎬 Downloading video for voice clone: {video_url[:50]}...")
+        
+        # Download video
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.get(video_url)
+            if response.status_code != 200:
+                print(f"❌ Failed to download video: {response.status_code}")
+                return None
+            video_data = response.content
+        
+        # Extract audio with ffmpeg
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as vf:
+            vf.write(video_data)
+            video_path = vf.name
+        
+        audio_path = video_path.replace(".mp4", ".wav")
+        
+        try:
+            result = subprocess.run([
+                "ffmpeg", "-i", video_path,
+                "-vn", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "1",
+                "-t", "10", "-y", audio_path
+            ], capture_output=True, timeout=30)
+            
+            if result.returncode != 0:
+                print(f"❌ FFmpeg error: {result.stderr.decode()[:200]}")
+                return None
+            
+            with open(audio_path, "rb") as f:
+                audio_data = f.read()
+            
+            # Clone voice
+            voice_name = f"{replica_name} Voice (Auto)"
+            clone_result = await voice_service.clone_voice(
+                audio_data=audio_data,
+                voice_name=voice_name,
+                language="en",
+                mode="similarity"
+            )
+            
+            cloned_voice_id = clone_result.get("voice_id")
+            
+            if cloned_voice_id:
+                # Update mapping with real voice_id
+                await db_service.create_replica_mapping(
+                    replica_id=replica_id,
+                    voice_id=cloned_voice_id,
+                    name=voice_name,
+                    description=f"Auto-cloned from {replica_name}",
+                    is_default=True
+                )
+                print(f"✅ Voice cloned: {cloned_voice_id}")
+                return cloned_voice_id
+                
+        finally:
+            import os as _os
+            try:
+                _os.unlink(video_path)
+                _os.unlink(audio_path)
+            except:
+                pass
+        
+        return None
+        
+    except Exception as e:
+        print(f"❌ Auto-clone failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 # ============================================================================
 # SCORING CONFIGURATION API ENDPOINTS

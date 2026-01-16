@@ -170,6 +170,41 @@
 {% endblock %}
 
 {% block content %}
+<!-- Default Replica Selector -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0">
+                    <i class="bi bi-star-fill me-2"></i>Default Replica Configuration
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <label for="defaultReplicaSelect" class="form-label mb-2">
+                            <strong>Select Default Replica:</strong>
+                        </label>
+                        <select class="form-select" id="defaultReplicaSelect">
+                            <option value="">Loading replicas...</option>
+                        </select>
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle"></i> The default replica will be used for all interviews unless a specific replica is selected during scheduling.
+                        </small>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="alert alert-success mb-0" id="defaultReplicaDisplay">
+                            <i class="bi bi-check-circle me-1"></i>
+                            <strong>Current Default:</strong><br>
+                            <span id="currentDefaultName">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Filter Tabs -->
 <div class="row mb-3">
     <div class="col-12">
@@ -266,9 +301,43 @@
                 </p>
             </div>
             <div class="card-footer bg-transparent border-top-0 pt-0">
+                {% if replica.voice_id and replica.voice_id != 'auto-clone' %}
+                <div class="mb-2">
+                    <small class="text-success">
+                        <i class="bi bi-mic-fill me-1"></i>Voice: <strong>{{ replica.voice_name }}</strong>
+                    </small>
+                    {% if replica.is_default %}
+                    <br><small class="text-warning"><i class="bi bi-star-fill"></i> Default replica</small>
+                    {% endif %}
+                </div>
+                {% elif replica.voice_id == 'auto-clone' %}
+                <div class="mb-2">
+                    <small class="text-info">
+                        <i class="bi bi-clock me-1"></i>Voice: <em>Auto-clone pending</em>
+                    </small>
+                    {% if replica.is_default %}
+                    <br><small class="text-warning"><i class="bi bi-star-fill"></i> Default replica</small>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="mb-2">
+                    <small class="text-muted">
+                        <i class="bi bi-mic-mute me-1"></i>Voice not configured
+                    </small>
+                </div>
+                {% endif %}
                 <div class="btn-group btn-group-sm w-100" onclick="event.stopPropagation();">
                     <button class="btn btn-outline-primary" onclick="viewReplica('{{ replica.replica_id }}')" title="View">
                         <i class="bi bi-eye"></i>
+                    </button>
+                    <button class="btn btn-outline-info" id="clone-btn-{{ replica.replica_id }}" 
+                            onclick="cloneVoice('{{ replica.replica_id }}', '{{ replica.replica_name }}')" 
+                            title="{{ 'Voice: ' + replica.voice_name if replica.voice_id and replica.voice_id != 'auto-clone' else 'Clone Voice from Video' }}">
+                        {% if replica.voice_id and replica.voice_id != 'auto-clone' %}
+                        <i class="bi bi-mic-fill text-success"></i>
+                        {% else %}
+                        <i class="bi bi-mic"></i>
+                        {% endif %}
                     </button>
                     <button class="btn btn-outline-warning" onclick="showRenameModal('{{ replica.replica_id }}', '{{ replica.replica_name }}')" title="Rename">
                         <i class="bi bi-pencil"></i>
@@ -298,7 +367,8 @@
                         <th>Status</th>
                         <th>Type</th>
                         <th>Model</th>
-                        <th style="width: 120px;">Actions</th>
+                        <th>Voice</th>
+                        <th style="width: 180px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -330,10 +400,38 @@
                         </td>
                         <td><span class="badge bg-info">{{ replica.replica_type or 'N/A' }}</span></td>
                         <td><small>{{ replica.model_name or 'N/A' }}</small></td>
+                        <td>
+                            {% if replica.voice_id and replica.voice_id != 'auto-clone' %}
+                                <span class="badge bg-success" title="{{ replica.voice_id }}">
+                                    <i class="bi bi-mic-fill me-1"></i>{{ replica.voice_name }}
+                                </span>
+                                {% if replica.is_default %}
+                                    <br><small class="text-muted"><i class="bi bi-star-fill text-warning"></i> Default</small>
+                                {% endif %}
+                            {% elif replica.voice_id == 'auto-clone' %}
+                                <span class="badge bg-info" title="Voice will be auto-cloned on first use">
+                                    <i class="bi bi-clock me-1"></i>Auto-clone pending
+                                </span>
+                                {% if replica.is_default %}
+                                    <br><small class="text-muted"><i class="bi bi-star-fill text-warning"></i> Default</small>
+                                {% endif %}
+                            {% else %}
+                                <span class="badge bg-secondary">Not configured</span>
+                            {% endif %}
+                        </td>
                         <td onclick="event.stopPropagation();">
                             <div class="btn-group btn-group-sm">
                                 <button class="btn btn-outline-primary" onclick="viewReplica('{{ replica.replica_id }}')" title="View">
                                     <i class="bi bi-eye"></i>
+                                </button>
+                                <button class="btn btn-outline-info" id="clone-btn-tbl-{{ replica.replica_id }}"
+                                        onclick="cloneVoice('{{ replica.replica_id }}', '{{ replica.replica_name }}')" 
+                                        title="{{ 'Voice: ' + replica.voice_name if replica.voice_id and replica.voice_id != 'auto-clone' else 'Clone Voice from Video' }}">
+                                    {% if replica.voice_id and replica.voice_id != 'auto-clone' %}
+                                    <i class="bi bi-mic-fill text-success"></i>
+                                    {% else %}
+                                    <i class="bi bi-mic"></i>
+                                    {% endif %}
                                 </button>
                                 <button class="btn btn-outline-warning" onclick="showRenameModal('{{ replica.replica_id }}', '{{ replica.replica_name }}')" title="Rename">
                                     <i class="bi bi-pencil"></i>
@@ -460,6 +558,52 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Voice Configuration Modal -->
+<div class="modal fade" id="voiceConfigModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="bi bi-mic me-2"></i>Configure Voice Mapping</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="voiceConfigReplicaId">
+                <div class="mb-3">
+                    <label class="form-label"><strong>Replica:</strong></label>
+                    <p class="form-control-plaintext" id="voiceConfigReplicaName"></p>
+                </div>
+                <div class="mb-3">
+                    <label for="voiceIdSelect" class="form-label">Select Voice <span class="text-danger">*</span></label>
+                    <select class="form-select" id="voiceIdSelect" required>
+                        <option value="">Loading voices...</option>
+                    </select>
+                    <small class="text-muted">Voice will be automatically mapped to this replica</small>
+                </div>
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="voiceConfigIsDefault">
+                        <label class="form-check-label" for="voiceConfigIsDefault">
+                            Set as default replica
+                        </label>
+                    </div>
+                    <small class="text-muted">Default replica will be used for all interviews unless specified</small>
+                </div>
+                <div class="alert alert-info mb-0">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Note:</strong> This will map the selected Cartesia voice to this Tavus replica. 
+                    The bot will automatically use this voice when using this replica.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveVoiceMapping()">
+                    <i class="bi bi-save me-1"></i> Save Mapping
+                </button>
             </div>
         </div>
     </div>
@@ -626,5 +770,147 @@ document.addEventListener('DOMContentLoaded', function() {
                 .catch(e => alert('Error: ' + e.message));
         }
     }
+    
+    // Clone Voice from Replica Video
+    async function cloneVoice(replicaId, replicaName) {
+        if (!confirm(`Clone voice from "${replicaName}" video?\n\nThis will extract audio from the replica's video and create a voice clone. This may take 15-30 seconds.`)) {
+            return;
+        }
+        
+        // Find and update button(s)
+        const btns = document.querySelectorAll(`[id^="clone-btn-"][id$="${replicaId}"]`);
+        btns.forEach(btn => {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        });
+        
+        try {
+            const response = await fetch(`/api/v1/tavus/replica-mappings/${replicaId}/clone-voice`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                alert(`✅ Voice cloned successfully!\n\nVoice Name: ${result.voice_name}\nVoice ID: ${result.voice_id}`);
+                location.reload();
+            } else {
+                alert(`❌ Voice cloning failed:\n${result.detail || 'Unknown error'}`);
+                btns.forEach(btn => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-mic"></i>';
+                });
+            }
+        } catch (error) {
+            alert(`❌ Error: ${error.message}`);
+            btns.forEach(btn => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-mic"></i>';
+            });
+        }
+    }
+
+    // Load replicas for default selector and update current default name
+    async function loadDefaultReplicaSelector() {
+        const select = document.getElementById("defaultReplicaSelect");
+        const nameSpan = document.getElementById("currentDefaultName");
+        if (!select) return;
+        
+        try {
+            // First fetch current default to get the replica_id
+            let currentDefaultId = null;
+            let currentDefaultReplicaName = null;
+            
+            try {
+                const defaultResponse = await fetch("/api/v1/tavus/replica-mappings/default");
+                if (defaultResponse.ok) {
+                    const defaultResult = await defaultResponse.json();
+                    if (defaultResult.success && defaultResult.data) {
+                        currentDefaultId = defaultResult.data.replica_id;
+                        console.log("Found default replica:", currentDefaultId);
+                    }
+                } else {
+                    console.log("No default replica set (404)");
+                    if (nameSpan) nameSpan.textContent = "None set";
+                }
+            } catch (e) {
+                console.log("Error fetching default:", e);
+                if (nameSpan) nameSpan.textContent = "None set";
+            }
+            
+            // Now fetch all replicas
+            const response = await fetch("/api/v1/tavus/replicas?limit=100&replica_type=all");
+            const result = await response.json();
+            
+            if (result.success && result.data) {
+                select.innerHTML = "<option value=\"\">-- Select Default Replica --</option>";
+                
+                // Sort replicas: default first, then by name
+                const sortedReplicas = [...result.data].sort((a, b) => {
+                    if (a.replica_id === currentDefaultId) return -1;
+                    if (b.replica_id === currentDefaultId) return 1;
+                    return (a.replica_name || "").localeCompare(b.replica_name || "");
+                });
+                
+                sortedReplicas.forEach(replica => {
+                    const option = document.createElement("option");
+                    option.value = replica.replica_id;
+                    const isDefault = replica.replica_id === currentDefaultId;
+                    option.textContent = replica.replica_name + (isDefault ? " ★ (Default)" : "");
+                    if (isDefault) {
+                        option.selected = true;
+                        currentDefaultReplicaName = replica.replica_name;
+                    }
+                    select.appendChild(option);
+                });
+                
+                // Update the name display
+                if (nameSpan) {
+                    if (currentDefaultReplicaName) {
+                        nameSpan.textContent = currentDefaultReplicaName;
+                    } else if (currentDefaultId) {
+                        nameSpan.textContent = currentDefaultId.substring(0, 12) + "...";
+                    } else {
+                        nameSpan.textContent = "None set";
+                    }
+                }
+                
+                // Add change handler (only once)
+                if (!select.dataset.listenerAdded) {
+                    select.dataset.listenerAdded = "true";
+                    select.addEventListener("change", async function() {
+                        if (!this.value) return;
+                        
+                        const selectedName = this.options[this.selectedIndex].textContent.replace(" ★ (Default)", "");
+                        
+                        try {
+                            const response = await fetch(`/api/v1/tavus/replica-mappings/${this.value}/set-default`, { method: "PATCH" });
+                            const result = await response.json();
+                            if (result.success) {
+                                alert("Default set to: " + selectedName);
+                                location.reload();
+                            } else {
+                                alert("Failed: " + (result.detail || result.message || "Unknown error"));
+                            }
+                        } catch (error) {
+                            alert("Error: " + error.message);
+                        }
+                    });
+                }
+            }
+        } catch (error) {
+            console.error("Failed to load replicas:", error);
+            select.innerHTML = "<option value=\"\">Error loading replicas</option>";
+            if (nameSpan) nameSpan.textContent = "Error";
+        }
+    }
+    
+    // Run on page load
+    document.addEventListener("DOMContentLoaded", function() {
+        if (document.getElementById("defaultReplicaSelect")) {
+            loadDefaultReplicaSelector();
+        }
+    });
 </script>
 {% endblock %}
