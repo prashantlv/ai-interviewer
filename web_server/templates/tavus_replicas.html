@@ -905,29 +905,28 @@ document.addEventListener('DOMContentLoaded', function() {
                     nameSpan.textContent = "None set";
                 }
             }
-                
-                // Add change handler (only once)
-                if (!select.dataset.listenerAdded) {
-                    select.dataset.listenerAdded = "true";
-                    select.addEventListener("change", async function() {
-                        if (!this.value) return;
-                        
-                        const selectedName = this.options[this.selectedIndex].textContent.replace(" ★ (Default)", "");
-                        
-                        try {
-                            const response = await fetch(`/api/v1/tavus/replica-mappings/${this.value}/set-default`, { method: "PATCH" });
-                            const result = await response.json();
-                            if (result.success) {
-                                alert("Default set to: " + selectedName);
-                                location.reload();
-                            } else {
-                                alert("Failed: " + (result.detail || result.message || "Unknown error"));
-                            }
-                        } catch (error) {
-                            alert("Error: " + error.message);
+            
+            // Add change handler (only once)
+            if (!select.dataset.listenerAdded) {
+                select.dataset.listenerAdded = "true";
+                select.addEventListener("change", async function() {
+                    if (!this.value) return;
+                    
+                    const selectedName = this.options[this.selectedIndex].textContent.replace(" ★ (Default)", "");
+                    
+                    try {
+                        const response = await fetch(`/api/v1/tavus/replica-mappings/${this.value}/set-default`, { method: "PATCH" });
+                        const result = await response.json();
+                        if (result.success) {
+                            alert("Default set to: " + selectedName);
+                            location.reload();
+                        } else {
+                            alert("Failed: " + (result.detail || result.message || "Unknown error"));
                         }
-                    });
-                }
+                    } catch (error) {
+                        alert("Error: " + error.message);
+                    }
+                });
             }
         } catch (error) {
             console.error("Failed to load replicas:", error);
