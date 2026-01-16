@@ -180,26 +180,15 @@
                 </h6>
             </div>
             <div class="card-body">
-                <div class="row align-items-center">
-                    <div class="col-md-8">
-                        <label for="defaultReplicaSelect" class="form-label mb-2">
-                            <strong>Select Default Replica:</strong>
-                        </label>
-                        <select class="form-select" id="defaultReplicaSelect">
-                            <option value="">Loading replicas...</option>
-                        </select>
-                        <small class="text-muted">
-                            <i class="bi bi-info-circle"></i> The default replica will be used for all interviews unless a specific replica is selected during scheduling.
-                        </small>
-                    </div>
-                    <div class="col-md-4 text-end">
-                        <div class="alert alert-success mb-0" id="defaultReplicaDisplay">
-                            <i class="bi bi-check-circle me-1"></i>
-                            <strong>Current Default:</strong><br>
-                            <span id="currentDefaultName">Loading...</span>
-                        </div>
-                    </div>
-                </div>
+                <label for="defaultReplicaSelect" class="form-label mb-2">
+                    <strong>Select Default Replica:</strong>
+                </label>
+                <select class="form-select" id="defaultReplicaSelect">
+                    <option value="">Loading replicas...</option>
+                </select>
+                <small class="text-muted">
+                    <i class="bi bi-info-circle"></i> The default replica will be used for all interviews unless a specific replica is selected during scheduling.
+                </small>
             </div>
         </div>
     </div>
@@ -811,38 +800,27 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Load replicas for default selector and update current default name
+    // Load replicas for default selector dropdown
     async function loadDefaultReplicaSelector() {
         const select = document.getElementById("defaultReplicaSelect");
-        const nameSpan = document.getElementById("currentDefaultName");
-        if (!select) {
-            console.log("Select element not found");
-            return;
-        }
-        
-        console.log("Loading default replica selector...");
+        if (!select) return;
         
         try {
-            // Step 1: Fetch current default from API
+            // Get current default from API
             let currentDefaultId = null;
-            let currentDefaultReplicaName = null;
-            
             try {
                 const defaultResponse = await fetch("/api/v1/tavus/replica-mappings/default");
                 if (defaultResponse.ok) {
                     const defaultResult = await defaultResponse.json();
                     if (defaultResult.success && defaultResult.data) {
                         currentDefaultId = defaultResult.data.replica_id;
-                        console.log("Found default replica ID:", currentDefaultId);
                     }
-                } else {
-                    console.log("No default replica set (404)");
                 }
             } catch (e) {
                 console.log("Error fetching default:", e);
             }
             
-            // Step 2: Get replicas from current page (Stock OR Personal, not combined)
+            // Get replicas from current page
             const pageReplicas = [
                 {% for replica in replicas %}
                 {
@@ -852,51 +830,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 {% endfor %}
             ];
-            console.log("Page has " + pageReplicas.length + " replicas");
             
-            // Step 3: Find default replica name
-            // First check if default is on this page
-            const defaultOnPage = pageReplicas.find(r => r.replica_id === currentDefaultId);
-            if (defaultOnPage) {
-                currentDefaultReplicaName = defaultOnPage.replica_name;
-                console.log("Default found on page:", currentDefaultReplicaName);
-            } else if (currentDefaultId) {
-                // Default not on this page - fetch its name from API
-                console.log("Default not on page, fetching from API...");
-                try {
-                    const replicaResponse = await fetch(`/api/v1/tavus/replicas/${currentDefaultId}`);
-                    if (replicaResponse.ok) {
-                        const replicaResult = await replicaResponse.json();
-                        if (replicaResult.success && replicaResult.data) {
-                            currentDefaultReplicaName = replicaResult.data.replica_name;
-                            console.log("Fetched default name:", currentDefaultReplicaName);
-                        }
-                    }
-                } catch (e) {
-                    console.log("Could not fetch default replica name:", e);
-                }
-            }
-            
-            // Step 4: Update green box with default name
-            if (nameSpan) {
-                if (currentDefaultReplicaName) {
-                    nameSpan.textContent = currentDefaultReplicaName;
-                } else if (currentDefaultId) {
-                    nameSpan.textContent = currentDefaultId.substring(0, 12) + "...";
-                } else {
-                    nameSpan.textContent = "None set";
-                }
-            }
-            
-            // Step 5: Build dropdown with ONLY current page replicas (not combined)
+            // Build dropdown
             select.innerHTML = "<option value=\"\">-- Select Default Replica --</option>";
             
-            // Sort: default first (if on this page), then by name
+            // Sort: default first, then by name
             const sortedReplicas = [...pageReplicas].sort((a, b) => {
-                const aIsDefault = a.replica_id === currentDefaultId;
-                const bIsDefault = b.replica_id === currentDefaultId;
-                if (aIsDefault) return -1;
-                if (bIsDefault) return 1;
+                if (a.replica_id === currentDefaultId) return -1;
+                if (b.replica_id === currentDefaultId) return 1;
                 return (a.replica_name || "").localeCompare(b.replica_name || "");
             });
             
@@ -905,13 +846,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 option.value = replica.replica_id;
                 const isDefault = replica.replica_id === currentDefaultId;
                 option.textContent = replica.replica_name + (isDefault ? " ★ (Default)" : "");
-                if (isDefault) {
-                    option.selected = true;
-                }
+                if (isDefault) option.selected = true;
                 select.appendChild(option);
             });
-            
-            console.log("Added " + sortedReplicas.length + " options to dropdown");
             
             // Add change handler (only once)
             if (!select.dataset.listenerAdded) {
@@ -938,7 +875,6 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             console.error("Failed to load replicas:", error);
             select.innerHTML = "<option value=\"\">Error loading - try refreshing</option>";
-            if (nameSpan) nameSpan.textContent = "Error - refresh page";
         }
     }
     
