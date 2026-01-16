@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+"""
+Migration Script: Move replica and voice IDs from environment variables to database
+
+This script:
+1. Reads TAVUS_REPLICA_ID and CARTESIA_VOICE_ID from environment variables
+2. Creates a default replica-voice mapping in the database
+3. Sets it as the default configuration
+
+Run this once after deploying the new database-backed replica config feature.
+"""
+
+import os
+import sys
+import asyncio
+from pathlib import Path
+
+# Try to load dotenv if available (optional)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    server_env = Path(__file__).parent / "server" / ".env"
+    if server_env.exists():
+        load_dotenv(server_env)
+except ImportError:
+    # dotenv not available - will use environment variables directly
+    # This is fine if running in Docker or with env vars already set
+    pass
+
+# Add parent directory to path for imports
+# Script is now in web_server/, so imports are relative
+sys.path.insert(0, str(Path(__file__).parent))
+
+# Check if dependencies are available
+try:
+    from services.database import DatabaseService
+    from services.tavus_service import tavus_service
+    from services.voice_cloning_service import voice_cloning_service
+    from loguru import logger
+except ImportError as e:
+    print(f"❌ Import error: {e}")
+    print("")
+    print("💡 This script needs to be run with the project dependencies installed.")
+    print("   Options:")
+    print("   1. Activate virtual environment: source venv/bin/activate")
+    print("   2. Or run from Docker container: docker-compose exec web-server python3 migrate_replica_config.py")
+    print("   3. Or install dependencies: pip install -r web_server/requirements.txt")
+    sys.exit(1)
+
+async def migrate_replica_config():
+    """Migrate env vars to database"""
+    db = DatabaseService()
+    
+    try:
+        # Connect to database
+        connected = await db.connect()
+        if not connected:
+            logger.error("❌ Failed to connect to database")
+            return False
+        
+        # Check if default config already exists
+        existing = await db.get_default_replica_config()
+        if existing:
+            logger.info(f"✅ Default replica config already exists: {existing.get('replica_id')}")
+            logger.info("   Skipping migration (config already in database)")
+            return True
+        
+        # Get values from environment
+        replica_id = os.getenv("TAVUS_REPLICA_ID")
+        voice_id = os.getenv("CARTESIA_VOICE_ID", "a0e99841-438c-4a64-b679-ae501e7d6091")
+        
+        if not replica_id:
+            logger.warning("⚠️ TAVUS_REPLICA_ID not set in environment - cannot migrate")
+            return False
+        
+        logger.info(f"🔄 Migrating replica config from environment variables...")
+        logger.info(f"   Replica ID: {replica_id}")
+        logger.info(f"   Voice ID: {voice_id}")
+        
+        # Validate replica exists in Tavus
+        logger.info("🔍 Validating replica in Tavus...")
+        replica = await tavus_service.get_replica(replica_id, verbose=False)
+        if not replica:
+            logger.error(f"❌ Replica not found in Tavus: {replica_id}")
+            logger.error("   Please ensure the replica exists before migrating")
+            return False
+        logger.info(f"✅ Replica validated: {replica.get('replica_name', replica_id)}")
+        
+        # Validate voice exists in Cartesia
+        logger.info("🔍 Validating voice in Cartesia...")
+        voice = await voice_cloning_service.get_voice(voice_id)
+        if not voice:
+            # Try listing all voices
+            all_voices = await voice_cloning_service.list_voices()
+            voice_found = any(v.get("id") == voice_id for v in all_voices)
+            if not voice_found:
+                logger.warning(f"⚠️ Voice not found in Cartesia: {voice_id}")
+                logger.warning("   Continuing anyway (may be a valid pre-built voice)")
+            else:
+                logger.info(f"✅ Voice validated: {voice_id}")
+        else:
+            logger.info(f"✅ Voice validated: {voice.get('name', voice_id)}")
+        
+        # Create default mapping
+        logger.info("💾 Creating default replica-voice mapping in database...")
+        success = await db.create_replica_mapping(
+            replica_id=replica_id,
+            voice_id=voice_id,
+            name="Default Replica (Migrated)",
+            description="Migrated from environment variables",
+            is_default=True
+        )
+        
+        if success:
+            logger.info("✅ Migration completed successfully!")
+            logger.info(f"   Default replica: {replica_id}")
+            logger.info(f"   Mapped voice: {voice_id}")
+            logger.info("")
+            logger.info("📝 Next steps:")
+            logger.info("   1. You can now manage replica-voice mappings via the dashboard")
+            logger.info("   2. Environment variables will be used as fallback if database lookup fails")
+            logger.info("   3. Consider removing TAVUS_REPLICA_ID and CARTESIA_VOICE_ID from .env files")
+            return True
+        else:
+            logger.error("❌ Failed to create replica mapping")
+            return False
+            
+    except Exception as e:
+        logger.error(f"❌ Migration failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+    finally:
+        await db.disconnect()
+
+if __name__ == "__main__":
+    logger.info("🚀 Starting replica config migration...")
+    success = asyncio.run(migrate_replica_config())
+    sys.exit(0 if success else 1)
