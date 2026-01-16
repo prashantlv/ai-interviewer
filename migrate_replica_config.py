@@ -14,21 +14,37 @@ import os
 import sys
 import asyncio
 from pathlib import Path
-from dotenv import load_dotenv
+
+# Try to load dotenv if available (optional)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    server_env = Path(__file__).parent / "server" / ".env"
+    if server_env.exists():
+        load_dotenv(server_env)
+except ImportError:
+    # dotenv not available - will use environment variables directly
+    # This is fine if running in Docker or with env vars already set
+    pass
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-# Load environment variables
-load_dotenv()
-server_env = Path(__file__).parent / "server" / ".env"
-if server_env.exists():
-    load_dotenv(server_env)
-
-from web_server.services.database import DatabaseService
-from web_server.services.tavus_service import tavus_service
-from web_server.services.voice_cloning_service import voice_cloning_service
-from loguru import logger
+# Check if dependencies are available
+try:
+    from web_server.services.database import DatabaseService
+    from web_server.services.tavus_service import tavus_service
+    from web_server.services.voice_cloning_service import voice_cloning_service
+    from loguru import logger
+except ImportError as e:
+    print(f"❌ Import error: {e}")
+    print("")
+    print("💡 This script needs to be run with the project dependencies installed.")
+    print("   Options:")
+    print("   1. Activate virtual environment: source venv/bin/activate")
+    print("   2. Or run from Docker container: docker-compose exec web-server python3 migrate_replica_config.py")
+    print("   3. Or install dependencies: pip install -r web_server/requirements.txt")
+    sys.exit(1)
 
 async def migrate_replica_config():
     """Migrate env vars to database"""
