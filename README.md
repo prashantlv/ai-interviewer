@@ -419,43 +419,5 @@ rq info
 
 ---
 
-## 📝 License
 
-[Your License Here]
 
----
-
-## 🤝 Contributing
-
-[Your Contributing Guidelines Here]
-
----
-
-## 📞 Support
-
-For issues and questions:
-- GitHub Issues: [Your Repo URL]
-- Documentation: See `/docs` directory
-- Email: [Your Email]
-
----
-
-**Built with:**
-- [Pipecat](https://github.com/pipecat-ai/pipecat) - Real-time AI conversation framework
-- [FastAPI](https://fastapi.tiangolo.com/) - Modern web framework
-- [Daily.co](https://www.daily.co/) - Video/audio infrastructure
-- [OpenAI](https://openai.com/) - LLM & STT
-- [Cartesia](https://www.cartesia.ai/) - TTS
-- [Redis](https://redis.io/) - Job queue
-- [MongoDB](https://www.mongodb.com/) - Database
-
----
-
-**Ready to start?**
-
-```bash
-./setup-venv.sh
-./start.sh
-```
-
-🎉 **Happy interviewing!**
