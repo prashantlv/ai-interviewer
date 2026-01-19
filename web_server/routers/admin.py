@@ -173,11 +173,12 @@ async def list_replica_requests(
 @router.get("/api/v1/admin/replica-requests/{request_id}")
 async def get_replica_request(
     request_id: str,
-    admin: AdminUserDep
+    admin: AdminUserDep,
+    db: DbServiceDep
 ):
     """Get a specific replica request"""
     try:
-        request_data = await db_service.get_replica_request(request_id)
+        request_data = await db.get_replica_request(request_id)
         if not request_data:
             raise HTTPException(status_code=404, detail="Replica request not found")
         
@@ -195,12 +196,13 @@ async def get_replica_request(
 @router.patch("/api/v1/admin/replica-requests/{request_id}/approve")
 async def approve_replica_request(
     request_id: str,
-    admin: AdminUserDep
+    admin: AdminUserDep,
+    db: DbServiceDep
 ):
     """Approve a replica request"""
     try:
         # Get request first
-        request_data = await db_service.get_replica_request(request_id)
+        request_data = await db.get_replica_request(request_id)
         if not request_data:
             raise HTTPException(status_code=404, detail="Replica request not found")
         
@@ -211,7 +213,7 @@ async def approve_replica_request(
             )
         
         # Approve the request
-        success = await db_service.approve_replica_request(
+        success = await db.approve_replica_request(
             request_id=request_id,
             admin_username=admin.get("username")
         )
@@ -234,12 +236,13 @@ async def approve_replica_request(
 async def reject_replica_request(
     request_id: str,
     request_body: RejectRequestModel,
-    admin: AdminUserDep
+    admin: AdminUserDep,
+    db: DbServiceDep
 ):
     """Reject a replica request"""
     try:
         # Get request first
-        request_data = await db_service.get_replica_request(request_id)
+        request_data = await db.get_replica_request(request_id)
         if not request_data:
             raise HTTPException(status_code=404, detail="Replica request not found")
         
@@ -250,7 +253,7 @@ async def reject_replica_request(
             )
         
         # Reject the request
-        success = await db_service.reject_replica_request(
+        success = await db.reject_replica_request(
             request_id=request_id,
             admin_username=admin.get("username"),
             reason=request_body.reason
@@ -273,12 +276,13 @@ async def reject_replica_request(
 @router.post("/api/v1/admin/replica-requests/{request_id}/train")
 async def train_replica_request(
     request_id: str,
-    admin: AdminUserDep
+    admin: AdminUserDep,
+    db: DbServiceDep
 ):
     """Start training for an approved replica request"""
     try:
         # Get request first
-        request_data = await db_service.get_replica_request(request_id)
+        request_data = await db.get_replica_request(request_id)
         if not request_data:
             raise HTTPException(status_code=404, detail="Replica request not found")
         
@@ -307,7 +311,7 @@ async def train_replica_request(
         tavus_replica_id = tavus_result.get("replica_id")
         
         # Update request status to training
-        success = await db_service.start_replica_training(
+        success = await db.start_replica_training(
             request_id=request_id,
             tavus_replica_id=tavus_replica_id
         )
