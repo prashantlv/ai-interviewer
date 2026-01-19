@@ -149,20 +149,12 @@
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="training-tab" data-bs-toggle="tab" data-bs-target="#training" type="button" role="tab">
-                    Training <span class="badge bg-info">{{ stats.training }}</span>
-                </button>
-            </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="rejected-tab" data-bs-toggle="tab" data-bs-target="#rejected" type="button" role="tab">
                     Rejected <span class="badge bg-danger">{{ stats.rejected }}</span>
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="completed-tab" data-bs-toggle="tab" data-bs-target="#completed" type="button" role="tab">
-                    Completed <span class="badge bg-primary">{{ stats.completed }}</span>
-                </button>
-            </li>
         </ul>
         
         <!-- Tab Content -->
@@ -273,35 +265,6 @@
             </div>
             
             <!-- Training Requests -->
-            <div class="tab-pane fade" id="training" role="tabpanel">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title mb-3">Training Replica Requests</h5>
-                        {% if training_requests %}
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Request ID</th>
-                                        <th>Replica Name</th>
-                                        <th>Tavus Replica ID</th>
-                                        <th>Training Started</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for req in training_requests %}
-                                    <tr>
-                                        <td><code>{{ req.request_id }}</code></td>
-                                        <td><strong>{{ req.replica_name }}</strong></td>
-                                        <td><code>{{ req.tavus_replica_id or 'N/A' }}</code></td>
-                                        <td>{{ req.trained_at.strftime('%Y-%m-%d %H:%M') if req.trained_at else 'N/A' }}</td>
-                                        <td><span class="status-badge status-training">Training</span></td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
                         {% else %}
                         <p class="text-muted text-center py-4">No requests in training</p>
                         {% endif %}
@@ -347,33 +310,6 @@
             </div>
             
             <!-- Completed Requests -->
-            <div class="tab-pane fade" id="completed" role="tabpanel">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title mb-3">Completed Replica Requests</h5>
-                        {% if completed_requests %}
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Request ID</th>
-                                        <th>Replica Name</th>
-                                        <th>Tavus Replica ID</th>
-                                        <th>Completed At</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for req in completed_requests %}
-                                    <tr>
-                                        <td><code>{{ req.request_id }}</code></td>
-                                        <td><strong>{{ req.replica_name }}</strong></td>
-                                        <td><code>{{ req.tavus_replica_id or 'N/A' }}</code></td>
-                                        <td>{{ req.trained_at.strftime('%Y-%m-%d %H:%M') if req.trained_at else 'N/A' }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
                         {% else %}
                         <p class="text-muted text-center py-4">No completed requests</p>
                         {% endif %}
