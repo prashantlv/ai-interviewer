@@ -54,21 +54,25 @@ async def admin_login(
     """Admin login endpoint"""
     try:
         logger.info(f"🔐 Admin login attempt for username: {username}")
-        if not admin:
         # Use db_service from app state (connected instance)
         db = request.app.state.db_service
         
         # Pass the connected db_service to authenticate_admin
+        admin = await admin_auth_service.authenticate_admin(username, password, db_service_instance=db)
+        
         if not admin:
+            logger.warning(f"❌ Admin login failed for username: {username}")
             return templates.TemplateResponse("admin_login.html", {
-            logger.warning(f"❌ Admin login failed for username: {username}")                "request": request,
+                "request": request,
                 "error": "Invalid username or password"
             })
+        
+        logger.info(f"✅ Admin login successful for username: {username}")
         
         # Create response with redirect
         response = RedirectResponse(url="/admin/dashboard", status_code=302)
         # Set admin session cookie
-        logger.info(f"✅ Admin login successful for username: {username}")        response.set_cookie(
+        response.set_cookie(
             key="admin_session",
             value=username,
             max_age=86400,  # 24 hours
