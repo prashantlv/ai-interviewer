@@ -154,14 +154,19 @@ async def create_replica(
         - message: Success message
     """
     try:
-        # Get user ID from JWT token
+        # Get user ID and email from JWT token
         user_id = current_user.get("userId", "unknown")
+        payload = current_user.get("payload", {})
+        user_email = payload.get("email") or payload.get("userEmail") or None
+        
+        # Format submitted_by: use email if available, otherwise user_id
+        submitted_by = user_email if user_email else user_id
         
         # Store replica request in database (pending approval)
         request_id = await db.create_replica_request(
             replica_name=request.replica_name,
             train_video_url=request.train_video_url,
-            submitted_by=user_id,
+            submitted_by=submitted_by,
             consent_video_url=request.consent_video_url,
             model_name=request.model_name
         )
