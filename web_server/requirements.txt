@@ -19,3 +19,6 @@ openai>=1.0.0                   # OpenAI API client
 
 # JWT Authentication
 # NOTE: No external JWT dependency required; HS256 verification uses Python stdlib.
+
+# Admin Authentication
+bcrypt>=4.0.1                    # Password hashing for admin users

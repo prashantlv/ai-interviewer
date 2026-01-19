@@ -27,7 +27,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 
 # Import our modules
-from routers import interviews, dashboard, feedback, bots, tavus, voices, scoring_settings, proctoring
+from routers import interviews, dashboard, feedback, bots, tavus, voices, scoring_settings, proctoring, admin
 from services.database import DatabaseService
 from services.question_engine import QuestionEngine
 from services.scoring_engine import ScoringEngine
@@ -139,6 +139,12 @@ app.include_router(voices.router, prefix="/api/v1/voices", tags=["voices-v1"])
 # API: /api/v1/tavus/* (backend still uses tavus service)
 app.include_router(tavus.router, tags=["replicas"])
 app.include_router(proctoring.router, tags=["proctoring"])
+
+# Admin routes
+# Login: /admin/login
+# Dashboard: /admin/dashboard
+# API: /api/v1/admin/*
+app.include_router(admin.router, tags=["admin"])
 
 @app.exception_handler(HTTPException)
 async def auth_exception_handler(request: Request, exc: HTTPException):
