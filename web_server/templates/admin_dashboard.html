@@ -198,7 +198,13 @@
                                                 <i class="bi bi-play-circle me-1"></i>View Video
                                             </a>
                                         </td>
-                                        <td>{{ req.submitted_by }}</td>
+                                        <td>
+                                            {% if req.submitted_by and '@' in req.submitted_by %}
+                                                {{ req.submitted_by }}
+                                            {% else %}
+                                                <code title="User ID: {{ req.submitted_by }}">{{ req.submitted_by[:12] }}...</code>
+                                            {% endif %}
+                                        </td>
                                         <td>{{ req.submitted_at.strftime('%Y-%m-%d %H:%M') if req.submitted_at else 'N/A' }}</td>
                                         <td><span class="badge bg-secondary">{{ req.model_name }}</span></td>
                                         <td>
