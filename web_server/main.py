@@ -164,6 +164,14 @@ async def auth_exception_handler(request: Request, exc: HTTPException):
                 content={"detail": exc.detail}
             )
 
+        # For admin routes, redirect to admin login
+        is_admin = request.url.path.startswith("/admin/")
+        if is_admin:
+            return RedirectResponse(
+                url="/admin/login",
+                status_code=302
+            )
+
         # For dashboard/HTML requests, redirect to agency signin page
         return RedirectResponse(
             url="https://human2intelligence.com/signin/agency",

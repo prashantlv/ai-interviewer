@@ -103,19 +103,20 @@ async def admin_logout():
 @router.get("/admin/dashboard", response_class=HTMLResponse)
 async def admin_dashboard(
     request: Request,
-    admin: AdminUserDep
+    admin: AdminUserDep,
+    db: DbServiceDep
 ):
     """Admin dashboard page"""
     try:
         # Get replica requests
-        pending_requests = await db_service.list_replica_requests(status="pending")
-        approved_requests = await db_service.list_replica_requests(status="approved")
-        rejected_requests = await db_service.list_replica_requests(status="rejected")
-        training_requests = await db_service.list_replica_requests(status="training")
-        completed_requests = await db_service.list_replica_requests(status="completed")
+        pending_requests = await db.list_replica_requests(status="pending")
+        approved_requests = await db.list_replica_requests(status="approved")
+        rejected_requests = await db.list_replica_requests(status="rejected")
+        training_requests = await db.list_replica_requests(status="training")
+        completed_requests = await db.list_replica_requests(status="completed")
         
         # Get all requests for stats
-        all_requests = await db_service.list_replica_requests(limit=1000)
+        all_requests = await db.list_replica_requests(limit=1000)
         
         stats = {
             "total": len(all_requests),
@@ -154,7 +155,7 @@ async def list_replica_requests(
 ):
     """List all replica requests"""
     try:
-        requests = await db_service.list_replica_requests(
+        requests = await db.list_replica_requests(
             status=status,
             limit=limit,
             offset=offset
