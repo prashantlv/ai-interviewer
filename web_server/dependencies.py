@@ -197,7 +197,7 @@ async def get_admin_user(request: Request) -> Dict[str, Any]:
         )
     
     # Verify admin exists and is active
-    admin = await db_service.get_admin_user(admin_username)
+    admin = await db.get_admin_user(admin_username)
     if not admin:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
