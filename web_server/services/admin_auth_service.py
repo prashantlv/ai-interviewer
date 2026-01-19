@@ -45,18 +45,33 @@ class AdminAuthService:
             print(f"❌ Error verifying password: {e}")
             return False
     
-    async def authenticate_admin(self, username: str, password: str) -> Optional[Dict[str, Any]]:
+    async def authenticate_admin(self, username: str, password: str, db_service_instance=None) -> Optional[Dict[str, Any]]:
         """Authenticate admin user with username and password"""
         try:
-            admin = await db_service.get_admin_user(username)
+            # Use provided db_service or fall back to global one
+            db = db_service_instance or db_service
+            
+            admin = await db.get_admin_user(username)
             if not admin:
+                print(f"❌ Admin user '{username}' not found in database")
                 return None
             
-            if not self.verify_password(password, admin.get("password_hash", "")):
+            password_hash = admin.get("password_hash", "")
+            if not password_hash:
+                print(f"❌ Admin user '{username}' has no password_hash field")
                 return None
+            
+            print(f"🔍 Verifying password for admin '{username}'...")
+            is_valid = self.verify_password(password, password_hash)
+            if not is_valid:
+                print(f"❌ Password verification failed for admin '{username}'")
+                print(f"   Password hash in DB: {password_hash[:20]}...")
+                return None
+            
+            print(f"✅ Password verified successfully for admin '{username}'")
             
             # Update last login
-            await db_service.update_admin_last_login(username)
+            await db.update_admin_last_login(username)
             
             return {
                 "username": admin.get("username"),
@@ -65,6 +80,8 @@ class AdminAuthService:
             }
         except Exception as e:
             print(f"❌ Error authenticating admin: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     async def create_admin(self, username: str, password: str) -> bool:
