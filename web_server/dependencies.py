@@ -185,7 +185,9 @@ async def get_admin_user(request: Request) -> Dict[str, Any]:
     Raises:
         HTTPException: If admin not logged in
     """
-    from services.database import db_service
+    # Use connected db_service from app state
+    db = request.app.state.db_service
+
     
     admin_username = request.cookies.get("admin_session")
     if not admin_username:
