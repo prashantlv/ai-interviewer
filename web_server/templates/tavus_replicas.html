@@ -673,7 +673,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             const result = await response.json();
             if (result.success) {
-                alert('Replica created! ID: ' + result.data.replica_id);
+                alert(result.message || 'Replica request submitted successfully! Awaiting admin approval.\nRequest ID: ' + result.data.request_id);
                 location.reload();
             } else {
                 alert('Failed: ' + (result.detail || 'Unknown error'));

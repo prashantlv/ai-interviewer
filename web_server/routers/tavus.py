@@ -11,7 +11,7 @@ from typing import Optional
 from pydantic import BaseModel
 from services.tavus_service import tavus_service
 from services.voice_cloning_service import voice_cloning_service
-from dependencies import DbServiceDep
+from dependencies import DbServiceDep, CurrentUserDep
 from loguru import logger
 
 router = APIRouter()
@@ -133,43 +133,61 @@ async def replicas_page(request: Request, page: int = 1, limit: int = 20, replic
 # ============================================================================
 
 @router.post("/api/v1/tavus/replicas")
-async def create_replica(request: CreateReplicaRequest):
+async def create_replica(
+    request: CreateReplicaRequest,
+    current_user: CurrentUserDep,
+    db: DbServiceDep
+):
     """
-    Create a new Tavus replica
+    Create a new replica request (pending admin approval)
     
     Request Body:
         - train_video_url: Public URL to training video (required)
         - replica_name: Name for the replica (required)
         - consent_video_url: Public URL to consent video (optional, required for personal replicas)
-        - callback_url: Webhook URL for training completion (optional)
+        - callback_url: Webhook URL for training completion (optional, ignored - stored for future use)
         - model_name: Phoenix model version (default: phoenix-3)
     
     Returns:
-        - replica_id: Unique identifier for the created replica
-        - status: Training status (started, completed, error)
+        - request_id: Unique identifier for the replica request
+        - status: "pending" (awaiting admin approval)
+        - message: Success message
     """
     try:
-        result = await tavus_service.create_replica(
-            train_video_url=request.train_video_url,
+        # Get user ID from JWT token
+        user_id = current_user.get("userId", "unknown")
+        
+        # Store replica request in database (pending approval)
+        request_id = await db.create_replica_request(
             replica_name=request.replica_name,
+            train_video_url=request.train_video_url,
+            submitted_by=user_id,
             consent_video_url=request.consent_video_url,
-            callback_url=request.callback_url,
             model_name=request.model_name
         )
         
-        if result:
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "success": True,
-                    "data": result
-                }
-            )
-        else:
+        if not request_id:
             raise HTTPException(
                 status_code=500,
-                detail="Failed to create replica. Check logs for details."
+                detail="Failed to create replica request. Please try again."
             )
+        
+        logger.info(f"✅ Replica request created: {request_id} by user {user_id}")
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "message": "Replica request submitted successfully. Awaiting admin approval.",
+                "data": {
+                    "request_id": request_id,
+                    "status": "pending",
+                    "replica_name": request.replica_name
+                }
+            }
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"❌ Error in create_replica endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

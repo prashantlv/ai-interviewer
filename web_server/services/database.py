@@ -134,13 +134,21 @@ class DatabaseService:
             await self.database.replica_voice_mappings.create_index("is_active")
             print("✅ Created 'replica_voice_mappings' collection with indexes")
         
-        # replica_voice_mappings - stores replica to voice mappings
-        if "replica_voice_mappings" not in collections:
-            await self.database.create_collection("replica_voice_mappings")
-            await self.database.replica_voice_mappings.create_index("replica_id", unique=True)
-            await self.database.replica_voice_mappings.create_index("is_default")
-            await self.database.replica_voice_mappings.create_index("is_active")
-            print("✅ Created 'replica_voice_mappings' collection with indexes")
+        # admin_users - stores admin login credentials
+        if "admin_users" not in collections:
+            await self.database.create_collection("admin_users")
+            await self.database.admin_users.create_index("username", unique=True)
+            await self.database.admin_users.create_index("is_active")
+            print("✅ Created 'admin_users' collection with indexes")
+        
+        # replica_requests - stores replica creation requests (pending approval)
+        if "replica_requests" not in collections:
+            await self.database.create_collection("replica_requests")
+            await self.database.replica_requests.create_index("request_id", unique=True)
+            await self.database.replica_requests.create_index("status")
+            await self.database.replica_requests.create_index("submitted_at")
+            await self.database.replica_requests.create_index("submitted_by")
+            print("✅ Created 'replica_requests' collection with indexes")
     
     def _load_json_data(self, filename: str) -> Dict[str, Any]:
         """Load data from JSON file"""
@@ -487,6 +495,232 @@ class DatabaseService:
             return result.modified_count > 0
         except Exception as e:
             print(f"❌ Error deleting replica mapping: {e}")
+            return False
+
+    # ============================================================================
+    # Admin Users Methods
+    # ============================================================================
+    
+    async def get_admin_user(self, username: str) -> Optional[Dict[str, Any]]:
+        """Get admin user by username"""
+        if self.database is None:
+            return None
+        
+        try:
+            admin = await self.database.admin_users.find_one({
+                "username": username,
+                "is_active": True
+            })
+            if admin:
+                admin.pop('_id', None)
+            return admin
+        except Exception as e:
+            print(f"❌ Error getting admin user: {e}")
+            return None
+    
+    async def create_admin_user(self, username: str, password_hash: str) -> bool:
+        """Create a new admin user"""
+        if self.database is None:
+            return False
+        
+        try:
+            # Check if admin already exists
+            existing = await self.database.admin_users.find_one({"username": username})
+            if existing:
+                print(f"⚠️ Admin user '{username}' already exists")
+                return False
+            
+            admin_data = {
+                "username": username,
+                "password_hash": password_hash,
+                "created_at": datetime.now(),
+                "last_login": None,
+                "is_active": True
+            }
+            await self.database.admin_users.insert_one(admin_data)
+            print(f"✅ Created admin user: {username}")
+            return True
+        except Exception as e:
+            print(f"❌ Error creating admin user: {e}")
+            return False
+    
+    async def update_admin_last_login(self, username: str) -> bool:
+        """Update admin user's last login timestamp"""
+        if self.database is None:
+            return False
+        
+        try:
+            result = await self.database.admin_users.update_one(
+                {"username": username},
+                {"$set": {"last_login": datetime.now()}}
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"❌ Error updating admin last login: {e}")
+            return False
+
+    # ============================================================================
+    # Replica Requests Methods
+    # ============================================================================
+    
+    async def create_replica_request(
+        self,
+        replica_name: str,
+        train_video_url: str,
+        submitted_by: str,
+        consent_video_url: Optional[str] = None,
+        model_name: str = "phoenix-3"
+    ) -> Optional[str]:
+        """Create a new replica request (pending approval)"""
+        if self.database is None:
+            return None
+        
+        try:
+            import uuid
+            request_id = f"req_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
+            
+            request_data = {
+                "request_id": request_id,
+                "replica_name": replica_name,
+                "train_video_url": train_video_url,
+                "consent_video_url": consent_video_url,
+                "model_name": model_name,
+                "status": "pending",
+                "submitted_by": submitted_by,
+                "submitted_at": datetime.now(),
+                "reviewed_by": None,
+                "reviewed_at": None,
+                "rejection_reason": None,
+                "tavus_replica_id": None,
+                "trained_at": None,
+                "notes": None
+            }
+            
+            await self.database.replica_requests.insert_one(request_data)
+            print(f"✅ Created replica request: {request_id}")
+            return request_id
+        except Exception as e:
+            print(f"❌ Error creating replica request: {e}")
+            return None
+    
+    async def get_replica_request(self, request_id: str) -> Optional[Dict[str, Any]]:
+        """Get replica request by ID"""
+        if self.database is None:
+            return None
+        
+        try:
+            request = await self.database.replica_requests.find_one({"request_id": request_id})
+            if request:
+                request.pop('_id', None)
+            return request
+        except Exception as e:
+            print(f"❌ Error getting replica request: {e}")
+            return None
+    
+    async def list_replica_requests(
+        self,
+        status: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        """List replica requests with optional status filter"""
+        if self.database is None:
+            return []
+        
+        try:
+            query = {}
+            if status:
+                query["status"] = status
+            
+            requests = []
+            cursor = self.database.replica_requests.find(query).sort(
+                "submitted_at", -1
+            ).limit(limit).skip(offset)
+            
+            async for request in cursor:
+                request.pop('_id', None)
+                requests.append(request)
+            
+            return requests
+        except Exception as e:
+            print(f"❌ Error listing replica requests: {e}")
+            return []
+    
+    async def approve_replica_request(
+        self,
+        request_id: str,
+        admin_username: str
+    ) -> bool:
+        """Approve a replica request"""
+        if self.database is None:
+            return False
+        
+        try:
+            result = await self.database.replica_requests.update_one(
+                {"request_id": request_id},
+                {
+                    "$set": {
+                        "status": "approved",
+                        "reviewed_by": admin_username,
+                        "reviewed_at": datetime.now()
+                    }
+                }
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"❌ Error approving replica request: {e}")
+            return False
+    
+    async def reject_replica_request(
+        self,
+        request_id: str,
+        admin_username: str,
+        reason: Optional[str] = None
+    ) -> bool:
+        """Reject a replica request"""
+        if self.database is None:
+            return False
+        
+        try:
+            result = await self.database.replica_requests.update_one(
+                {"request_id": request_id},
+                {
+                    "$set": {
+                        "status": "rejected",
+                        "reviewed_by": admin_username,
+                        "reviewed_at": datetime.now(),
+                        "rejection_reason": reason or "Rejected by admin"
+                    }
+                }
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"❌ Error rejecting replica request: {e}")
+            return False
+    
+    async def start_replica_training(
+        self,
+        request_id: str,
+        tavus_replica_id: str
+    ) -> bool:
+        """Mark replica request as training started"""
+        if self.database is None:
+            return False
+        
+        try:
+            result = await self.database.replica_requests.update_one(
+                {"request_id": request_id},
+                {
+                    "$set": {
+                        "status": "training",
+                        "tavus_replica_id": tavus_replica_id,
+                        "trained_at": datetime.now()
+                    }
+                }
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"❌ Error starting replica training: {e}")
             return False
 
 

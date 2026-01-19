@@ -170,6 +170,48 @@ CurrentUserDep = Annotated[Dict[str, Any], Depends(get_current_user)]
 
 
 # =============================================================================
+# Admin Authentication Dependencies
+# =============================================================================
+
+async def get_admin_user(request: Request) -> Dict[str, Any]:
+    """
+    Dependency to get current authenticated admin from cookie
+    
+    Checks admin_session cookie for admin login status
+    
+    Returns:
+        Dict with username
+        
+    Raises:
+        HTTPException: If admin not logged in
+    """
+    from services.database import db_service
+    
+    admin_username = request.cookies.get("admin_session")
+    if not admin_username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Admin authentication required. Please login at /admin/login"
+        )
+    
+    # Verify admin exists and is active
+    admin = await db_service.get_admin_user(admin_username)
+    if not admin:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid admin session. Please login again."
+        )
+    
+    return {
+        "username": admin_username
+    }
+
+# Type alias for admin routes
+AdminUserDep = Annotated[Dict[str, Any], Depends(get_admin_user)]
+"""Admin user dependency - injects authenticated admin data (username)"""
+
+
+# =============================================================================
 # Usage Example
 # =============================================================================
 """
