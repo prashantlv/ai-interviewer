@@ -426,11 +426,26 @@
                         {{ scheduled_datetime }}
                     </p>
                     <p style="color: #856404; font-size: 0.95rem;">
-                        Please return at the scheduled time to join your interview.
+                        You can join 10 minutes before or up to 10 minutes after the scheduled time.
                     </p>
                     <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ffc107;">
                         <p style="color: #856404; font-size: 0.9rem;" id="countdown-timer"></p>
                     </div>
+                </div>
+                {% elif join_deadline and scheduled_datetime %}
+                <!-- Join Deadline Passed Message -->
+                <div class="scheduled-message" style="background: #f8d7da; border: 2px solid #dc3545; border-radius: 12px; padding: 24px; margin: 20px 0; text-align: center;">
+                    <div style="font-size: 3rem; margin-bottom: 16px;">⏰</div>
+                    <h2 style="color: #721c24; margin-bottom: 12px;">Join Window Closed</h2>
+                    <p style="color: #721c24; font-size: 1.1rem; margin-bottom: 8px;">
+                        The interview was scheduled for:
+                    </p>
+                    <p style="color: #721c24; font-size: 1.3rem; font-weight: bold; margin-bottom: 16px;" id="scheduled-time-display">
+                        {{ scheduled_datetime }}
+                    </p>
+                    <p style="color: #721c24; font-size: 0.95rem;">
+                        The join window (10 minutes after scheduled time) has passed. Please contact the interviewer to reschedule.
+                    </p>
                 </div>
                 {% else %}
                 <!-- Normal Instructions -->
@@ -508,6 +523,7 @@
         let API_BASE = '';
         let IS_FUTURE_SCHEDULE = {{ 'true' if is_future_schedule else 'false' }};
         let SCHEDULED_DATETIME = {{ ('"' + scheduled_datetime + '"') if scheduled_datetime else 'null' }};
+        let JOIN_DEADLINE = {{ ('"' + join_deadline + '"') if join_deadline else 'null' }};
         
         try {
             const configScript = document.getElementById('interview-config');
@@ -531,6 +547,26 @@
         // Format scheduled datetime and show countdown if future schedule
         if (IS_FUTURE_SCHEDULE && SCHEDULED_DATETIME) {
             const scheduledTime = new Date(SCHEDULED_DATETIME);
+            const now = new Date();
+            
+            // Double-check if scheduled time has actually passed (client-side validation)
+            // Room opens 10 minutes before scheduled time
+            const roomOpenTime = new Date(scheduledTime.getTime() - 10 * 60 * 1000);
+            
+            console.log('Scheduled time check:', {
+                scheduledTime: scheduledTime.toISOString(),
+                roomOpenTime: roomOpenTime.toISOString(),
+                now: now.toISOString(),
+                isFuture: now < roomOpenTime
+            });
+            
+            if (now >= roomOpenTime) {
+                // Scheduled time has passed - reload page to show normal join interface
+                console.log('✅ Scheduled time has passed, reloading page to enable join...');
+                location.reload();
+                return;
+            }
+            
             const timeDisplay = document.getElementById('scheduled-time-display');
             if (timeDisplay) {
                 timeDisplay.textContent = scheduledTime.toLocaleString('en-US', {
@@ -550,14 +586,14 @@
                 if (!countdownEl) return;
                 
                 const now = new Date();
-                const diff = scheduledTime - now;
+                const diff = roomOpenTime - now; // Countdown to room open time (10 min before scheduled)
                 
                 if (diff <= 0) {
-                    countdownEl.textContent = 'Interview is now available! Please refresh the page.';
-                    // Enable join button and reload page after 2 seconds
+                    countdownEl.textContent = 'Interview is now available! Refreshing page...';
+                    // Reload page to show normal join interface
                     setTimeout(() => {
                         location.reload();
-                    }, 2000);
+                    }, 1000);
                     return;
                 }
                 
@@ -1038,8 +1074,20 @@
             if (IS_FUTURE_SCHEDULE && SCHEDULED_DATETIME) {
                 const scheduledTime = new Date(SCHEDULED_DATETIME);
                 const now = new Date();
-                if (scheduledTime > now) {
-                    alert('This interview is scheduled for ' + scheduledTime.toLocaleString() + '. Please join at the scheduled time.');
+                const roomOpenTime = new Date(scheduledTime.getTime() - 10 * 60 * 1000); // 10 min before
+                
+                if (now < roomOpenTime) {
+                    alert('This interview is scheduled for ' + scheduledTime.toLocaleString() + '. You can join 10 minutes before the scheduled time.');
+                    return;
+                }
+            }
+            
+            // Check join deadline (10 minutes after scheduled time)
+            if (JOIN_DEADLINE && SCHEDULED_DATETIME) {
+                const joinDeadline = new Date(JOIN_DEADLINE);
+                const now = new Date();
+                if (now > joinDeadline) {
+                    alert('The join window for this interview has closed. The interview was scheduled for ' + new Date(SCHEDULED_DATETIME).toLocaleString() + '. Please contact the interviewer to reschedule.');
                     return;
                 }
             }

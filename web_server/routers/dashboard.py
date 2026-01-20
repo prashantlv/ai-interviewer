@@ -497,17 +497,18 @@ async def create_interview(
     print(f"   Candidate skills: {', '.join(parsed_resume.get('skills', [])[:5])}")
     
     # Create unique Daily.co room for this interview
-    # For future schedules, set nbf (not before) to scheduled time - 30 seconds (bot can join early)
-    # Set exp (expires) to scheduled time + 1 hour
+    # For future schedules, set nbf (not before) to scheduled time - 10 minutes (early join buffer)
+    # Set exp (expires) to scheduled time + 1 hour (interview duration)
     room_nbf = None
     room_exp_minutes = None
     
     if is_future_schedule and scheduled_datetime:
-        # Room opens 30 seconds before scheduled time (bot can join early)
-        room_nbf = scheduled_datetime - timedelta(seconds=30)
-        # Room expires 1 hour after scheduled time
+        # Room opens 10 minutes before scheduled time (early join buffer)
+        room_nbf = scheduled_datetime - timedelta(minutes=10)
+        # Room expires 1 hour after scheduled time (allows interview to complete)
         room_exp_minutes = 60
-        print(f"📅 Room will be available from: {room_nbf} (30s before scheduled time)")
+        print(f"📅 Room will be available from: {room_nbf} (10 minutes before scheduled time)")
+        print(f"📅 Room allows joining until: {scheduled_datetime + timedelta(minutes=10)} (10 minutes after scheduled time)")
     
     room_data = await daily_service.create_interview_room(
         interview_id=interview_id,
@@ -616,11 +617,12 @@ async def create_interview(
             # Calculate delay for bot scheduling
             bot_delay_seconds = 0
             if is_future_schedule and scheduled_datetime:
-                # Bot starts at scheduled time (room opens 30s before)
+                # Bot starts at scheduled time (room opens 10 minutes before, so bot can join early)
                 now = datetime.now()
                 delay_timedelta = scheduled_datetime - now
                 bot_delay_seconds = int(delay_timedelta.total_seconds())
                 print(f"⏰ Bot will start in {bot_delay_seconds} seconds ({delay_timedelta})")
+                print(f"⏰ Room will be available 10 minutes before bot starts")
             
             if auto_start:
                 try:

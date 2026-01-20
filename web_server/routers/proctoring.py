@@ -115,19 +115,50 @@ async def interview_room(request: Request, interview_id: str):
     scheduled_date_str = evaluation.get("scheduled_date")
     is_future_schedule = False
     scheduled_datetime = None
+    join_deadline_utc = None  # 10 minutes after scheduled time
     
     if scheduled_date_str:
         try:
-            from datetime import datetime
-            scheduled_datetime = datetime.fromisoformat(scheduled_date_str.replace('Z', '+00:00'))
-            now = datetime.now(scheduled_datetime.tzinfo) if scheduled_datetime.tzinfo else datetime.now()
+            from datetime import datetime, timedelta, timezone
+            # Parse scheduled datetime (handle both with and without timezone)
+            scheduled_datetime_str = scheduled_date_str.replace('Z', '+00:00') if 'Z' in scheduled_date_str else scheduled_date_str
             
-            # Check if scheduled time is in the future (with 1 minute buffer for room nbf)
-            if scheduled_datetime > now:
+            # Try parsing with timezone first, then without
+            try:
+                scheduled_datetime = datetime.fromisoformat(scheduled_datetime_str)
+            except ValueError:
+                # If parsing fails, try without timezone
+                scheduled_datetime = datetime.fromisoformat(scheduled_date_str)
+            
+            # Get current time - always use UTC for comparison to avoid timezone issues
+            now_utc = datetime.now(timezone.utc)
+            
+            # Convert scheduled_datetime to UTC if it has timezone info, otherwise assume UTC
+            if scheduled_datetime.tzinfo:
+                scheduled_datetime_utc = scheduled_datetime.astimezone(timezone.utc)
+            else:
+                # Assume scheduled_datetime is in UTC if no timezone info
+                scheduled_datetime_utc = scheduled_datetime.replace(tzinfo=timezone.utc)
+            
+            # Room opens 10 minutes before scheduled time
+            room_open_time_utc = scheduled_datetime_utc - timedelta(minutes=10)
+            # Join deadline: 10 minutes after scheduled time
+            join_deadline_utc = scheduled_datetime_utc + timedelta(minutes=10)
+            
+            # Check if room open time is still in the future
+            if room_open_time_utc > now_utc:
                 is_future_schedule = True
-                logger.info(f"📅 Interview scheduled for future: {scheduled_datetime} (current: {now})")
+                logger.info(f"📅 Interview scheduled for future: {scheduled_datetime_utc} UTC (current: {now_utc} UTC, room opens: {room_open_time_utc} UTC)")
+            elif now_utc > join_deadline_utc:
+                # More than 10 minutes after scheduled time - join deadline passed
+                is_future_schedule = False
+                logger.info(f"⏰ Join deadline passed: {join_deadline_utc} UTC (current: {now_utc} UTC, scheduled: {scheduled_datetime_utc} UTC)")
+            else:
+                # Between room open and join deadline - interview is available
+                is_future_schedule = False
+                logger.info(f"✅ Interview available: {scheduled_datetime_utc} UTC (current: {now_utc} UTC, join deadline: {join_deadline_utc} UTC)")
         except Exception as e:
-            logger.warning(f"⚠️ Failed to parse scheduled_date: {e}")
+            logger.warning(f"⚠️ Failed to parse scheduled_date '{scheduled_date_str}': {e}", exc_info=True)
     
     # Get room name and base URL (WITHOUT candidate token)
     room_name = evaluation.get("room_name") or interview.get("room_name", f"interview-{interview_id}")
@@ -198,7 +229,8 @@ async def interview_room(request: Request, interview_id: str):
             "api_base": api_base,
             "interview_config_json": interview_config_json,
             "is_future_schedule": is_future_schedule,
-            "scheduled_datetime": scheduled_datetime.isoformat() if scheduled_datetime else None
+            "scheduled_datetime": scheduled_datetime.isoformat() if scheduled_datetime else None,
+            "join_deadline": join_deadline_utc.isoformat() if join_deadline_utc else None
         }
     )
 
