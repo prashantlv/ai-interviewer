@@ -436,8 +436,7 @@
                                         <th>ID</th>
                                         <th>Name</th>
                                         <th>Email</th>
-                                        <th>Phone</th>
-                                        <th>Status</th>
+                                        <th>Approved</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
@@ -447,16 +446,15 @@
                                         <td><code>{{ agency._id or agency.id or 'N/A' }}</code></td>
                                         <td><strong>{{ agency.agency_name or agency.name or 'N/A' }}</strong></td>
                                         <td>{{ agency.corporate_email or agency.email or 'N/A' }}</td>
-                                        <td>{{ agency.phone_number or agency.phone or 'N/A' }}</td>
                                         <td>
-                                            {% if agency.is_active is defined %}
-                                                {% if agency.is_active %}
-                                                    <span class="badge bg-success">Active</span>
+                                            {% if agency.is_approved is defined %}
+                                                {% if agency.is_approved %}
+                                                    <span class="badge bg-success">Approved</span>
                                                 {% else %}
-                                                    <span class="badge bg-secondary">Inactive</span>
+                                                    <span class="badge bg-warning">Pending</span>
                                                 {% endif %}
                                             {% else %}
-                                                <span class="badge bg-info">Unknown</span>
+                                                <span class="badge bg-secondary">Unknown</span>
                                             {% endif %}
                                         </td>
                                         <td>
@@ -638,30 +636,139 @@
                 
                 if (result.success && result.data) {
                     const agency = result.data;
-                    let html = '<div class="row">';
                     
-                    // Display all agency fields
-                    for (const [key, value] of Object.entries(agency)) {
-                        if (value !== null && value !== undefined) {
-                            const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                            let displayValue = value;
-                            
-                            if (typeof value === 'object') {
-                                displayValue = '<pre class="mb-0">' + JSON.stringify(value, null, 2) + '</pre>';
-                            } else if (typeof value === 'boolean') {
-                                displayValue = value ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>';
-                            }
-                            
-                            html += `
-                                <div class="col-md-6 mb-3">
-                                    <strong>${displayKey}:</strong><br>
-                                    <span class="text-muted">${displayValue}</span>
-                                </div>
-                            `;
+                    // Format date
+                    function formatDate(dateValue) {
+                        if (!dateValue) return 'N/A';
+                        try {
+                            const date = new Date(dateValue);
+                            return date.toLocaleString('en-US', { 
+                                year: 'numeric', 
+                                month: 'long', 
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                        } catch {
+                            return dateValue;
                         }
                     }
                     
-                    html += '</div>';
+                    // Format phone with extension
+                    function formatPhone(phone, extension) {
+                        if (!phone) return 'N/A';
+                        if (extension) {
+                            return `${extension} ${phone}`;
+                        }
+                        return phone;
+                    }
+                    
+                    let html = `
+                        <div class="agency-details">
+                            <!-- Basic Information -->
+                            <div class="card mb-3">
+                                <div class="card-header bg-primary text-white">
+                                    <h6 class="mb-0"><i class="bi bi-building me-2"></i>Basic Information</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <strong>Agency ID:</strong><br>
+                                            <code>${agency._id || agency.id || 'N/A'}</code>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <strong>Agency Name:</strong><br>
+                                            <span class="text-muted">${agency.agency_name || agency.name || 'N/A'}</span>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <strong>Email:</strong><br>
+                                            <span class="text-muted">${agency.corporate_email || agency.email || 'N/A'}</span>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <strong>Created At:</strong><br>
+                                            <span class="text-muted">${formatDate(agency.createdAt || agency.created_at)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Contact Person Information -->
+                            <div class="card mb-3">
+                                <div class="card-header bg-info text-white">
+                                    <h6 class="mb-0"><i class="bi bi-person me-2"></i>Contact Person</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <strong>First Name:</strong><br>
+                                            <span class="text-muted">${agency.first_name || 'N/A'}</span>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <strong>Last Name:</strong><br>
+                                            <span class="text-muted">${agency.last_name || 'N/A'}</span>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <strong>Personal Email:</strong><br>
+                                            <span class="text-muted">${agency.personal_email || 'N/A'}</span>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <strong>Personal Phone:</strong><br>
+                                            <span class="text-muted">${formatPhone(agency.personal_phone, agency.extension)}</span>
+                                        </div>
+                                        <div class="col-md-12 mb-3">
+                                            <strong>LinkedIn:</strong><br>
+                                            ${agency.personal_linkedin_url ? 
+                                                `<a href="${agency.personal_linkedin_url}" target="_blank" class="text-primary">${agency.personal_linkedin_url}</a>` : 
+                                                '<span class="text-muted">N/A</span>'}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Location & System Information -->
+                            <div class="card mb-3">
+                                <div class="card-header bg-success text-white">
+                                    <h6 class="mb-0"><i class="bi bi-geo-alt me-2"></i>Location & System</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <strong>Agency Location:</strong><br>
+                                            <span class="text-muted">${agency.agency_location || 'N/A'}</span>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <strong>System:</strong><br>
+                                            <span class="text-muted">${agency.system || 'N/A'}</span>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <strong>Browser Type:</strong><br>
+                                            <span class="text-muted">${agency.browser_type || 'N/A'}</span>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <strong>Login Time:</strong><br>
+                                            <span class="text-muted">${formatDate(agency.login_time)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Account Information -->
+                            <div class="card">
+                                <div class="card-header bg-warning text-dark">
+                                    <h6 class="mb-0"><i class="bi bi-wallet2 me-2"></i>Account Information</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-12">
+                                            <strong>Final Credits:</strong><br>
+                                            <span class="h4 text-primary">${agency.finalCredits !== undefined && agency.finalCredits !== null ? agency.finalCredits : 'N/A'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
                     detailsDiv.innerHTML = html;
                 } else {
                     detailsDiv.innerHTML = '<div class="alert alert-danger">Failed to load agency details</div>';
