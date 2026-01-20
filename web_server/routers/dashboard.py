@@ -16,6 +16,60 @@ from services.daily_service import daily_service
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
+# Register IST datetime filters (same as in main.py)
+def format_ist_datetime(dt, format_str='%Y-%m-%d %I:%M %p IST'):
+    """Format datetime in IST timezone"""
+    if not dt:
+        return 'N/A'
+    
+    # If already formatted with IST, return as-is
+    if isinstance(dt, str) and 'IST' in dt and ('PM' in dt or 'AM' in dt or ':' in dt):
+        return dt
+    
+    try:
+        IST = pytz.timezone('Asia/Kolkata')
+        if isinstance(dt, str):
+            # Check if it's already a formatted date (not ISO)
+            if 'IST' in dt and ('PM' in dt or 'AM' in dt):
+                return dt
+            # Parse ISO format string
+            dt_str = dt.replace('Z', '+00:00')
+            dt = datetime.fromisoformat(dt_str)
+        # Ensure dt is a datetime object
+        if not isinstance(dt, datetime):
+            return str(dt)
+        if dt.tzinfo is None:
+            # Assume UTC if timezone-naive
+            dt = dt.replace(tzinfo=timezone.utc)
+        ist_dt = dt.astimezone(IST)
+        return ist_dt.strftime(format_str)
+    except Exception as e:
+        # Return original value if formatting fails
+        return str(dt) if dt else 'N/A'
+
+def format_ist_time_only(dt):
+    """Format datetime to show only time in IST"""
+    if not dt:
+        return 'N/A'
+    try:
+        IST = pytz.timezone('Asia/Kolkata')
+        if isinstance(dt, str):
+            dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
+        if not isinstance(dt, datetime):
+            return str(dt)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        ist_dt = dt.astimezone(IST)
+        return ist_dt.strftime('%I:%M %p IST')
+    except Exception as e:
+        # Fallback: try to extract time from string
+        if isinstance(dt, str) and len(dt) >= 19:
+            return dt[11:19] + ' IST'
+        return str(dt)
+
+templates.env.filters['ist_datetime'] = format_ist_datetime
+templates.env.filters['ist_time'] = format_ist_time_only
+
 @router.get("/", response_class=HTMLResponse)
 async def dashboard_home(
     request: Request,

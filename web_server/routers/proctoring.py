@@ -29,6 +29,64 @@ router = APIRouter(tags=["proctoring"])
 # Templates
 templates = Jinja2Templates(directory="templates")
 
+# Register IST datetime filters (same as in main.py)
+def format_ist_datetime(dt, format_str='%Y-%m-%d %I:%M %p IST'):
+    """Format datetime in IST timezone"""
+    if not dt:
+        return 'N/A'
+    
+    # If already formatted with IST, return as-is
+    if isinstance(dt, str) and 'IST' in dt and ('PM' in dt or 'AM' in dt or ':' in dt):
+        return dt
+    
+    try:
+        IST = pytz.timezone('Asia/Kolkata')
+        if isinstance(dt, str):
+            # Check if it's already a formatted date (not ISO)
+            if 'IST' in dt and ('PM' in dt or 'AM' in dt):
+                return dt
+            # Parse ISO format string
+            dt_str = dt.replace('Z', '+00:00')
+            from datetime import datetime
+            dt = datetime.fromisoformat(dt_str)
+        # Ensure dt is a datetime object
+        from datetime import datetime
+        if not isinstance(dt, datetime):
+            return str(dt)
+        if dt.tzinfo is None:
+            # Assume UTC if timezone-naive
+            dt = dt.replace(tzinfo=pytz.UTC)
+        ist_dt = dt.astimezone(IST)
+        return ist_dt.strftime(format_str)
+    except Exception as e:
+        # Return original value if formatting fails
+        return str(dt) if dt else 'N/A'
+
+def format_ist_time_only(dt):
+    """Format datetime to show only time in IST"""
+    if not dt:
+        return 'N/A'
+    try:
+        IST = pytz.timezone('Asia/Kolkata')
+        if isinstance(dt, str):
+            from datetime import datetime
+            dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
+        from datetime import datetime
+        if not isinstance(dt, datetime):
+            return str(dt)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=pytz.UTC)
+        ist_dt = dt.astimezone(IST)
+        return ist_dt.strftime('%I:%M %p IST')
+    except Exception as e:
+        # Fallback: try to extract time from string
+        if isinstance(dt, str) and len(dt) >= 19:
+            return dt[11:19] + ' IST'
+        return str(dt)
+
+templates.env.filters['ist_datetime'] = format_ist_datetime
+templates.env.filters['ist_time'] = format_ist_time_only
+
 # Redis connection for distributed locking (shared across all web server workers)
 # Use 'redis' hostname in Docker, 'localhost' for local dev
 redis_client = Redis(host=os.getenv('REDIS_HOST', 'redis'), port=6379, decode_responses=True)
