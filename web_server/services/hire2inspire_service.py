@@ -221,6 +221,63 @@ class Hire2InspireService:
         except Exception as e:
             logger.error(f"❌ Failed to get candidate details: {e}")
             return None
+    
+    async def get_agency_list(self) -> List[Dict[str, Any]]:
+        """Get list of all registered agencies"""
+        try:
+            token = await self._ensure_token()
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(
+                    f"{self.base_url}/agency/h2i-list",
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Accept": "application/json"
+                    }
+                )
+                response.raise_for_status()
+                data = response.json()
+                
+                # Extract agencies from response
+                if "data" in data:
+                    agencies = data["data"]
+                    logger.info(f"✅ Fetched {len(agencies)} agencies from Hire2Inspire")
+                    return agencies
+                else:
+                    logger.warning("⚠️ No agencies data in response")
+                    return []
+                    
+        except Exception as e:
+            logger.error(f"❌ Failed to fetch agencies: {e}")
+            return []
+    
+    async def get_agency_details(self, agency_id: str) -> Optional[Dict[str, Any]]:
+        """Get details of a specific agency by ID"""
+        try:
+            token = await self._ensure_token()
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(
+                    f"{self.base_url}/agency/{agency_id}",
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Accept": "application/json"
+                    }
+                )
+                response.raise_for_status()
+                data = response.json()
+                
+                # Extract agency details from response
+                if "data" in data:
+                    logger.info(f"✅ Fetched agency details for {agency_id}")
+                    return data["data"]
+                else:
+                    logger.warning(f"⚠️ No agency data in response for {agency_id}")
+                    return None
+                    
+        except Exception as e:
+            logger.error(f"❌ Failed to get agency details: {e}")
+            return None
 
 
 # Global instance

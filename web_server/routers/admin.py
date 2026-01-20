@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from services.admin_auth_service import admin_auth_service
 from services.database import db_service
 from services.tavus_service import tavus_service
+from services.hire2inspire_service import hire2inspire_service
 from dependencies import DbServiceDep, AdminUserDep
 from loguru import logger
 from datetime import datetime
@@ -127,6 +128,14 @@ async def admin_dashboard(
             "completed": len(completed_requests)
         }
         
+        # Get agencies list
+        agencies = []
+        try:
+            agencies = await hire2inspire_service.get_agency_list()
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to fetch agencies: {e}")
+            agencies = []
+        
         return templates.TemplateResponse("admin_dashboard.html", {
             "request": request,
             "admin_username": admin.get("username"),
@@ -135,7 +144,8 @@ async def admin_dashboard(
             "rejected_requests": rejected_requests,
             "training_requests": training_requests,
             "completed_requests": completed_requests,
-            "stats": stats
+            "stats": stats,
+            "agencies": agencies
         })
     except Exception as e:
         logger.error(f"❌ Error loading admin dashboard: {str(e)}")
@@ -170,6 +180,25 @@ async def list_replica_requests(
         logger.error(f"❌ Error listing replica requests: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.get("/api/v1/admin/agencies/{agency_id}")
+async def get_agency_details(
+    agency_id: str,
+    admin: AdminUserDep
+):
+    """Get details of a specific agency"""
+    try:
+        agency = await hire2inspire_service.get_agency_details(agency_id)
+        if agency:
+            return JSONResponse({
+                "success": True,
+                "data": agency
+            })
+        else:
+            raise HTTPException(status_code=404, detail="Agency not found")
+    except Exception as e:
+        logger.error(f"❌ Error getting agency details: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/api/v1/admin/replica-requests/{request_id}")
 async def get_replica_request(

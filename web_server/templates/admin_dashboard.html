@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - Replica Approval</title>
+    <title>Admin Dashboard</title>
     
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -45,6 +45,8 @@
         .status-pending { background-color: #fef3c7; color: #92400e; }
         .status-approved { background-color: #d1fae5; color: #065f46; }
         .status-rejected { background-color: #fee2e2; color: #991b1b; }
+        .status-training { background-color: #e0e7ff; color: #4338ca; }
+        .status-completed { background-color: #d1fae5; color: #065f46; }
         
         .table {
             background: white;
@@ -57,9 +59,14 @@
             font-size: 0.875rem;
         }
         
-        .video-preview {
-            max-width: 300px;
-            border-radius: 8px;
+        .main-tabs .nav-link {
+            font-weight: 500;
+            padding: 0.75rem 1.5rem;
+        }
+        
+        .sub-tabs .nav-link {
+            font-size: 0.9rem;
+            padding: 0.5rem 1rem;
         }
     </style>
 </head>
@@ -84,223 +91,410 @@
     </nav>
     
     <div class="container-fluid">
-        <!-- Statistics Cards -->
-        <div class="row mb-4">
-            <div class="col-md-2">
-                <div class="card stat-card">
-                    <div class="card-body text-center">
-                        <h5 class="text-muted mb-1">Total</h5>
-                        <h2 class="mb-0">{{ stats.total }}</h2>
+        <!-- Main Tabs -->
+        <ul class="nav nav-tabs main-tabs mb-4" id="mainTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="replica-requests-tab" data-bs-toggle="tab" data-bs-target="#replica-requests" type="button" role="tab">
+                    <i class="bi bi-person-video2 me-2"></i>Replica Requests
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="agencies-tab" data-bs-toggle="tab" data-bs-target="#agencies" type="button" role="tab">
+                    <i class="bi bi-building me-2"></i>Agencies <span class="badge bg-primary">{{ agencies|length }}</span>
+                </button>
+            </li>
+        </ul>
+        
+        <!-- Main Tab Content -->
+        <div class="tab-content" id="mainTabsContent">
+            <!-- Replica Requests Tab -->
+            <div class="tab-pane fade show active" id="replica-requests" role="tabpanel">
+                <!-- Statistics Cards -->
+                <div class="row mb-4">
+                    <div class="col-md-2">
+                        <div class="card stat-card">
+                            <div class="card-body text-center">
+                                <h5 class="text-muted mb-1">Total</h5>
+                                <h2 class="mb-0">{{ stats.total }}</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card stat-card border-warning">
+                            <div class="card-body text-center">
+                                <h5 class="text-warning mb-1">Pending</h5>
+                                <h2 class="mb-0 text-warning">{{ stats.pending }}</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card stat-card border-success">
+                            <div class="card-body text-center">
+                                <h5 class="text-success mb-1">Approved</h5>
+                                <h2 class="mb-0 text-success">{{ stats.approved }}</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card stat-card border-info">
+                            <div class="card-body text-center">
+                                <h5 class="text-info mb-1">Training</h5>
+                                <h2 class="mb-0 text-info">{{ stats.training }}</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card stat-card border-danger">
+                            <div class="card-body text-center">
+                                <h5 class="text-danger mb-1">Rejected</h5>
+                                <h2 class="mb-0 text-danger">{{ stats.rejected }}</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card stat-card border-primary">
+                            <div class="card-body text-center">
+                                <h5 class="text-primary mb-1">Completed</h5>
+                                <h2 class="mb-0 text-primary">{{ stats.completed }}</h2>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Sub-tabs for Replica Requests -->
+                <ul class="nav nav-tabs sub-tabs mb-3" id="replicaTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button" role="tab">
+                            Pending <span class="badge bg-warning">{{ stats.pending }}</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="approved-tab" data-bs-toggle="tab" data-bs-target="#approved" type="button" role="tab">
+                            Approved <span class="badge bg-success">{{ stats.approved }}</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="training-tab" data-bs-toggle="tab" data-bs-target="#training" type="button" role="tab">
+                            Training <span class="badge bg-info">{{ stats.training }}</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="completed-tab" data-bs-toggle="tab" data-bs-target="#completed" type="button" role="tab">
+                            Completed <span class="badge bg-primary">{{ stats.completed }}</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="rejected-tab" data-bs-toggle="tab" data-bs-target="#rejected" type="button" role="tab">
+                            Rejected <span class="badge bg-danger">{{ stats.rejected }}</span>
+                        </button>
+                    </li>
+                </ul>
+                
+                <!-- Replica Requests Tab Content -->
+                <div class="tab-content" id="replicaTabsContent">
+                    <!-- Pending Requests -->
+                    <div class="tab-pane fade show active" id="pending" role="tabpanel">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3">Pending Replica Requests</h5>
+                                {% if pending_requests %}
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Request ID</th>
+                                                <th>Replica Name</th>
+                                                <th>Video URL</th>
+                                                <th>Submitted By</th>
+                                                <th>Submitted At</th>
+                                                <th>Model</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for req in pending_requests %}
+                                            <tr>
+                                                <td><code>{{ req.request_id }}</code></td>
+                                                <td><strong>{{ req.replica_name }}</strong></td>
+                                                <td>
+                                                    <a href="{{ req.train_video_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                                        <i class="bi bi-play-circle me-1"></i>View Video
+                                                    </a>
+                                                </td>
+                                                <td>
+                                                    {% if req.submitted_by and '@' in req.submitted_by %}
+                                                        {{ req.submitted_by }}
+                                                    {% else %}
+                                                        <code title="User ID: {{ req.submitted_by }}">{{ req.submitted_by[:12] }}...</code>
+                                                    {% endif %}
+                                                </td>
+                                                <td>{{ req.submitted_at.strftime('%Y-%m-%d %H:%M') if req.submitted_at else 'N/A' }}</td>
+                                                <td><span class="badge bg-secondary">{{ req.model_name }}</span></td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-success me-1" onclick="approveRequest('{{ req.request_id }}')">
+                                                        <i class="bi bi-check-circle me-1"></i>Approve
+                                                    </button>
+                                                    <button class="btn btn-sm btn-danger" onclick="rejectRequest('{{ req.request_id }}')">
+                                                        <i class="bi bi-x-circle me-1"></i>Reject
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {% else %}
+                                <p class="text-muted text-center py-4">No pending requests</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Approved Requests -->
+                    <div class="tab-pane fade" id="approved" role="tabpanel">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3">Approved Replica Requests</h5>
+                                {% if approved_requests %}
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Request ID</th>
+                                                <th>Replica Name</th>
+                                                <th>Video URL</th>
+                                                <th>Approved By</th>
+                                                <th>Approved At</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for req in approved_requests %}
+                                            <tr>
+                                                <td><code>{{ req.request_id }}</code></td>
+                                                <td><strong>{{ req.replica_name }}</strong></td>
+                                                <td>
+                                                    <a href="{{ req.train_video_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                                        <i class="bi bi-play-circle me-1"></i>View Video
+                                                    </a>
+                                                </td>
+                                                <td>{{ req.reviewed_by }}</td>
+                                                <td>{{ req.reviewed_at.strftime('%Y-%m-%d %H:%M') if req.reviewed_at else 'N/A' }}</td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-primary" onclick="trainRequest('{{ req.request_id }}')">
+                                                        <i class="bi bi-play-fill me-1"></i>Start Training
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {% else %}
+                                <p class="text-muted text-center py-4">No approved requests</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Training Requests -->
+                    <div class="tab-pane fade" id="training" role="tabpanel">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3">Training Requests</h5>
+                                {% if training_requests %}
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Request ID</th>
+                                                <th>Replica Name</th>
+                                                <th>Replica ID</th>
+                                                <th>Training Started</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for req in training_requests %}
+                                            <tr>
+                                                <td><code>{{ req.request_id }}</code></td>
+                                                <td><strong>{{ req.replica_name }}</strong></td>
+                                                <td>
+                                                    {% if req.tavus_replica_id %}
+                                                        <code>{{ req.tavus_replica_id }}</code>
+                                                    {% else %}
+                                                        <span class="text-muted">-</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td>{{ req.trained_at.strftime('%Y-%m-%d %H:%M') if req.trained_at else 'N/A' }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {% else %}
+                                <p class="text-muted text-center py-4">No requests in training</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Completed Requests -->
+                    <div class="tab-pane fade" id="completed" role="tabpanel">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3">Completed Requests</h5>
+                                {% if completed_requests %}
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Request ID</th>
+                                                <th>Replica Name</th>
+                                                <th>Replica ID</th>
+                                                <th>Completed At</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for req in completed_requests %}
+                                            <tr>
+                                                <td><code>{{ req.request_id }}</code></td>
+                                                <td><strong>{{ req.replica_name }}</strong></td>
+                                                <td>
+                                                    {% if req.tavus_replica_id %}
+                                                        <code>{{ req.tavus_replica_id }}</code>
+                                                    {% else %}
+                                                        <span class="text-muted">-</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td>{{ req.completed_at.strftime('%Y-%m-%d %H:%M') if req.completed_at else 'N/A' }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {% else %}
+                                <p class="text-muted text-center py-4">No completed requests</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Rejected Requests -->
+                    <div class="tab-pane fade" id="rejected" role="tabpanel">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3">Rejected Replica Requests</h5>
+                                {% if rejected_requests %}
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Request ID</th>
+                                                <th>Replica Name</th>
+                                                <th>Rejected By</th>
+                                                <th>Rejected At</th>
+                                                <th>Reason</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for req in rejected_requests %}
+                                            <tr>
+                                                <td><code>{{ req.request_id }}</code></td>
+                                                <td><strong>{{ req.replica_name }}</strong></td>
+                                                <td>{{ req.reviewed_by }}</td>
+                                                <td>{{ req.reviewed_at.strftime('%Y-%m-%d %H:%M') if req.reviewed_at else 'N/A' }}</td>
+                                                <td>{{ req.rejection_reason or 'No reason provided' }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {% else %}
+                                <p class="text-muted text-center py-4">No rejected requests</p>
+                                {% endif %}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-2">
-                <div class="card stat-card border-warning">
-                    <div class="card-body text-center">
-                        <h5 class="text-warning mb-1">Pending</h5>
-                        <h2 class="mb-0 text-warning">{{ stats.pending }}</h2>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-2">
-                <div class="card stat-card border-success">
-                    <div class="card-body text-center">
-                        <h5 class="text-success mb-1">Approved</h5>
-                        <h2 class="mb-0 text-success">{{ stats.approved }}</h2>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-2">
-                <div class="card stat-card border-info">
-                    <div class="card-body text-center">
-                        <h5 class="text-info mb-1">Training</h5>
-                        <h2 class="mb-0 text-info">{{ stats.training }}</h2>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-2">
-                <div class="card stat-card border-danger">
-                    <div class="card-body text-center">
-                        <h5 class="text-danger mb-1">Rejected</h5>
-                        <h2 class="mb-0 text-danger">{{ stats.rejected }}</h2>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-2">
-                <div class="card stat-card border-primary">
-                    <div class="card-body text-center">
-                        <h5 class="text-primary mb-1">Completed</h5>
-                        <h2 class="mb-0 text-primary">{{ stats.completed }}</h2>
+            
+            <!-- Agencies Tab -->
+            <div class="tab-pane fade" id="agencies" role="tabpanel">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="card-title mb-0">Registered Agencies</h5>
+                            <button class="btn btn-sm btn-outline-primary" onclick="loadAgencies()">
+                                <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                            </button>
+                        </div>
+                        {% if agencies %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Name</th>
+                                        <th>Email</th>
+                                        <th>Phone</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for agency in agencies %}
+                                    <tr>
+                                        <td><code>{{ agency._id or agency.id or 'N/A' }}</code></td>
+                                        <td><strong>{{ agency.agency_name or agency.name or 'N/A' }}</strong></td>
+                                        <td>{{ agency.corporate_email or agency.email or 'N/A' }}</td>
+                                        <td>{{ agency.phone_number or agency.phone or 'N/A' }}</td>
+                                        <td>
+                                            {% if agency.is_active is defined %}
+                                                {% if agency.is_active %}
+                                                    <span class="badge bg-success">Active</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">Inactive</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="badge bg-info">Unknown</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary" onclick="viewAgencyDetails('{{ agency._id or agency.id }}')">
+                                                <i class="bi bi-eye me-1"></i>View Details
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <p class="text-muted text-center py-4">No agencies found</p>
+                        {% endif %}
                     </div>
                 </div>
             </div>
         </div>
-        
-        <!-- Tabs -->
-        <ul class="nav nav-tabs mb-3" id="requestTabs" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button" role="tab">
-                    Pending <span class="badge bg-warning">{{ stats.pending }}</span>
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="approved-tab" data-bs-toggle="tab" data-bs-target="#approved" type="button" role="tab">
-                    Approved <span class="badge bg-success">{{ stats.approved }}</span>
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="rejected-tab" data-bs-toggle="tab" data-bs-target="#rejected" type="button" role="tab">
-                    Rejected <span class="badge bg-danger">{{ stats.rejected }}</span>
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-        </ul>
-        
-        <!-- Tab Content -->
-        <div class="tab-content" id="requestTabsContent">
-            <!-- Pending Requests -->
-            <div class="tab-pane fade show active" id="pending" role="tabpanel">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title mb-3">Pending Replica Requests</h5>
-                        {% if pending_requests %}
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Request ID</th>
-                                        <th>Replica Name</th>
-                                        <th>Video URL</th>
-                                        <th>Submitted By</th>
-                                        <th>Submitted At</th>
-                                        <th>Model</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for req in pending_requests %}
-                                    <tr>
-                                        <td><code>{{ req.request_id }}</code></td>
-                                        <td><strong>{{ req.replica_name }}</strong></td>
-                                        <td>
-                                            <a href="{{ req.train_video_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                                                <i class="bi bi-play-circle me-1"></i>View Video
-                                            </a>
-                                        </td>
-                                        <td>
-                                            {% if req.submitted_by and '@' in req.submitted_by %}
-                                                {{ req.submitted_by }}
-                                            {% else %}
-                                                <code title="User ID: {{ req.submitted_by }}">{{ req.submitted_by[:12] }}...</code>
-                                            {% endif %}
-                                        </td>
-                                        <td>{{ req.submitted_at.strftime('%Y-%m-%d %H:%M') if req.submitted_at else 'N/A' }}</td>
-                                        <td><span class="badge bg-secondary">{{ req.model_name }}</span></td>
-                                        <td>
-                                            <button class="btn btn-sm btn-success me-1" onclick="approveRequest('{{ req.request_id }}')">
-                                                <i class="bi bi-check-circle me-1"></i>Approve
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" onclick="rejectRequest('{{ req.request_id }}')">
-                                                <i class="bi bi-x-circle me-1"></i>Reject
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
+    </div>
+    
+    <!-- Agency Details Modal -->
+    <div class="modal fade" id="agencyModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Agency Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="agencyDetails">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
                         </div>
-                        {% else %}
-                        <p class="text-muted text-center py-4">No pending requests</p>
-                        {% endif %}
                     </div>
                 </div>
-            </div>
-            
-            <!-- Approved Requests -->
-            <div class="tab-pane fade" id="approved" role="tabpanel">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title mb-3">Approved Replica Requests</h5>
-                        {% if approved_requests %}
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Request ID</th>
-                                        <th>Replica Name</th>
-                                        <th>Video URL</th>
-                                        <th>Approved By</th>
-                                        <th>Approved At</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for req in approved_requests %}
-                                    <tr>
-                                        <td><code>{{ req.request_id }}</code></td>
-                                        <td><strong>{{ req.replica_name }}</strong></td>
-                                        <td>
-                                            <a href="{{ req.train_video_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                                                <i class="bi bi-play-circle me-1"></i>View Video
-                                            </a>
-                                        </td>
-                                        <td>{{ req.reviewed_by }}</td>
-                                        <td>{{ req.reviewed_at.strftime('%Y-%m-%d %H:%M') if req.reviewed_at else 'N/A' }}</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-primary" onclick="trainRequest('{{ req.request_id }}')">
-                                                <i class="bi bi-play-fill me-1"></i>Start Training
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        {% else %}
-                        <p class="text-muted text-center py-4">No approved requests</p>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Rejected Requests -->
-            <div class="tab-pane fade" id="rejected" role="tabpanel">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title mb-3">Rejected Replica Requests</h5>
-                        {% if rejected_requests %}
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Request ID</th>
-                                        <th>Replica Name</th>
-                                        <th>Rejected By</th>
-                                        <th>Rejected At</th>
-                                        <th>Reason</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for req in rejected_requests %}
-                                    <tr>
-                                        <td><code>{{ req.request_id }}</code></td>
-                                        <td><strong>{{ req.replica_name }}</strong></td>
-                                        <td>{{ req.reviewed_by }}</td>
-                                        <td>{{ req.reviewed_at.strftime('%Y-%m-%d %H:%M') if req.reviewed_at else 'N/A' }}</td>
-                                        <td>{{ req.rejection_reason or 'No reason provided' }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        {% else %}
-                        <p class="text-muted text-center py-4">No rejected requests</p>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>
@@ -417,6 +611,56 @@
                 btn.disabled = false;
                 btn.innerHTML = originalText;
             }
+        }
+        
+        async function viewAgencyDetails(agencyId) {
+            const modal = new bootstrap.Modal(document.getElementById('agencyModal'));
+            const detailsDiv = document.getElementById('agencyDetails');
+            
+            detailsDiv.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+            modal.show();
+            
+            try {
+                const response = await fetch(`/api/v1/admin/agencies/${agencyId}`);
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                    const agency = result.data;
+                    let html = '<div class="row">';
+                    
+                    // Display all agency fields
+                    for (const [key, value] of Object.entries(agency)) {
+                        if (value !== null && value !== undefined) {
+                            const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                            let displayValue = value;
+                            
+                            if (typeof value === 'object') {
+                                displayValue = '<pre class="mb-0">' + JSON.stringify(value, null, 2) + '</pre>';
+                            } else if (typeof value === 'boolean') {
+                                displayValue = value ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>';
+                            }
+                            
+                            html += `
+                                <div class="col-md-6 mb-3">
+                                    <strong>${displayKey}:</strong><br>
+                                    <span class="text-muted">${displayValue}</span>
+                                </div>
+                            `;
+                        }
+                    }
+                    
+                    html += '</div>';
+                    detailsDiv.innerHTML = html;
+                } else {
+                    detailsDiv.innerHTML = '<div class="alert alert-danger">Failed to load agency details</div>';
+                }
+            } catch (error) {
+                detailsDiv.innerHTML = '<div class="alert alert-danger">Error: ' + error.message + '</div>';
+            }
+        }
+        
+        function loadAgencies() {
+            location.reload();
         }
     </script>
 </body>
