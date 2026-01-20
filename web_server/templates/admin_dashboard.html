@@ -638,13 +638,14 @@
                 console.log('Agency details response:', result);
                 if (result.success && result.data) {
                     console.log('Agency data keys:', Object.keys(result.data));
+                    console.log('Full agency data:', JSON.stringify(result.data, null, 2));
+                    console.log('Subscription:', result.data.subscription);
                     console.log('Sample fields:', {
                         first_name: result.data.first_name,
                         last_name: result.data.last_name,
                         personal_email: result.data.personal_email,
                         agency_location: result.data.agency_location,
-                        finalCredits: result.data.finalCredits,
-                        final_credits: result.data.final_credits
+                        subscription: result.data.subscription
                     });
                     
                     const agency = result.data;
@@ -675,26 +676,47 @@
                         return phone;
                     }
                     
-                    // Helper function to get value with multiple fallback keys
+                    // Helper function to get value with multiple fallback keys (supports nested paths)
                     function getValue(obj, ...keys) {
                         for (const key of keys) {
-                            if (obj[key] !== undefined && obj[key] !== null && obj[key] !== '') {
-                                return obj[key];
+                            // Support nested paths like 'user.first_name'
+                            if (key.includes('.')) {
+                                const parts = key.split('.');
+                                let value = obj;
+                                for (const part of parts) {
+                                    if (value && typeof value === 'object' && part in value) {
+                                        value = value[part];
+                                    } else {
+                                        value = null;
+                                        break;
+                                    }
+                                }
+                                if (value !== undefined && value !== null && value !== '') {
+                                    return value;
+                                }
+                            } else {
+                                // Direct key access
+                                if (obj[key] !== undefined && obj[key] !== null && obj[key] !== '') {
+                                    return obj[key];
+                                }
                             }
                         }
                         return null;
                     }
                     
-                    // Extract values with fallbacks for different naming conventions
-                    const firstName = getValue(agency, 'first_name', 'firstName', 'firstname');
-                    const lastName = getValue(agency, 'last_name', 'lastName', 'lastname');
-                    const personalEmail = getValue(agency, 'personal_email', 'personalEmail', 'personalemail');
-                    const personalPhone = getValue(agency, 'personal_phone', 'personalPhone', 'personalphone');
-                    const extension = getValue(agency, 'extension', 'phone_extension', 'phoneExtension');
-                    const linkedinUrl = getValue(agency, 'personal_linkedin_url', 'personalLinkedinUrl', 'linkedin_url', 'linkedinUrl', 'linkedin');
-                    const agencyLocation = getValue(agency, 'agency_location', 'agencyLocation', 'location', 'city');
+                    // Extract values with fallbacks for different naming conventions and nested structures
+                    const firstName = getValue(agency, 'first_name', 'firstName', 'firstname', 'user.first_name', 'user.firstName', 'contact.first_name');
+                    const lastName = getValue(agency, 'last_name', 'lastName', 'lastname', 'user.last_name', 'user.lastName', 'contact.last_name');
+                    const personalEmail = getValue(agency, 'personal_email', 'personalEmail', 'personalemail', 'user.personal_email', 'contact.personal_email', 'email');
+                    const personalPhone = getValue(agency, 'personal_phone', 'personalPhone', 'personalphone', 'user.personal_phone', 'contact.personal_phone', 'phone');
+                    const extension = getValue(agency, 'extension', 'phone_extension', 'phoneExtension', 'user.extension', 'contact.extension');
+                    const linkedinUrl = getValue(agency, 'personal_linkedin_url', 'personalLinkedinUrl', 'linkedin_url', 'linkedinUrl', 'linkedin', 'user.personal_linkedin_url', 'contact.linkedin');
+                    const agencyLocation = getValue(agency, 'agency_location', 'agencyLocation', 'location', 'city', 'address.city', 'address.location');
                     const createdAt = getValue(agency, 'createdAt', 'created_at', 'created', 'dateCreated');
                     const loginTime = getValue(agency, 'login_time', 'loginTime', 'last_login', 'lastLogin');
+                    
+                    // Get subscription - might be nested or at root
+                    const subscription = agency.subscription || agency.subscription_data || agency.subscriptionInfo || {};
                     
                     let html = `
                         <div class="agency-details">
@@ -792,43 +814,44 @@
                                 </div>
                                 <div class="card-body">
                                     <div class="row">
-                                        ${(() => {
-                                            const subscription = agency.subscription || {};
-                                            return `
-                                                <div class="col-md-6 mb-3">
-                                                    <strong>Status:</strong><br>
-                                                    <span class="badge ${subscription.status === 'active' ? 'bg-success' : 'bg-secondary'}">${subscription.status || 'N/A'}</span>
-                                                </div>
-                                                <div class="col-md-6 mb-3">
-                                                    <strong>Type:</strong><br>
-                                                    <span class="text-muted">${subscription.type || 'N/A'}</span>
-                                                </div>
-                                                <div class="col-md-6 mb-3">
-                                                    <strong>Amount:</strong><br>
-                                                    <span class="text-muted">${subscription.amount !== undefined && subscription.amount !== null ? '₹' + subscription.amount.toLocaleString('en-IN') : 'N/A'}</span>
-                                                </div>
-                                                <div class="col-md-6 mb-3">
-                                                    <strong>Validity:</strong><br>
-                                                    <span class="text-muted">${subscription.validity || 'N/A'}</span>
-                                                </div>
-                                                <div class="col-md-6 mb-3">
-                                                    <strong>Quantity:</strong><br>
-                                                    <span class="text-muted">${subscription.quantity !== undefined && subscription.quantity !== null ? subscription.quantity : 'N/A'}</span>
-                                                </div>
-                                                <div class="col-md-6 mb-3">
-                                                    <strong>User Type:</strong><br>
-                                                    <span class="text-muted">${subscription.user_type || 'N/A'}</span>
-                                                </div>
-                                                <div class="col-md-6 mb-3">
-                                                    <strong>Created At:</strong><br>
-                                                    <span class="text-muted">${formatDate(subscription.createdAt || subscription.created_at)}</span>
-                                                </div>
-                                                <div class="col-md-6 mb-3">
-                                                    <strong>Updated At:</strong><br>
-                                                    <span class="text-muted">${formatDate(subscription.updatedAt || subscription.updated_at)}</span>
-                                                </div>
-                                            `;
-                                        })()}
+                                        <div class="col-md-6 mb-3">
+                                            <strong>Status:</strong><br>
+                                            <span class="badge ${subscription.status === 'active' ? 'bg-success' : 'bg-secondary'}">${subscription.status || getValue(agency, 'status') || 'N/A'}</span>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <strong>Type:</strong><br>
+                                            <span class="text-muted">${subscription.type || getValue(agency, 'type', 'subscription_type') || 'N/A'}</span>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <strong>Amount:</strong><br>
+                                            <span class="text-muted">${(() => {
+                                                const amount = subscription.amount !== undefined && subscription.amount !== null ? subscription.amount : getValue(agency, 'amount');
+                                                return amount !== null && amount !== undefined ? '₹' + amount.toLocaleString('en-IN') : 'N/A';
+                                            })()}</span>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <strong>Validity:</strong><br>
+                                            <span class="text-muted">${subscription.validity || getValue(agency, 'validity') || 'N/A'}</span>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <strong>Quantity:</strong><br>
+                                            <span class="text-muted">${(() => {
+                                                const qty = subscription.quantity !== undefined && subscription.quantity !== null ? subscription.quantity : getValue(agency, 'quantity');
+                                                return qty !== null && qty !== undefined ? qty : 'N/A';
+                                            })()}</span>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <strong>User Type:</strong><br>
+                                            <span class="text-muted">${subscription.user_type || getValue(agency, 'user_type', 'userType') || 'N/A'}</span>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <strong>Created At:</strong><br>
+                                            <span class="text-muted">${formatDate(subscription.createdAt || subscription.created_at || getValue(agency, 'subscription_created_at'))}</span>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <strong>Updated At:</strong><br>
+                                            <span class="text-muted">${formatDate(subscription.updatedAt || subscription.updated_at || getValue(agency, 'subscription_updated_at'))}</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

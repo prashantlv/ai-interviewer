@@ -365,11 +365,20 @@ class Hire2InspireService:
                 
                 if agency_data:
                     logger.info(f"✅ Fetched agency details for {agency_id}")
-                    # Log sample fields to help debug
-                    sample_fields = ['first_name', 'last_name', 'personal_email', 'agency_location', 'subscription']
-                    for field in sample_fields:
-                        if field in agency_data:
-                            logger.debug(f"📋 Found field '{field}': {agency_data[field]}")
+                    # Log all keys to help debug
+                    if isinstance(agency_data, dict):
+                        logger.info(f"📋 Agency data has {len(agency_data)} keys: {list(agency_data.keys())[:20]}")  # First 20 keys
+                        # Log sample fields to help debug
+                        sample_fields = ['first_name', 'last_name', 'personal_email', 'agency_location', 'subscription', 'firstName', 'lastName']
+                        for field in sample_fields:
+                            if field in agency_data:
+                                logger.info(f"📋 Found field '{field}': {agency_data[field]}")
+                        # Check for subscription
+                        if 'subscription' in agency_data:
+                            logger.info(f"📋 Subscription keys: {list(agency_data['subscription'].keys()) if isinstance(agency_data['subscription'], dict) else 'not a dict'}")
+                        # Log full structure (truncated)
+                        import json
+                        logger.debug(f"📋 Full agency data (first 1000 chars): {json.dumps(agency_data, default=str)[:1000]}")
                     return agency_data
                 else:
                     logger.warning(f"⚠️ No agency data in response for {agency_id}")
