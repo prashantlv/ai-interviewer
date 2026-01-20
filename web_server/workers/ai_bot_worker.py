@@ -58,35 +58,82 @@ def start_interview_bot(interview_id: str, config: Optional[Dict[str, Any]] = No
         command = _build_bot_command(interview_id, room_url)
         logger.info(f"📝 Command: {' '.join(command)}")
         
-        # Start the bot process
-        # CRITICAL: Let stdout/stderr inherit from parent so logs show immediately
-        process = subprocess.Popen(
-            command,
-            stdout=None,  # Inherit stdout - logs go directly to docker logs
-            stderr=None,  # Inherit stderr - errors go directly to docker logs
-            env=_get_bot_environment(interview_id),
-            cwd=_get_bot_directory()
-        )
+        # Retry logic: Try up to 3 times with 30-second intervals
+        max_retries = 3
+        retry_delay = 30  # seconds
+        process = None
+        last_error = None
         
-        # Store process info
-        ACTIVE_BOTS[interview_id] = {
-            "pid": process.pid,
-            "started_at": start_time.isoformat(),
-            "status": "running",
-            "process": process
-        }
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.info(f"🔄 Attempt {attempt}/{max_retries} to start bot for interview {interview_id}")
+                
+                # Start the bot process
+                # CRITICAL: Let stdout/stderr inherit from parent so logs show immediately
+                process = subprocess.Popen(
+                    command,
+                    stdout=None,  # Inherit stdout - logs go directly to docker logs
+                    stderr=None,  # Inherit stderr - errors go directly to docker logs
+                    env=_get_bot_environment(interview_id),
+                    cwd=_get_bot_directory()
+                )
+                
+                # Wait 5 seconds to check if process is still alive
+                time.sleep(5)
+                
+                # Check if process is still running
+                if process.poll() is None:
+                    # Process is still running - success!
+                    # Store process info
+                    ACTIVE_BOTS[interview_id] = {
+                        "pid": process.pid,
+                        "started_at": start_time.isoformat(),
+                        "status": "running",
+                        "process": process,
+                        "attempt": attempt
+                    }
+                    
+                    logger.info(f"✅ Bot started successfully on attempt {attempt}! PID: {process.pid}")
+                    
+                    # Note: We don't wait for the process to complete here
+                    # The bot will run independently and send results when done
+                    
+                    return {
+                        "success": True,
+                        "interview_id": interview_id,
+                        "pid": process.pid,
+                        "started_at": start_time.isoformat(),
+                        "attempt": attempt,
+                        "message": f"Bot started successfully for interview {interview_id} (attempt {attempt})"
+                    }
+                else:
+                    # Process died immediately - failed to start
+                    exit_code = process.returncode
+                    last_error = f"Bot process exited immediately with code {exit_code}"
+                    logger.warning(f"⚠️ Attempt {attempt} failed: {last_error}")
+                    
+                    if attempt < max_retries:
+                        logger.info(f"⏳ Waiting {retry_delay} seconds before retry...")
+                        time.sleep(retry_delay)
+                    else:
+                        logger.error(f"❌ All {max_retries} attempts failed")
+                        
+            except Exception as e:
+                last_error = str(e)
+                logger.error(f"❌ Attempt {attempt} error: {last_error}")
+                
+                if attempt < max_retries:
+                    logger.info(f"⏳ Waiting {retry_delay} seconds before retry...")
+                    time.sleep(retry_delay)
+                else:
+                    logger.error(f"❌ All {max_retries} attempts failed")
         
-        logger.info(f"✅ Bot started successfully! PID: {process.pid}")
-        
-        # Note: We don't wait for the process to complete here
-        # The bot will run independently and send results when done
-        
+        # All retries failed
         return {
-            "success": True,
+            "success": False,
             "interview_id": interview_id,
-            "pid": process.pid,
-            "started_at": start_time.isoformat(),
-            "message": f"Bot started successfully for interview {interview_id}"
+            "error": f"Failed to start bot after {max_retries} attempts: {last_error}",
+            "error_type": "retry_exhausted"
         }
         
     except FileNotFoundError as e:

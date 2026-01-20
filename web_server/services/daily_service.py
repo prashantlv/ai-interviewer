@@ -8,6 +8,7 @@ Based on: https://www.daily.co/blog/intro-to-room-access-control/
 import os
 import httpx
 from typing import Dict, Any, Optional
+from datetime import datetime, timedelta
 from loguru import logger
 
 
@@ -29,7 +30,8 @@ class DailyService:
         self, 
         interview_id: str,
         candidate_name: str = "Candidate",
-        expires_in_minutes: Optional[int] = None
+        expires_in_minutes: Optional[int] = None,
+        scheduled_time: Optional[datetime] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Create a unique Daily.co room for an interview
@@ -38,6 +40,7 @@ class DailyService:
             interview_id: Unique interview identifier
             candidate_name: Name of the candidate (for room name)
             expires_in_minutes: Room expiration time (default: 60 minutes)
+            scheduled_time: Optional datetime when room should become available (sets nbf)
             
         Returns:
             Dict with room details including URL, or None if failed
@@ -49,6 +52,18 @@ class DailyService:
         # Generate unique room name
         room_name = f"interview-{interview_id}"
         room_exp_minutes = expires_in_minutes or max(1, DEFAULT_ROOM_EXP_SECONDS // 60)
+        
+        # Calculate expiry timestamp
+        if scheduled_time:
+            # For scheduled rooms: exp = scheduled_time + expiration duration
+            exp_datetime = scheduled_time + timedelta(minutes=room_exp_minutes)
+            exp_timestamp = int(exp_datetime.timestamp())
+            nbf_timestamp = int(scheduled_time.timestamp())
+            logger.info(f"📅 Scheduled room: nbf={nbf_timestamp} ({scheduled_time}), exp={exp_timestamp} ({exp_datetime})")
+        else:
+            # For immediate rooms: exp = now + expiration duration
+            exp_timestamp = self._calculate_expiry(room_exp_minutes)
+            nbf_timestamp = None
         
         # Room configuration
         # Reference: https://www.daily.co/blog/intro-to-room-access-control/
@@ -66,12 +81,16 @@ class DailyService:
                 "start_video_off": False,
                 "start_audio_off": False,
                 "enable_recording": "cloud",  # Enable cloud recording
-                "exp": self._calculate_expiry(room_exp_minutes),
+                "exp": exp_timestamp,
                 "eject_at_room_exp": True,  # Eject participants when room expires
                 "owner_only_broadcast": False,  # Allow both bot and candidate to speak
                 "enable_prejoin_ui": False,  # Disable prejoin UI - using custom proctoring page instead
             }
         }
+        
+        # Add nbf (not before) if scheduled
+        if nbf_timestamp:
+            room_config["properties"]["nbf"] = nbf_timestamp
         
         try:
             async with httpx.AsyncClient() as client:
@@ -107,7 +126,8 @@ class DailyService:
     async def create_bot_token(
         self,
         room_name: str,
-        expires_in_minutes: Optional[int] = None
+        expires_in_minutes: Optional[int] = None,
+        not_before: Optional[datetime] = None
     ) -> Optional[str]:
         """
         Create a meeting token for the AI bot (owner access)
@@ -127,15 +147,31 @@ class DailyService:
         
         token_exp_minutes = expires_in_minutes or max(1, DEFAULT_ROOM_EXP_SECONDS // 60)
         
+        # Calculate expiry timestamp
+        if not_before:
+            # For scheduled tokens: exp = not_before + expiration duration
+            exp_datetime = not_before + timedelta(minutes=token_exp_minutes)
+            exp_timestamp = int(exp_datetime.timestamp())
+            nbf_timestamp = int(not_before.timestamp())
+            logger.info(f"📅 Scheduled token: nbf={nbf_timestamp} ({not_before}), exp={exp_timestamp} ({exp_datetime})")
+        else:
+            # For immediate tokens: exp = now + expiration duration
+            exp_timestamp = self._calculate_expiry(token_exp_minutes)
+            nbf_timestamp = None
+        
         token_config = {
             "properties": {
                 "room_name": room_name,
                 "is_owner": True,  # Bot needs owner privileges
                 "user_name": "AI Interviewer Bot",
-                "exp": self._calculate_expiry(token_exp_minutes),
+                "exp": exp_timestamp,
                 "enable_recording": "cloud"  # Bot can start recording
             }
         }
+        
+        # Add nbf (not before) if scheduled
+        if nbf_timestamp:
+            token_config["properties"]["nbf"] = nbf_timestamp
         
         try:
             async with httpx.AsyncClient() as client:
@@ -166,7 +202,8 @@ class DailyService:
         self,
         room_name: str,
         candidate_name: str,
-        expires_in_minutes: Optional[int] = None
+        expires_in_minutes: Optional[int] = None,
+        not_before: Optional[datetime] = None
     ) -> Optional[str]:
         """
         Create a meeting token for the candidate (participant access)
@@ -177,6 +214,7 @@ class DailyService:
             room_name: Name of the room
             candidate_name: Name of the candidate
             expires_in_minutes: Token expiration time
+            not_before: Optional datetime when token becomes valid (sets nbf)
             
         Returns:
             Meeting token string, or None if failed
@@ -187,14 +225,30 @@ class DailyService:
         
         token_exp_minutes = expires_in_minutes or max(1, DEFAULT_ROOM_EXP_SECONDS // 60)
         
+        # Calculate expiry timestamp
+        if not_before:
+            # For scheduled tokens: exp = not_before + expiration duration
+            exp_datetime = not_before + timedelta(minutes=token_exp_minutes)
+            exp_timestamp = int(exp_datetime.timestamp())
+            nbf_timestamp = int(not_before.timestamp())
+            logger.info(f"📅 Scheduled candidate token: nbf={nbf_timestamp} ({not_before}), exp={exp_timestamp} ({exp_datetime})")
+        else:
+            # For immediate tokens: exp = now + expiration duration
+            exp_timestamp = self._calculate_expiry(token_exp_minutes)
+            nbf_timestamp = None
+        
         token_config = {
             "properties": {
                 "room_name": room_name,
                 "is_owner": True,  # Candidate needs owner access to join empty room
                 "user_name": candidate_name,
-                "exp": self._calculate_expiry(token_exp_minutes)
+                "exp": exp_timestamp
             }
         }
+        
+        # Add nbf (not before) if scheduled
+        if nbf_timestamp:
+            token_config["properties"]["nbf"] = nbf_timestamp
         
         try:
             async with httpx.AsyncClient() as client:

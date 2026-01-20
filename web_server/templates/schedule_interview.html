@@ -82,6 +82,22 @@
                             </div>
                         </div>
 
+                        <!-- Scheduled Date/Time -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="scheduled_date" class="form-label">Scheduled Date *</label>
+                                <input type="date" class="form-control" id="scheduled_date" name="scheduled_date" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="scheduled_time" class="form-label">Scheduled Time *</label>
+                                <input type="time" class="form-control" id="scheduled_time" name="scheduled_time" required>
+                            </div>
+                        </div>
+                        <div class="alert alert-info mb-3">
+                            <i class="bi bi-info-circle"></i> 
+                            <strong>Note:</strong> Interviews must be scheduled at least 72 hours (3 days) in advance. The interview link will be active at the scheduled time.
+                        </div>
+
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="position" class="form-label">Position *</label>
@@ -601,11 +617,48 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.querySelector('form');
     const submitBtn = document.getElementById('scheduleBtn');
     
+    // Validate scheduled date/time (72 hours minimum)
+    function validateScheduledTime() {
+        const dateInput = document.getElementById('scheduled_date');
+        const timeInput = document.getElementById('scheduled_time');
+        
+        if (!dateInput.value || !timeInput.value) {
+            return { valid: false, message: 'Please select both date and time' };
+        }
+        
+        const scheduledDateTime = new Date(`${dateInput.value}T${timeInput.value}`);
+        const now = new Date();
+        const minDateTime = new Date(now.getTime() + (72 * 60 * 60 * 1000)); // 72 hours from now
+        
+        if (scheduledDateTime < minDateTime) {
+            const hoursUntilMin = Math.ceil((minDateTime - now) / (1000 * 60 * 60));
+            return { 
+                valid: false, 
+                message: `Interviews must be scheduled at least 72 hours in advance. Earliest available: ${minDateTime.toLocaleString()}` 
+            };
+        }
+        
+        if (scheduledDateTime < now) {
+            return { valid: false, message: 'Scheduled time cannot be in the past' };
+        }
+        
+        return { valid: true };
+    }
+    
+    // Add validation on form submit
     let formSubmitted = false;
     form.addEventListener('submit', function(e) {
         if (formSubmitted) {
             e.preventDefault();
             console.log('⚠️ Form already submitted, preventing duplicate');
+            return false;
+        }
+        
+        // Validate scheduled time
+        const validation = validateScheduledTime();
+        if (!validation.valid) {
+            e.preventDefault();
+            alert(validation.message);
             return false;
         }
         
@@ -624,6 +677,12 @@ document.addEventListener('DOMContentLoaded', function() {
         
         return false;
     });
+    
+    // Set minimum date to 3 days from now
+    const dateInput = document.getElementById('scheduled_date');
+    const minDate = new Date();
+    minDate.setDate(minDate.getDate() + 3);
+    dateInput.min = minDate.toISOString().split('T')[0];
 });
 </script>
 {% endblock %}

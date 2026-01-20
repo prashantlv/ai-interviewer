@@ -430,17 +430,54 @@ async def create_interview(
     auto_start: bool = Form(False),  # Sprint 1.2: Auto-start bot option
     job_description: str = Form(...),  # NEW: JD text for GPT parsing
     candidate_resume: str = Form(...),  # NEW: Resume text for GPT parsing
-    replica_id: str = Form("")  # NEW: Optional replica selection
+    replica_id: str = Form(""),  # NEW: Optional replica selection
+    scheduled_date: str = Form(None),  # NEW: Scheduled date (YYYY-MM-DD)
+    scheduled_time: str = Form(None)  # NEW: Scheduled time (HH:MM)
 ):
     """Create a new interview"""
     import uuid
-    from datetime import datetime
+    from datetime import datetime, timedelta
     from services.resume_parser import ResumeParser
     from services.jd_parser import JDParser
     
     # Validate db service is available
     if db is None:
         raise HTTPException(status_code=500, detail="Database service not available")
+    
+    # Parse and validate scheduled date/time
+    scheduled_datetime = None
+    is_future_schedule = False
+    
+    if scheduled_date and scheduled_time:
+        try:
+            # Parse scheduled datetime
+            scheduled_datetime = datetime.strptime(f"{scheduled_date} {scheduled_time}", "%Y-%m-%d %H:%M")
+            now = datetime.now()
+            
+            # Validate 72-hour minimum
+            min_datetime = now + timedelta(hours=72)
+            if scheduled_datetime < min_datetime:
+                return templates.TemplateResponse("schedule_interview.html", {
+                    "request": request,
+                    "current_user": current_user,
+                    "error": f"Interviews must be scheduled at least 72 hours in advance. Earliest available: {min_datetime.strftime('%Y-%m-%d %H:%M')}"
+                })
+            
+            if scheduled_datetime < now:
+                return templates.TemplateResponse("schedule_interview.html", {
+                    "request": request,
+                    "current_user": current_user,
+                    "error": "Scheduled time cannot be in the past"
+                })
+            
+            is_future_schedule = True
+            print(f"📅 Future interview scheduled for: {scheduled_datetime}")
+        except ValueError as e:
+            return templates.TemplateResponse("schedule_interview.html", {
+                "request": request,
+                "current_user": current_user,
+                "error": f"Invalid date/time format: {str(e)}"
+            })
     
     # Generate unique interview ID
     interview_id = f"interview_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
@@ -460,9 +497,23 @@ async def create_interview(
     print(f"   Candidate skills: {', '.join(parsed_resume.get('skills', [])[:5])}")
     
     # Create unique Daily.co room for this interview
+    # For future schedules, set nbf (not before) to scheduled time - 30 seconds (bot can join early)
+    # Set exp (expires) to scheduled time + 1 hour
+    room_nbf = None
+    room_exp_minutes = None
+    
+    if is_future_schedule and scheduled_datetime:
+        # Room opens 30 seconds before scheduled time (bot can join early)
+        room_nbf = scheduled_datetime - timedelta(seconds=30)
+        # Room expires 1 hour after scheduled time
+        room_exp_minutes = 60
+        print(f"📅 Room will be available from: {room_nbf} (30s before scheduled time)")
+    
     room_data = await daily_service.create_interview_room(
         interview_id=interview_id,
-        candidate_name=candidate_name
+        candidate_name=candidate_name,
+        scheduled_time=room_nbf,  # Pass nbf time
+        expires_in_minutes=room_exp_minutes
     )
     
     if not room_data:
@@ -472,9 +523,13 @@ async def create_interview(
         )
     
     # Generate candidate token (with their name)
+    # For future schedules, token should be valid until room expires
+    token_exp_minutes = room_exp_minutes if is_future_schedule else None
     candidate_token = await daily_service.create_candidate_token(
         room_name=room_data["room_name"],
-        candidate_name=candidate_name
+        candidate_name=candidate_name,
+        expires_in_minutes=token_exp_minutes,
+        not_before=room_nbf  # Token also has nbf
     )
     
     # Store original Daily.co URL with token (for internal use)
@@ -544,7 +599,9 @@ async def create_interview(
                 "job_description_raw": job_description,
                 "candidate_resume_raw": candidate_resume,
                 # NEW: Store replica_id if specified (bot will read this from interview_config)
-                "replica_id": replica_id if replica_id else None
+                "replica_id": replica_id if replica_id else None,
+                # NEW: Store scheduled_date for future interviews
+                "scheduled_date": scheduled_datetime.isoformat() if scheduled_datetime else None
             },
             status="scheduled"
         )
@@ -556,13 +613,25 @@ async def create_interview(
             bot_job_id = None
             bot_status = "Not started (manual mode)"
             
+            # Calculate delay for bot scheduling
+            bot_delay_seconds = 0
+            if is_future_schedule and scheduled_datetime:
+                # Bot starts at scheduled time (room opens 30s before)
+                now = datetime.now()
+                delay_timedelta = scheduled_datetime - now
+                bot_delay_seconds = int(delay_timedelta.total_seconds())
+                print(f"⏰ Bot will start in {bot_delay_seconds} seconds ({delay_timedelta})")
+            
             if auto_start:
                 try:
                     # Use injected bot_manager (already available from DI)
                     
                     # Create bot token (owner privileges)
+                    # For future schedules, token needs to be valid at scheduled time
                     bot_token = await daily_service.create_bot_token(
-                        room_name=room_data["room_name"]
+                        room_name=room_data["room_name"],
+                        expires_in_minutes=room_exp_minutes if is_future_schedule else None,
+                        not_before=room_nbf if is_future_schedule else None
                     )
                     
                     # Bot joins with token for owner access
@@ -573,7 +642,12 @@ async def create_interview(
                         "room_url": bot_room_url,
                         "room_name": room_data["room_name"]
                     }
-                    bot_result = bot_manager.schedule_interview(interview_id, config=bot_config)
+                    # Schedule bot with delay for future interviews
+                    bot_result = bot_manager.schedule_interview(
+                        interview_id, 
+                        config=bot_config,
+                        delay=bot_delay_seconds  # 0 for immediate, >0 for future
+                    )
                     if bot_result.get("success"):
                         bot_job_id = bot_result.get("job_id")
                         bot_status = f"Queued (Job: {bot_job_id[:16]}...)"
