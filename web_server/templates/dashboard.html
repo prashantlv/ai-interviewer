@@ -80,6 +80,70 @@
     @media (max-width: 1400px) {
         .hide-on-lg { display: none !important; }
     }
+    
+    /* Fix UI breaking at 100% zoom */
+    .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .table {
+        min-width: 600px;
+        width: 100%;
+    }
+    
+    .stat-card {
+        min-width: 0;
+        word-wrap: break-word;
+    }
+    
+    .stat-card .h3 {
+        font-size: clamp(1.5rem, 2vw, 2rem);
+        word-break: break-word;
+    }
+    
+    .btn-group-sm {
+        white-space: nowrap;
+    }
+    
+    .btn-group-sm .btn {
+        font-size: 0.875rem;
+        padding: 0.25rem 0.5rem;
+    }
+    
+    /* Ensure proper spacing at all zoom levels */
+    .container-fluid {
+        max-width: 100%;
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+    
+    .row {
+        margin-left: -7.5px;
+        margin-right: -7.5px;
+    }
+    
+    .row > * {
+        padding-left: 7.5px;
+        padding-right: 7.5px;
+    }
+    
+    /* Fix table cell overflow */
+    .table td, .table th {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 200px;
+    }
+    
+    .table td:first-child, .table th:first-child {
+        max-width: 150px;
+    }
+    
+    .table td:last-child, .table th:last-child {
+        max-width: 100px;
+        white-space: normal;
+    }
 </style>
 {% endblock %}
 

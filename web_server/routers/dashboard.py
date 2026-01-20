@@ -1150,33 +1150,18 @@ async def generate_interview_link(
         if not room_name and room_url:
             room_name = room_url.split("/")[-1]
         
-        # Generate fresh token for this room
-        try:
-            print(f"🔑 Generating token for room: {room_name}")
-            candidate_token = await daily_service.create_candidate_token(
-                room_name=room_name,
-                candidate_name=candidate_name,
-                expires_in_minutes=90  # Token valid for 1.5 hours
-            )
-            print(f"🎟️ Token generated: {candidate_token[:20] if candidate_token else 'None'}...")
-            
-            if candidate_token:
-                join_url = f"{room_url}?t={candidate_token}"
-                print(f"✅ Join URL with token: {join_url[:80]}...")
-            else:
-                # Fallback: try without token (will work for public rooms)
-                join_url = room_url
-                print(f"⚠️ No token generated, using room URL only")
-                
-        except Exception as e:
-            print(f"❌ Failed to generate token: {e}")
-            # Fallback: return room URL without token
-            join_url = room_url
+        # Return the proctored interview room URL (not the Daily.co room URL)
+        # This is the URL that candidates should use to join the interview
+        join_url = f"/interview/{interview_id}/room"
         
-        print(f"✅ Returning join_url")
+        # Construct full URL from request
+        base_url = str(request.base_url).rstrip('/')
+        full_join_url = f"{base_url}{join_url}"
+        
+        print(f"✅ Returning proctored interview URL: {full_join_url}")
         return JSONResponse({
             "success": True,
-            "join_url": join_url,
+            "join_url": full_join_url,
             "interview_id": interview_id
         })
         
