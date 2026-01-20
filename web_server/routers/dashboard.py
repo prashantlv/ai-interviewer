@@ -321,7 +321,7 @@ async def interviews_page(
                 "interview_type": interview.get("interview_type", "technical"),
                 "status": interview.get("status", "unknown"),
                 "score": interview.get("score", 0),
-                "scheduled_date": interview.get("created_at", "N/A"),
+                "scheduled_date": scheduled_date_str if scheduled_date_str and scheduled_date_str != "N/A" else interview.get("created_at", "N/A"),
                 "scheduled_time": scheduled_time_display,
                 "duration": duration_display,
                 "transcript_available": interview.get("transcript_available", False),

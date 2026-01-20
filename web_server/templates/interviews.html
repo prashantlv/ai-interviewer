@@ -154,9 +154,15 @@
                                     <td>{{ interview.position }}</td>
                                     <td>
                                         {% if interview.scheduled_time and interview.scheduled_time != 'N/A' %}
-                                            <small>{{ interview.scheduled_time }}</small>
+                                            {% if 'T' in interview.scheduled_time or 'IST' not in interview.scheduled_time %}
+                                                {# If it's a raw ISO format, format it with IST filter #}
+                                                <small>{{ interview.scheduled_time|ist_datetime('%b %d, %Y %I:%M %p IST') }}</small>
+                                            {% else %}
+                                                {# Already formatted, use as-is #}
+                                                <small>{{ interview.scheduled_time }}</small>
+                                            {% endif %}
                                         {% elif interview.scheduled_date and interview.scheduled_date != 'N/A' %}
-                                            <small>{{ interview.scheduled_date[:10] }}</small>
+                                            <small>{{ interview.scheduled_date|ist_datetime('%b %d, %Y %I:%M %p IST') }}</small>
                                         {% else %}
                                             <small class="text-muted">-</small>
                                         {% endif %}
