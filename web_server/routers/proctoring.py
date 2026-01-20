@@ -111,6 +111,24 @@ async def interview_room(request: Request, interview_id: str):
     # Interview data is nested in "evaluation" sub-document
     evaluation = interview.get("evaluation", {})
     
+    # Check if interview is scheduled for future
+    scheduled_date_str = evaluation.get("scheduled_date")
+    is_future_schedule = False
+    scheduled_datetime = None
+    
+    if scheduled_date_str:
+        try:
+            from datetime import datetime
+            scheduled_datetime = datetime.fromisoformat(scheduled_date_str.replace('Z', '+00:00'))
+            now = datetime.now(scheduled_datetime.tzinfo) if scheduled_datetime.tzinfo else datetime.now()
+            
+            # Check if scheduled time is in the future (with 1 minute buffer for room nbf)
+            if scheduled_datetime > now:
+                is_future_schedule = True
+                logger.info(f"📅 Interview scheduled for future: {scheduled_datetime} (current: {now})")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to parse scheduled_date: {e}")
+    
     # Get room name and base URL (WITHOUT candidate token)
     room_name = evaluation.get("room_name") or interview.get("room_name", f"interview-{interview_id}")
     daily_domain = os.getenv("DAILY_DOMAIN", "human2intelligence.daily.co")
@@ -178,7 +196,9 @@ async def interview_room(request: Request, interview_id: str):
             "candidate_name": candidate_name,
             "position": position,
             "api_base": api_base,
-            "interview_config_json": interview_config_json
+            "interview_config_json": interview_config_json,
+            "is_future_schedule": is_future_schedule,
+            "scheduled_datetime": scheduled_datetime.isoformat() if scheduled_datetime else None
         }
     )
 
@@ -390,11 +410,52 @@ async def end_interview(interview_id: str, request: Request):
     """
     Mark interview as ended by candidate.
     Called when candidate clicks 'End Interview' button.
+    CRITICAL: Only mark as completed if interview actually started.
     """
     logger.info(f"🏁 Ending interview {interview_id}")
     
     try:
         db = request.app.state.db_service
+        
+        # Get current interview status
+        interview = await db.get_interview_result(interview_id)
+        if not interview:
+            logger.warning(f"⚠️ Interview {interview_id} not found")
+            return {"status": "error", "message": "Interview not found"}
+        
+        # Check if interview actually started
+        evaluation = interview.get("evaluation", {})
+        transcript = interview.get("transcript", "")
+        scheduled_date_str = evaluation.get("scheduled_date")
+        
+        # Check if interview is scheduled for future
+        is_future_schedule = False
+        if scheduled_date_str:
+            try:
+                from datetime import datetime
+                scheduled_datetime = datetime.fromisoformat(scheduled_date_str.replace('Z', '+00:00'))
+                now = datetime.now(scheduled_datetime.tzinfo) if scheduled_datetime.tzinfo else datetime.now()
+                if scheduled_datetime > now:
+                    is_future_schedule = True
+                    logger.warning(f"⚠️ Attempted to end interview scheduled for future: {scheduled_datetime}")
+                    return {
+                        "status": "error",
+                        "message": "Cannot end interview that hasn't started yet. Interview is scheduled for " + scheduled_datetime.strftime('%Y-%m-%d %H:%M')
+                    }
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to parse scheduled_date: {e}")
+        
+        # Check if interview actually started (has transcript beyond placeholder)
+        transcript_placeholder = "Interview scheduled - waiting for completion"
+        has_started = transcript and transcript != transcript_placeholder and len(transcript.strip()) > len(transcript_placeholder)
+        
+        if not has_started:
+            logger.warning(f"⚠️ Attempted to end interview that never started: {interview_id}")
+            # Don't mark as completed - keep status as "scheduled"
+            return {
+                "status": "warning",
+                "message": "Interview never started. Status remains 'scheduled'."
+            }
         
         # Update the interview status
         from datetime import datetime
