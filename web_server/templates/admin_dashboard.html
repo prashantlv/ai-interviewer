@@ -637,18 +637,20 @@
                 // Debug: Log the actual response
                 console.log('Agency details response:', result);
                 if (result.success && result.data) {
-                    console.log('Agency data keys:', Object.keys(result.data));
-                    console.log('Full agency data:', JSON.stringify(result.data, null, 2));
-                    console.log('Subscription:', result.data.subscription);
-                    console.log('Sample fields:', {
-                        first_name: result.data.first_name,
-                        last_name: result.data.last_name,
-                        personal_email: result.data.personal_email,
-                        agency_location: result.data.agency_location,
-                        subscription: result.data.subscription
-                    });
-                    
                     const agency = result.data;
+                    console.log('Agency data keys:', Object.keys(agency));
+                    console.log('Has subscription?', 'subscription' in agency);
+                    console.log('Subscription:', agency.subscription);
+                    console.log('Subscription type:', typeof agency.subscription);
+                    console.log('Is subscription array?', Array.isArray(agency.subscription));
+                    if (agency.subscription && Array.isArray(agency.subscription)) {
+                        console.log('Subscription array length:', agency.subscription.length);
+                        if (agency.subscription.length > 0) {
+                            console.log('First subscription item:', agency.subscription[0]);
+                            console.log('First subscription keys:', Object.keys(agency.subscription[0]));
+                        }
+                    }
+                    console.log('Full agency data:', JSON.stringify(agency, null, 2));
                     
                     // Format date
                     function formatDate(dateValue) {
@@ -718,35 +720,50 @@
                     
                     // Get subscription - it's an array, get the first active one or first one
                     let subscription = {};
-                    console.log('Agency subscription:', agency.subscription);
-                    console.log('Is array?', Array.isArray(agency.subscription));
                     
-                    if (agency.subscription) {
-                        if (Array.isArray(agency.subscription) && agency.subscription.length > 0) {
-                            // Find active subscription first, otherwise use first one
-                            const activeSub = agency.subscription.find(sub => sub && sub.status === 'active');
-                            subscription = activeSub || agency.subscription[0];
-                            console.log('Found subscription from array:', subscription);
-                            console.log('Subscription has status?', 'status' in subscription);
-                            console.log('Subscription has type?', 'type' in subscription);
-                        } else if (typeof agency.subscription === 'object' && !Array.isArray(agency.subscription)) {
+                    // Debug: Check what we actually have
+                    console.log('=== SUBSCRIPTION DEBUG ===');
+                    console.log('agency.subscription:', agency.subscription);
+                    console.log('Type of agency.subscription:', typeof agency.subscription);
+                    console.log('Is array?', Array.isArray(agency.subscription));
+                    console.log('Has subscription key?', 'subscription' in agency);
+                    
+                    if (agency.subscription !== undefined && agency.subscription !== null) {
+                        if (Array.isArray(agency.subscription)) {
+                            console.log('Subscription is an array with length:', agency.subscription.length);
+                            if (agency.subscription.length > 0) {
+                                // Find active subscription first, otherwise use first one
+                                const activeSub = agency.subscription.find(sub => sub && sub.status === 'active');
+                                subscription = activeSub || agency.subscription[0];
+                                console.log('✅ Extracted subscription from array:', subscription);
+                                console.log('Subscription keys:', Object.keys(subscription));
+                            } else {
+                                console.log('⚠️ Subscription array is empty');
+                            }
+                        } else if (typeof agency.subscription === 'object') {
                             // If it's already an object (not array), use it directly
                             subscription = agency.subscription;
-                            console.log('Using subscription as object:', subscription);
+                            console.log('✅ Using subscription as object:', subscription);
+                        } else {
+                            console.log('⚠️ Subscription is not array or object:', typeof agency.subscription);
                         }
                     } else {
-                        console.log('No subscription found in agency data');
+                        console.log('❌ No subscription found in agency data');
+                        console.log('Available keys in agency:', Object.keys(agency));
                     }
                     
-                    // Debug subscription - log all keys
+                    // Final debug
                     console.log('Final subscription object:', subscription);
-                    console.log('Subscription keys:', Object.keys(subscription));
-                    console.log('Subscription.status:', subscription.status);
-                    console.log('Subscription.type:', subscription.type);
-                    console.log('Subscription.amount:', subscription.amount);
-                    console.log('Subscription.validity:', subscription.validity);
-                    console.log('Subscription.quantity:', subscription.quantity);
-                    console.log('Subscription.user_type:', subscription.user_type);
+                    console.log('Subscription has keys?', Object.keys(subscription).length > 0);
+                    if (Object.keys(subscription).length > 0) {
+                        console.log('Subscription.status:', subscription.status);
+                        console.log('Subscription.type:', subscription.type);
+                        console.log('Subscription.amount:', subscription.amount);
+                        console.log('Subscription.validity:', subscription.validity);
+                        console.log('Subscription.quantity:', subscription.quantity);
+                        console.log('Subscription.user_type:', subscription.user_type);
+                    }
+                    console.log('=== END SUBSCRIPTION DEBUG ===');
                     
                     let html = `
                         <div class="agency-details">

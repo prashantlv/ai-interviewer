@@ -367,18 +367,52 @@ class Hire2InspireService:
                     logger.info(f"✅ Fetched agency details for {agency_id}")
                     # Log all keys to help debug
                     if isinstance(agency_data, dict):
-                        logger.info(f"📋 Agency data has {len(agency_data)} keys: {list(agency_data.keys())[:20]}")  # First 20 keys
+                        all_keys = list(agency_data.keys())
+                        logger.info(f"📋 Agency data has {len(agency_data)} keys")
+                        logger.info(f"📋 All keys: {all_keys}")
+                        # Check if subscription is in the keys (case-insensitive check)
+                        subscription_keys = [k for k in all_keys if 'subscription' in k.lower()]
+                        if subscription_keys:
+                            logger.info(f"📋 Found keys containing 'subscription': {subscription_keys}")
+                        else:
+                            logger.warning(f"⚠️ No keys containing 'subscription' found!")
+                        
+                        # Check for subscription specifically - check all possible variations
+                        subscription_field = None
+                        for key in ['subscription', 'subscriptions', 'subscription_data', 'subscriptionInfo']:
+                            if key in agency_data:
+                                subscription_field = key
+                                logger.info(f"✅ Found subscription field as '{key}'")
+                                break
+                        
+                        if subscription_field:
+                            subscription_data = agency_data[subscription_field]
+                            if isinstance(subscription_data, list):
+                                logger.info(f"📋 Subscription is an array with {len(subscription_data)} items")
+                                if len(subscription_data) > 0:
+                                    logger.info(f"📋 First subscription item keys: {list(subscription_data[0].keys()) if isinstance(subscription_data[0], dict) else 'not a dict'}")
+                                    logger.info(f"📋 First subscription status: {subscription_data[0].get('status')}")
+                                    logger.info(f"📋 First subscription type: {subscription_data[0].get('type')}")
+                                    logger.info(f"📋 First subscription amount: {subscription_data[0].get('amount')}")
+                            elif isinstance(subscription_data, dict):
+                                logger.info(f"📋 Subscription is a dict with keys: {list(subscription_data.keys())}")
+                        else:
+                            logger.warning(f"⚠️ 'subscription' field NOT found in agency data!")
+                            logger.warning(f"⚠️ Available keys: {all_keys}")
+                            # Log full response to see what we actually got
+                            import json
+                            logger.warning(f"⚠️ Full response data (first 2000 chars): {json.dumps(data, default=str)[:2000]}")
+                        
                         # Log sample fields to help debug
-                        sample_fields = ['first_name', 'last_name', 'personal_email', 'agency_location', 'subscription', 'firstName', 'lastName']
+                        sample_fields = ['first_name', 'last_name', 'personal_email', 'agency_location', 'agency_account_info']
                         for field in sample_fields:
                             if field in agency_data:
-                                logger.info(f"📋 Found field '{field}': {agency_data[field]}")
-                        # Check for subscription
-                        if 'subscription' in agency_data:
-                            logger.info(f"📋 Subscription keys: {list(agency_data['subscription'].keys()) if isinstance(agency_data['subscription'], dict) else 'not a dict'}")
-                        # Log full structure (truncated)
+                                logger.info(f"📋 Found field '{field}': {type(agency_data[field])}")
+                        
+                        # Log full structure (truncated) - but include subscription check
                         import json
-                        logger.debug(f"📋 Full agency data (first 1000 chars): {json.dumps(agency_data, default=str)[:1000]}")
+                        if 'subscription' in agency_data:
+                            logger.info(f"📋 Subscription data: {json.dumps(agency_data['subscription'], default=str)[:500]}")
                     return agency_data
                 else:
                     logger.warning(f"⚠️ No agency data in response for {agency_id}")
