@@ -103,6 +103,11 @@
                     <i class="bi bi-building me-2"></i>Agencies <span class="badge bg-primary">{{ agencies|length }}</span>
                 </button>
             </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="employers-tab" data-bs-toggle="tab" data-bs-target="#employers" type="button" role="tab">
+                    <i class="bi bi-briefcase me-2"></i>Employers <span class="badge bg-primary">{{ employers|length }}</span>
+                </button>
+            </li>
         </ul>
         
         <!-- Main Tab Content -->
@@ -421,10 +426,13 @@
             <!-- Agencies Tab -->
             <div class="tab-pane fade" id="agencies" role="tabpanel">
                 <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">Registered Agencies</h5>
+                        <button class="btn btn-sm btn-primary" onclick="loadAgencies()">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                        </button>
+                    </div>
                     <div class="card-body">
-                        <div class="mb-3">
-                            <h5 class="card-title mb-0">Registered Agencies</h5>
-                        </div>
                         {% if agencies and agencies|length > 0 %}
                         <div class="table-responsive">
                             <table class="table table-hover">
@@ -433,29 +441,25 @@
                                         <th>ID</th>
                                         <th>Name</th>
                                         <th>Email</th>
-                                        <th>Approved</th>
+                                        <th>Status</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for agency in agencies %}
                                     <tr>
-                                        <td><code>{{ agency._id or agency.id or 'N/A' }}</code></td>
-                                        <td><strong>{{ agency.agency_name or agency.name or 'N/A' }}</strong></td>
-                                        <td>{{ agency.corporate_email or agency.email or 'N/A' }}</td>
+                                        <td><code>{{ agency._id[:8] }}...</code></td>
+                                        <td>{{ agency.name }}</td>
+                                        <td>{{ agency.corporate_email }}</td>
                                         <td>
-                                            {% if agency.is_approved is defined %}
-                                                {% if agency.is_approved %}
-                                                    <span class="badge bg-success">Approved</span>
-                                                {% else %}
-                                                    <span class="badge bg-warning">Pending</span>
-                                                {% endif %}
+                                            {% if agency.is_approved %}
+                                                <span class="badge bg-success">Approved</span>
                                             {% else %}
-                                                <span class="badge bg-secondary">Unknown</span>
+                                                <span class="badge bg-warning">Pending</span>
                                             {% endif %}
                                         </td>
                                         <td>
-                                            <button class="btn btn-sm btn-outline-primary" onclick="viewAgencyDetails('{{ agency._id or agency.id }}')">
+                                            <button class="btn btn-sm btn-outline-primary" onclick="viewAgencyDetails('{{ agency._id }}')">
                                                 <i class="bi bi-eye me-1"></i>View Details
                                             </button>
                                         </td>
@@ -466,16 +470,72 @@
                         </div>
                         {% else %}
                         <div class="alert alert-info">
-                            <i class="bi bi-info-circle me-2"></i>
                             <strong>No agencies found.</strong> 
-                            <br>This could mean:
                             <ul class="mb-0 mt-2">
-                                <li>The API returned an empty list</li>
                                 <li>There was an error fetching agencies (check server logs)</li>
-                                <li>Authentication token may need to be refreshed</li>
                             </ul>
                             <button class="btn btn-sm btn-primary mt-2" onclick="loadAgencies()">
-                                <i class="bi bi-arrow-clockwise me-1"></i>Try Again
+                                <i class="bi bi-arrow-clockwise me-1"></i>Retry
+                            </button>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Employers Tab -->
+            <div class="tab-pane fade" id="employers" role="tabpanel">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">Registered Employers</h5>
+                        <button class="btn btn-sm btn-primary" onclick="loadEmployers()">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        {% if employers and employers|length > 0 %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Name</th>
+                                        <th>Email</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for employer in employers %}
+                                    <tr>
+                                        <td><code>{{ employer._id[:8] }}...</code></td>
+                                        <td>{{ employer.name }}</td>
+                                        <td>{{ employer.corporate_email }}</td>
+                                        <td>
+                                            {% if employer.is_approved %}
+                                                <span class="badge bg-success">Approved</span>
+                                            {% else %}
+                                                <span class="badge bg-warning">Pending</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary" onclick="viewAgencyDetails('{{ employer._id }}')">
+                                                <i class="bi bi-eye me-1"></i>View Details
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-info">
+                            <strong>No employers found.</strong> 
+                            <ul class="mb-0 mt-2">
+                                <li>There was an error fetching employers (check server logs)</li>
+                            </ul>
+                            <button class="btn btn-sm btn-primary mt-2" onclick="loadEmployers()">
+                                <i class="bi bi-arrow-clockwise me-1"></i>Retry
                             </button>
                         </div>
                         {% endif %}
@@ -966,6 +1026,15 @@
         }
         
         function loadAgencies() {
+            location.reload();
+        }
+        
+        function loadEmployers() {
+            location.reload();
+        }
+        
+        // Original loadAgencies function (if needed for AJAX reload)
+        function loadAgenciesAjax() {
             location.reload();
         }
     </script>

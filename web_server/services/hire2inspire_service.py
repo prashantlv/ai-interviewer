@@ -250,8 +250,16 @@ class Hire2InspireService:
             logger.error(f"❌ Failed to get candidate details: {e}")
             return None
     
-    async def get_agency_list(self) -> List[Dict[str, Any]]:
-        """Get list of all registered agencies"""
+    async def get_agency_list(self, user_type: str = "agencies") -> List[Dict[str, Any]]:
+        """
+        Get list of agencies or employers from Hire2Inspire API
+        
+        Args:
+            user_type: Either "agencies" or "employers" (default: "agencies")
+        
+        Returns:
+            List of agency/employer dictionaries
+        """
         try:
             # Try to get token, but if login fails, try with existing token anyway
             token = None
@@ -273,6 +281,7 @@ class Hire2InspireService:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(
                     f"{self.base_url}/agency/h2i-list",
+                    params={"user_type": user_type},
                     headers={
                         "Authorization": f"Bearer {token}",
                         "Accept": "application/json"

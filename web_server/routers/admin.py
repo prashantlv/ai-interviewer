@@ -131,13 +131,24 @@ async def admin_dashboard(
         # Get agencies list
         agencies = []
         try:
-            agencies = await hire2inspire_service.get_agency_list()
+            agencies = await hire2inspire_service.get_agency_list(user_type="agencies")
             logger.info(f"📊 Loaded {len(agencies)} agencies for admin dashboard")
             if len(agencies) == 0:
                 logger.warning("⚠️ No agencies returned from API - check logs for details")
         except Exception as e:
             logger.error(f"❌ Failed to fetch agencies: {e}", exc_info=True)
             agencies = []
+        
+        # Get employers list
+        employers = []
+        try:
+            employers = await hire2inspire_service.get_agency_list(user_type="employers")
+            logger.info(f"📊 Loaded {len(employers)} employers for admin dashboard")
+            if len(employers) == 0:
+                logger.warning("⚠️ No employers returned from API - check logs for details")
+        except Exception as e:
+            logger.error(f"❌ Failed to fetch employers: {e}", exc_info=True)
+            employers = []
         
         return templates.TemplateResponse("admin_dashboard.html", {
             "request": request,
@@ -148,7 +159,8 @@ async def admin_dashboard(
             "training_requests": training_requests,
             "completed_requests": completed_requests,
             "stats": stats,
-            "agencies": agencies
+            "agencies": agencies,
+            "employers": employers
         })
     except Exception as e:
         logger.error(f"❌ Error loading admin dashboard: {str(e)}")
