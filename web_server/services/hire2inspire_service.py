@@ -378,40 +378,45 @@ class Hire2InspireService:
                             logger.warning(f"⚠️ data.data is not a dict, it's: {type(data['data'])}")
                 
                 # Extract agency details from response
-                # IMPORTANT: Use deep copy or direct assignment to preserve ALL fields including subscription
+                # ROOT CAUSE: subscription and finalCredits are at TOP LEVEL of response, not inside data["data"]
+                # Structure: { "data": {...agency...}, "subscription": [...], "finalCredits": {...} }
                 agency_data = None
                 if isinstance(data, dict):
                     if "data" in data:
-                        # Direct assignment to preserve all fields (don't use .copy() as it might cause issues)
-                        agency_data = data["data"]
-                        logger.info(f"📋 Extracted agency_data from data.data (direct assignment)")
-                        logger.info(f"📋 Agency data type: {type(agency_data)}")
-                        if isinstance(agency_data, dict):
-                            logger.info(f"📋 Agency data keys count: {len(agency_data)}")
-                            logger.info(f"📋 Agency data ALL keys: {list(agency_data.keys())}")
-                            # Explicitly check subscription right after extraction
-                            if "subscription" in agency_data:
-                                logger.info(f"✅ Subscription EXISTS in agency_data after extraction!")
-                                logger.info(f"✅ Subscription type: {type(agency_data['subscription'])}")
-                                if isinstance(agency_data['subscription'], list):
-                                    logger.info(f"✅ Subscription is array with {len(agency_data['subscription'])} items")
-                                    if len(agency_data['subscription']) > 0:
-                                        logger.info(f"✅ First subscription item keys: {list(agency_data['subscription'][0].keys())}")
-                                        logger.info(f"✅ First subscription status: {agency_data['subscription'][0].get('status')}")
-                            else:
-                                logger.error(f"❌ Subscription NOT in agency_data after extraction!")
-                                logger.error(f"❌ This should not happen if subscription is in data.data")
+                        # Extract agency data from data["data"]
+                        agency_data = data["data"] if isinstance(data["data"], dict) else {}
+                        
+                        # CRITICAL: Merge subscription and finalCredits from TOP LEVEL into agency_data
+                        if "subscription" in data:
+                            agency_data["subscription"] = data["subscription"]
+                            logger.info(f"✅ Added subscription from top level to agency_data")
+                            if isinstance(data["subscription"], list):
+                                logger.info(f"✅ Subscription is array with {len(data['subscription'])} items")
+                        else:
+                            logger.warning(f"⚠️ No subscription found at top level of response")
+                        
+                        if "finalCredits" in data:
+                            agency_data["finalCredits"] = data["finalCredits"]
+                            logger.info(f"✅ Added finalCredits from top level to agency_data")
+                        
+                        logger.info(f"📋 Extracted agency_data and merged top-level fields")
+                        logger.info(f"📋 Agency data keys count: {len(agency_data)}")
+                        logger.info(f"📋 Agency data ALL keys: {list(agency_data.keys())}")
+                        
+                        # Verify subscription is now in agency_data
+                        if "subscription" in agency_data:
+                            logger.info(f"✅ Subscription confirmed in agency_data after merge!")
+                            if isinstance(agency_data['subscription'], list) and len(agency_data['subscription']) > 0:
+                                logger.info(f"✅ First subscription status: {agency_data['subscription'][0].get('status')}")
+                        else:
+                            logger.error(f"❌ Subscription still missing after merge!")
                     else:
                         # Response might be the agency data directly
                         agency_data = data
                         logger.info(f"📋 Using response as agency data directly")
-                        if isinstance(agency_data, dict) and "subscription" in agency_data:
-                            logger.info(f"✅ Subscription found in direct response")
                 elif isinstance(data, list) and len(data) > 0:
                     agency_data = data[0]
                     logger.info(f"📋 Using first item from list response")
-                    if isinstance(agency_data, dict) and "subscription" in agency_data:
-                        logger.info(f"✅ Subscription found in list item")
                 
                 if agency_data:
                     logger.info(f"✅ Fetched agency details for {agency_id}")
