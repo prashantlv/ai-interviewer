@@ -198,18 +198,15 @@ async def interviews_page(
             # Get interview ID for URL construction
             interview_id = interview.get("interview_id", interview.get("id", "unknown"))
             
-            # Get join URL with fallbacks
-            join_url = interview.get("candidate_join_url") or interview.get("join_url")
+            # ALWAYS use the proctored interview room URL (not Daily.co room URL)
+            # This is the correct URL that candidates should use
+            # Format: /interview/{interview_id}/room
+            join_url = f"/interview/{interview_id}/room"
             
-            # If no join_url, construct from room_url or interview_id
-            if not join_url:
-                room_url = interview.get("room_url")
-                if room_url:
-                    join_url = room_url
-                else:
-                    # Fallback: construct Daily.co URL from interview_id
-                    daily_domain = os.getenv("DAILY_DOMAIN", "human2intelligence.daily.co")
-                    join_url = f"https://{daily_domain}/interview-{interview_id}"
+            # Note: We don't use candidate_join_url or room_url here because:
+            # - candidate_join_url might be a relative path that needs the domain
+            # - room_url is the Daily.co URL, not the proctored interview URL
+            # The API endpoint will handle constructing the full URL with domain
             
             interview_list.append({
                 "id": interview.get("id", "unknown"),

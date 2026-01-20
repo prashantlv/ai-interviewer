@@ -315,44 +315,39 @@ async function showInterviewLink(joinUrl, interviewId) {
             const data = await response.json();
             console.log('✅ API response data:', data);
             
-            // Construct full URL if it's a relative path
+            // Use the URL from API (should already be full URL)
             let fullUrl = data.join_url;
+            
+            // If it's a relative path, construct full URL
             if (fullUrl && fullUrl.startsWith('/')) {
                 fullUrl = window.location.origin + fullUrl;
             }
             
             linkInput.value = fullUrl;
             openLink.href = fullUrl;
+            console.log('✅ Final URL set:', fullUrl);
         } else {
             const errorText = await response.text();
             console.error('❌ API error:', response.status, errorText);
             
-            // Fallback: construct full URL from relative path
-            let fallbackUrl = joinUrl || '';
-            if (fallbackUrl && fallbackUrl.startsWith('/')) {
-                fallbackUrl = window.location.origin + fallbackUrl;
-            } else if (!fallbackUrl) {
-                // Construct from interview ID
-                fallbackUrl = window.location.origin + `/interview/${interviewId}/room`;
-            }
+            // Fallback: ALWAYS use proctored interview URL (not Daily.co URL)
+            // Construct from interview ID - this is the correct URL format
+            const fallbackUrl = window.location.origin + `/interview/${interviewId}/room`;
             
-            linkInput.value = fallbackUrl || 'Failed to generate link';
-            openLink.href = fallbackUrl || '#';
+            linkInput.value = fallbackUrl;
+            openLink.href = fallbackUrl;
+            console.log('⚠️ Using fallback URL:', fallbackUrl);
         }
     } catch (error) {
         console.error('❌ Failed to generate interview link:', error);
         
-        // Fallback: construct full URL from relative path
-        let fallbackUrl = joinUrl || '';
-        if (fallbackUrl && fallbackUrl.startsWith('/')) {
-            fallbackUrl = window.location.origin + fallbackUrl;
-        } else if (!fallbackUrl) {
-            // Construct from interview ID
-            fallbackUrl = window.location.origin + `/interview/${interviewId}/room`;
-        }
+        // Fallback: ALWAYS use proctored interview URL (not Daily.co URL)
+        // Construct from interview ID - this is the correct URL format
+        const fallbackUrl = window.location.origin + `/interview/${interviewId}/room`;
         
-        linkInput.value = fallbackUrl || 'Failed to generate link';
-        openLink.href = fallbackUrl || '#';
+        linkInput.value = fallbackUrl;
+        openLink.href = fallbackUrl;
+        console.log('⚠️ Using fallback URL after error:', fallbackUrl);
     } finally {
         linkInput.disabled = false;
     }
