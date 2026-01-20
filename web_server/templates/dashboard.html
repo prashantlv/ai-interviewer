@@ -221,7 +221,7 @@
                                 <th>Position</th>
                                 <th>Status</th>
                                 <th>Score</th>
-                                <th class="hide-on-lg">Date</th>
+                                <th class="hide-on-lg">Scheduled Time</th>
                                 <th class="pe-3 text-center">Action</th>
                             </tr>
                         </thead>
@@ -253,7 +253,9 @@
                                     {% endif %}
                                 </td>
                                 <td class="hide-on-lg text-muted small">
-                                    {% if interview.date and interview.date != 'N/A' %}
+                                    {% if interview.scheduled_time and interview.scheduled_time != 'N/A' %}
+                                        {{ interview.scheduled_time }}
+                                    {% elif interview.date and interview.date != 'N/A' %}
                                         {{ interview.date[:10] }}
                                     {% else %}
                                         -

@@ -134,10 +134,11 @@
                                 <tr>
                                     <th>Candidate</th>
                                     <th>Position</th>
-                                    <th>Date & Time</th>
+                                    <th>Scheduled Time</th>
                                     <th>Interview Type</th>
                                     <th>Status</th>
                                     <th>Score</th>
+                                    <th>Duration</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -151,7 +152,15 @@
                                         </div>
                                     </td>
                                     <td>{{ interview.position }}</td>
-                                    <td>{{ interview.scheduled_date }}</td>
+                                    <td>
+                                        {% if interview.scheduled_time and interview.scheduled_time != 'N/A' %}
+                                            <small>{{ interview.scheduled_time }}</small>
+                                        {% elif interview.scheduled_date and interview.scheduled_date != 'N/A' %}
+                                            <small>{{ interview.scheduled_date[:10] }}</small>
+                                        {% else %}
+                                            <small class="text-muted">-</small>
+                                        {% endif %}
+                                    </td>
                                     <td>{{ interview.interview_type | default("technical", true) | replace("_", " ") | title }}</td>
                                     <td>
                                         {% if interview.status == 'completed' %}
@@ -176,6 +185,13 @@
                                             {% endif %}
                                         {% else %}
                                             <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if interview.duration and interview.duration != 'N/A' %}
+                                            <small class="text-muted">{{ interview.duration }}</small>
+                                        {% else %}
+                                            <small class="text-muted">-</small>
                                         {% endif %}
                                     </td>
                                     <td>

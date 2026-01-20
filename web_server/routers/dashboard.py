@@ -89,9 +89,37 @@ async def dashboard_home(
         completion_rate = round((completed_total / total_interviews * 100), 1) if total_interviews > 0 else 0
         
         # Get recent interviews (limit to 5 for dashboard) - already sorted
+        IST = pytz.timezone('Asia/Kolkata')
+        
         recent_interviews = []
         for interview in interviews[:8]:
             print(f"🔍 DEBUG Dashboard: interview_type = {interview.get('interview_type', 'NOT_SET')}")
+            
+            # Extract scheduled_date from evaluation if available
+            evaluation = interview.get("evaluation", {})
+            scheduled_date_str = evaluation.get("scheduled_date") or interview.get("scheduled_date")
+            
+            # Format scheduled time in IST for display
+            scheduled_time_display = "N/A"
+            if scheduled_date_str and scheduled_date_str != "N/A":
+                try:
+                    # Parse ISO format datetime
+                    if isinstance(scheduled_date_str, str):
+                        scheduled_dt = datetime.fromisoformat(scheduled_date_str.replace('Z', '+00:00'))
+                    else:
+                        scheduled_dt = scheduled_date_str
+                    
+                    # Convert to IST and format
+                    if scheduled_dt.tzinfo:
+                        scheduled_ist = scheduled_dt.astimezone(IST)
+                    else:
+                        scheduled_ist = scheduled_dt.replace(tzinfo=timezone.utc).astimezone(IST)
+                    
+                    scheduled_time_display = scheduled_ist.strftime('%b %d, %Y %I:%M %p IST')
+                except Exception as e:
+                    print(f"⚠️ Error formatting scheduled time: {e}")
+                    scheduled_time_display = str(scheduled_date_str)[:19] if scheduled_date_str else "N/A"
+            
             recent_interviews.append({
                 "id": interview.get("id", "unknown"),
                 "candidate_name": interview.get("candidate_name", "Unknown"),
@@ -99,7 +127,8 @@ async def dashboard_home(
                 "interview_type": interview.get("interview_type", "technical"),
                 "status": interview.get("status", "unknown"),
                 "score": interview.get("score", 0),
-                "date": interview.get("scheduled_date", "N/A")
+                "date": interview.get("scheduled_date", "N/A"),
+                "scheduled_time": scheduled_time_display
             })
         
         dashboard_data = {
@@ -208,6 +237,54 @@ async def interviews_page(
             # - room_url is the Daily.co URL, not the proctored interview URL
             # The API endpoint will handle constructing the full URL with domain
             
+            # Extract scheduled_date from evaluation if available
+            evaluation = interview.get("evaluation", {})
+            scheduled_date_str = evaluation.get("scheduled_date") or interview.get("scheduled_date")
+            
+            # Format scheduled time in IST for display
+            scheduled_time_display = "N/A"
+            if scheduled_date_str and scheduled_date_str != "N/A":
+                try:
+                    IST = pytz.timezone('Asia/Kolkata')
+                    # Parse ISO format datetime
+                    if isinstance(scheduled_date_str, str):
+                        scheduled_dt = datetime.fromisoformat(scheduled_date_str.replace('Z', '+00:00'))
+                    else:
+                        scheduled_dt = scheduled_date_str
+                    
+                    # Convert to IST and format
+                    if scheduled_dt.tzinfo:
+                        scheduled_ist = scheduled_dt.astimezone(IST)
+                    else:
+                        scheduled_ist = scheduled_dt.replace(tzinfo=timezone.utc).astimezone(IST)
+                    
+                    scheduled_time_display = scheduled_ist.strftime('%b %d, %Y %I:%M %p IST')
+                except Exception as e:
+                    print(f"⚠️ Error formatting scheduled time: {e}")
+                    scheduled_time_display = str(scheduled_date_str)[:19] if scheduled_date_str else "N/A"
+            
+            # Calculate duration from proctoring data
+            duration_display = "N/A"
+            proctoring = interview.get("proctoring", {})
+            if proctoring and proctoring.get("start_time") and proctoring.get("end_time"):
+                try:
+                    start_time = datetime.fromisoformat(proctoring["start_time"].replace('Z', '+00:00'))
+                    end_time = datetime.fromisoformat(proctoring["end_time"].replace('Z', '+00:00'))
+                    duration_delta = end_time - start_time
+                    total_seconds = int(duration_delta.total_seconds())
+                    hours = total_seconds // 3600
+                    minutes = (total_seconds % 3600) // 60
+                    seconds = total_seconds % 60
+                    
+                    if hours > 0:
+                        duration_display = f"{hours}h {minutes}m {seconds}s"
+                    elif minutes > 0:
+                        duration_display = f"{minutes}m {seconds}s"
+                    else:
+                        duration_display = f"{seconds}s"
+                except Exception as e:
+                    print(f"⚠️ Error calculating duration: {e}")
+            
             interview_list.append({
                 "id": interview.get("id", "unknown"),
                 "interview_id": interview_id,
@@ -218,7 +295,8 @@ async def interviews_page(
                 "status": interview.get("status", "unknown"),
                 "score": interview.get("score", 0),
                 "scheduled_date": interview.get("created_at", "N/A"),
-                "duration": "N/A",  # TODO: Calculate from transcript
+                "scheduled_time": scheduled_time_display,
+                "duration": duration_display,
                 "transcript_available": interview.get("transcript_available", False),
                 "join_url": join_url
             })
@@ -347,6 +425,51 @@ async def interview_detail(
         else:
             print(f"❌ NO PROCTORING DATA for interview {interview_id}")
         
+        # Extract scheduled_date from evaluation
+        scheduled_date_str = evaluation.get("scheduled_date")
+        
+        # Format scheduled time in IST for display
+        IST = pytz.timezone('Asia/Kolkata')
+        scheduled_time_display = "N/A"
+        if scheduled_date_str:
+            try:
+                if isinstance(scheduled_date_str, str):
+                    scheduled_dt = datetime.fromisoformat(scheduled_date_str.replace('Z', '+00:00'))
+                else:
+                    scheduled_dt = scheduled_date_str
+                
+                if scheduled_dt.tzinfo:
+                    scheduled_ist = scheduled_dt.astimezone(IST)
+                else:
+                    scheduled_ist = scheduled_dt.replace(tzinfo=timezone.utc).astimezone(IST)
+                
+                scheduled_time_display = scheduled_ist.strftime('%B %d, %Y at %I:%M %p IST')
+            except Exception as e:
+                print(f"⚠️ Error formatting scheduled time: {e}")
+                scheduled_time_display = str(scheduled_date_str)[:19] if scheduled_date_str else "N/A"
+        
+        # Calculate duration from proctoring data
+        duration_display = "N/A"
+        proctoring_data = interview_result.get("proctoring")
+        if proctoring_data and proctoring_data.get("start_time") and proctoring_data.get("end_time"):
+            try:
+                start_time = datetime.fromisoformat(proctoring_data["start_time"].replace('Z', '+00:00'))
+                end_time = datetime.fromisoformat(proctoring_data["end_time"].replace('Z', '+00:00'))
+                duration_delta = end_time - start_time
+                total_seconds = int(duration_delta.total_seconds())
+                hours = total_seconds // 3600
+                minutes = (total_seconds % 3600) // 60
+                seconds = total_seconds % 60
+                
+                if hours > 0:
+                    duration_display = f"{hours} hour{'s' if hours != 1 else ''} {minutes} minute{'s' if minutes != 1 else ''}"
+                elif minutes > 0:
+                    duration_display = f"{minutes} minute{'s' if minutes != 1 else ''} {seconds} second{'s' if seconds != 1 else ''}"
+                else:
+                    duration_display = f"{seconds} second{'s' if seconds != 1 else ''}"
+            except Exception as e:
+                print(f"⚠️ Error calculating duration: {e}")
+        
         interview_data = {
             "id": interview_id,
             "candidate_name": evaluation.get("candidate_name", "Unknown Candidate"),
@@ -355,7 +478,8 @@ async def interview_detail(
             "status": interview_result.get("status", "completed"),
             "score": evaluation.get("overall_score", 0),
             "scheduled_date": str(interview_result.get("completed_at", "N/A")),
-            "duration": "N/A",
+            "scheduled_time": scheduled_time_display,
+            "duration": duration_display,
             "transcript": interview_result.get("transcript", "No transcript available"),
             "recording": interview_result.get("recording"),
             "proctoring": proctoring_data,  # Proctoring data (violations, risk level, etc.)
