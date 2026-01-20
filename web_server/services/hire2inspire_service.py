@@ -349,12 +349,25 @@ class Hire2InspireService:
                 # Log the response structure for debugging
                 logger.debug(f"📋 Agency details response keys: {list(data.keys()) if isinstance(data, dict) else 'not a dict'}")
                 
+                # Check if subscription exists in raw response
+                if isinstance(data, dict):
+                    if "data" in data and isinstance(data["data"], dict):
+                        if "subscription" in data["data"]:
+                            logger.info(f"✅ Found 'subscription' in data.data before extraction")
+                        else:
+                            logger.warning(f"⚠️ 'subscription' NOT in data.data. Keys: {list(data['data'].keys())[:20]}")
+                
                 # Extract agency details from response
                 agency_data = None
                 if isinstance(data, dict):
                     if "data" in data:
                         agency_data = data["data"]
                         logger.debug(f"📋 Agency data keys: {list(agency_data.keys()) if isinstance(agency_data, dict) else 'not a dict'}")
+                        # Explicitly check subscription right after extraction
+                        if isinstance(agency_data, dict) and "subscription" in agency_data:
+                            logger.info(f"✅ Subscription exists in agency_data after extraction: {type(agency_data['subscription'])}")
+                        else:
+                            logger.warning(f"⚠️ Subscription NOT in agency_data after extraction!")
                     else:
                         # Response might be the agency data directly
                         agency_data = data
@@ -413,6 +426,26 @@ class Hire2InspireService:
                         import json
                         if 'subscription' in agency_data:
                             logger.info(f"📋 Subscription data: {json.dumps(agency_data['subscription'], default=str)[:500]}")
+                        
+                        # Final verification before return - explicitly check subscription
+                        if 'subscription' not in agency_data:
+                            logger.error(f"❌ CRITICAL: Subscription field missing from agency_data before return!")
+                            logger.error(f"❌ All keys that will be returned: {all_keys}")
+                            # Try to get subscription from original response
+                            if isinstance(data, dict) and "data" in data:
+                                original_data = data["data"]
+                                if isinstance(original_data, dict) and "subscription" in original_data:
+                                    logger.warning(f"⚠️ Subscription exists in original data but not in agency_data - copying it!")
+                                    agency_data["subscription"] = original_data["subscription"]
+                                    logger.info(f"✅ Copied subscription to agency_data")
+                        else:
+                            logger.info(f"✅ Subscription field confirmed present before return")
+                            logger.info(f"✅ Subscription type: {type(agency_data['subscription'])}, is array: {isinstance(agency_data['subscription'], list)}")
+                    
+                    # Ensure we return the full agency_data with all fields including subscription
+                    # Double-check subscription is included
+                    if isinstance(agency_data, dict) and 'subscription' not in agency_data:
+                        logger.error(f"❌ FINAL CHECK FAILED: Subscription still missing!")
                     return agency_data
                 else:
                     logger.warning(f"⚠️ No agency data in response for {agency_id}")

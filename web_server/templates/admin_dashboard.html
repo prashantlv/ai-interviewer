@@ -635,14 +635,33 @@
                 const result = await response.json();
                 
                 // Debug: Log the actual response
-                console.log('Agency details response:', result);
+                console.log('=== FULL RESPONSE DEBUG ===');
+                console.log('Full response object:', result);
+                console.log('Response keys:', Object.keys(result));
+                console.log('Response.success:', result.success);
+                console.log('Response.data exists?', !!result.data);
+                
                 if (result.success && result.data) {
                     const agency = result.data;
+                    console.log('=== AGENCY DATA DEBUG ===');
+                    console.log('Agency data type:', typeof agency);
+                    console.log('Agency is array?', Array.isArray(agency));
                     console.log('Agency data keys:', Object.keys(agency));
+                    console.log('Total keys:', Object.keys(agency).length);
                     console.log('Has subscription?', 'subscription' in agency);
-                    console.log('Subscription:', agency.subscription);
+                    console.log('Subscription value:', agency.subscription);
                     console.log('Subscription type:', typeof agency.subscription);
                     console.log('Is subscription array?', Array.isArray(agency.subscription));
+                    
+                    // Check all keys for anything containing "subscription"
+                    const subscriptionKeys = Object.keys(agency).filter(k => k.toLowerCase().includes('subscription'));
+                    console.log('Keys containing "subscription":', subscriptionKeys);
+                    
+                    // Log first 10 and last 10 keys to see if subscription is somewhere
+                    const allKeys = Object.keys(agency);
+                    console.log('First 10 keys:', allKeys.slice(0, 10));
+                    console.log('Last 10 keys:', allKeys.slice(-10));
+                    
                     if (agency.subscription && Array.isArray(agency.subscription)) {
                         console.log('Subscription array length:', agency.subscription.length);
                         if (agency.subscription.length > 0) {
@@ -650,7 +669,7 @@
                             console.log('First subscription keys:', Object.keys(agency.subscription[0]));
                         }
                     }
-                    console.log('Full agency data:', JSON.stringify(agency, null, 2));
+                    console.log('=== END DEBUG ===');
                     
                     // Format date
                     function formatDate(dateValue) {
