@@ -454,20 +454,20 @@ async def create_interview(
             scheduled_datetime = datetime.strptime(f"{scheduled_date} {scheduled_time}", "%Y-%m-%d %H:%M")
             now = datetime.now()
             
-            # Validate 72-hour minimum
-            min_datetime = now + timedelta(hours=72)
-            if scheduled_datetime < min_datetime:
-                return templates.TemplateResponse("schedule_interview.html", {
-                    "request": request,
-                    "current_user": current_user,
-                    "error": f"Interviews must be scheduled at least 72 hours in advance. Earliest available: {min_datetime.strftime('%Y-%m-%d %H:%M')}"
-                })
-            
             if scheduled_datetime < now:
                 return templates.TemplateResponse("schedule_interview.html", {
                     "request": request,
                     "current_user": current_user,
                     "error": "Scheduled time cannot be in the past"
+                })
+            
+            # Validate 72-hour maximum
+            max_datetime = now + timedelta(hours=72)
+            if scheduled_datetime > max_datetime:
+                return templates.TemplateResponse("schedule_interview.html", {
+                    "request": request,
+                    "current_user": current_user,
+                    "error": f"Interviews can be scheduled up to 72 hours in advance. Latest available: {max_datetime.strftime('%Y-%m-%d %H:%M')}"
                 })
             
             is_future_schedule = True

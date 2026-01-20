@@ -95,7 +95,7 @@
                         </div>
                         <div class="alert alert-info mb-3">
                             <i class="bi bi-info-circle"></i> 
-                            <strong>Note:</strong> Interviews must be scheduled at least 72 hours (3 days) in advance. The interview link will be active at the scheduled time.
+                            <strong>Note:</strong> Interviews can be scheduled up to 72 hours (3 days) in advance. The interview link will be active at the scheduled time.
                         </div>
 
                         <div class="row">
@@ -617,7 +617,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.querySelector('form');
     const submitBtn = document.getElementById('scheduleBtn');
     
-    // Validate scheduled date/time (72 hours minimum)
+    // Validate scheduled date/time (maximum 72 hours in advance)
     function validateScheduledTime() {
         const dateInput = document.getElementById('scheduled_date');
         const timeInput = document.getElementById('scheduled_time');
@@ -628,18 +628,17 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const scheduledDateTime = new Date(`${dateInput.value}T${timeInput.value}`);
         const now = new Date();
-        const minDateTime = new Date(now.getTime() + (72 * 60 * 60 * 1000)); // 72 hours from now
-        
-        if (scheduledDateTime < minDateTime) {
-            const hoursUntilMin = Math.ceil((minDateTime - now) / (1000 * 60 * 60));
-            return { 
-                valid: false, 
-                message: `Interviews must be scheduled at least 72 hours in advance. Earliest available: ${minDateTime.toLocaleString()}` 
-            };
-        }
+        const maxDateTime = new Date(now.getTime() + (72 * 60 * 60 * 1000)); // 72 hours from now
         
         if (scheduledDateTime < now) {
             return { valid: false, message: 'Scheduled time cannot be in the past' };
+        }
+        
+        if (scheduledDateTime > maxDateTime) {
+            return { 
+                valid: false, 
+                message: `Interviews can be scheduled up to 72 hours in advance. Latest available: ${maxDateTime.toLocaleString()}` 
+            };
         }
         
         return { valid: true };
@@ -678,11 +677,14 @@ document.addEventListener('DOMContentLoaded', function() {
         return false;
     });
     
-    // Set minimum date to 3 days from now
+    // Set date constraints: today to 3 days from now (72 hours max)
     const dateInput = document.getElementById('scheduled_date');
-    const minDate = new Date();
-    minDate.setDate(minDate.getDate() + 3);
-    dateInput.min = minDate.toISOString().split('T')[0];
+    const today = new Date();
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + 3);
+    
+    dateInput.min = today.toISOString().split('T')[0]; // Can schedule from today
+    dateInput.max = maxDate.toISOString().split('T')[0]; // Maximum 3 days ahead
 });
 </script>
 {% endblock %}
