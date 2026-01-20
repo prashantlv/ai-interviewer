@@ -624,8 +624,9 @@ async def create_interview(
             bot_delay_seconds = 0
             if is_future_schedule and scheduled_datetime:
                 # Bot starts at scheduled time (room opens 10 minutes before, so bot can join early)
-                now = datetime.now()
-                delay_timedelta = scheduled_datetime - now
+                # Use UTC to match scheduled_datetime's timezone
+                now_utc = datetime.now(timezone.utc)
+                delay_timedelta = scheduled_datetime - now_utc
                 bot_delay_seconds = int(delay_timedelta.total_seconds())
                 print(f"⏰ Bot will start in {bot_delay_seconds} seconds ({delay_timedelta})")
                 print(f"⏰ Room will be available 10 minutes before bot starts")
