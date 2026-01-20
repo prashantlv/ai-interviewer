@@ -634,7 +634,19 @@
                 const response = await fetch(`/api/v1/admin/agencies/${agencyId}`);
                 const result = await response.json();
                 
+                // Debug: Log the actual response
+                console.log('Agency details response:', result);
                 if (result.success && result.data) {
+                    console.log('Agency data keys:', Object.keys(result.data));
+                    console.log('Sample fields:', {
+                        first_name: result.data.first_name,
+                        last_name: result.data.last_name,
+                        personal_email: result.data.personal_email,
+                        agency_location: result.data.agency_location,
+                        finalCredits: result.data.finalCredits,
+                        final_credits: result.data.final_credits
+                    });
+                    
                     const agency = result.data;
                     
                     // Format date
@@ -663,6 +675,27 @@
                         return phone;
                     }
                     
+                    // Helper function to get value with multiple fallback keys
+                    function getValue(obj, ...keys) {
+                        for (const key of keys) {
+                            if (obj[key] !== undefined && obj[key] !== null && obj[key] !== '') {
+                                return obj[key];
+                            }
+                        }
+                        return null;
+                    }
+                    
+                    // Extract values with fallbacks for different naming conventions
+                    const firstName = getValue(agency, 'first_name', 'firstName', 'firstname');
+                    const lastName = getValue(agency, 'last_name', 'lastName', 'lastname');
+                    const personalEmail = getValue(agency, 'personal_email', 'personalEmail', 'personalemail');
+                    const personalPhone = getValue(agency, 'personal_phone', 'personalPhone', 'personalphone');
+                    const extension = getValue(agency, 'extension', 'phone_extension', 'phoneExtension');
+                    const linkedinUrl = getValue(agency, 'personal_linkedin_url', 'personalLinkedinUrl', 'linkedin_url', 'linkedinUrl', 'linkedin');
+                    const agencyLocation = getValue(agency, 'agency_location', 'agencyLocation', 'location', 'city');
+                    const createdAt = getValue(agency, 'createdAt', 'created_at', 'created', 'dateCreated');
+                    const loginTime = getValue(agency, 'login_time', 'loginTime', 'last_login', 'lastLogin');
+                    
                     let html = `
                         <div class="agency-details">
                             <!-- Basic Information -->
@@ -686,7 +719,7 @@
                                         </div>
                                         <div class="col-md-6 mb-3">
                                             <strong>Created At:</strong><br>
-                                            <span class="text-muted">${formatDate(agency.createdAt || agency.created_at)}</span>
+                                            <span class="text-muted">${formatDate(createdAt)}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -701,24 +734,24 @@
                                     <div class="row">
                                         <div class="col-md-6 mb-3">
                                             <strong>First Name:</strong><br>
-                                            <span class="text-muted">${agency.first_name || 'N/A'}</span>
+                                            <span class="text-muted">${firstName || 'N/A'}</span>
                                         </div>
                                         <div class="col-md-6 mb-3">
                                             <strong>Last Name:</strong><br>
-                                            <span class="text-muted">${agency.last_name || 'N/A'}</span>
+                                            <span class="text-muted">${lastName || 'N/A'}</span>
                                         </div>
                                         <div class="col-md-6 mb-3">
                                             <strong>Personal Email:</strong><br>
-                                            <span class="text-muted">${agency.personal_email || 'N/A'}</span>
+                                            <span class="text-muted">${personalEmail || 'N/A'}</span>
                                         </div>
                                         <div class="col-md-6 mb-3">
                                             <strong>Personal Phone:</strong><br>
-                                            <span class="text-muted">${formatPhone(agency.personal_phone, agency.extension)}</span>
+                                            <span class="text-muted">${formatPhone(personalPhone, extension)}</span>
                                         </div>
                                         <div class="col-md-12 mb-3">
                                             <strong>LinkedIn:</strong><br>
-                                            ${agency.personal_linkedin_url ? 
-                                                `<a href="${agency.personal_linkedin_url}" target="_blank" class="text-primary">${agency.personal_linkedin_url}</a>` : 
+                                            ${linkedinUrl ? 
+                                                `<a href="${linkedinUrl}" target="_blank" class="text-primary">${linkedinUrl}</a>` : 
                                                 '<span class="text-muted">N/A</span>'}
                                         </div>
                                     </div>
@@ -734,7 +767,7 @@
                                     <div class="row">
                                         <div class="col-md-6 mb-3">
                                             <strong>Agency Location:</strong><br>
-                                            <span class="text-muted">${agency.agency_location || 'N/A'}</span>
+                                            <span class="text-muted">${agencyLocation || 'N/A'}</span>
                                         </div>
                                         <div class="col-md-6 mb-3">
                                             <strong>System:</strong><br>
@@ -742,27 +775,60 @@
                                         </div>
                                         <div class="col-md-6 mb-3">
                                             <strong>Browser Type:</strong><br>
-                                            <span class="text-muted">${agency.browser_type || 'N/A'}</span>
+                                            <span class="text-muted">${agency.browser_type || agency.browserType || 'N/A'}</span>
                                         </div>
                                         <div class="col-md-6 mb-3">
                                             <strong>Login Time:</strong><br>
-                                            <span class="text-muted">${formatDate(agency.login_time)}</span>
+                                            <span class="text-muted">${formatDate(loginTime)}</span>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             
-                            <!-- Account Information -->
+                            <!-- Subscription Information -->
                             <div class="card">
                                 <div class="card-header bg-warning text-dark">
-                                    <h6 class="mb-0"><i class="bi bi-wallet2 me-2"></i>Account Information</h6>
+                                    <h6 class="mb-0"><i class="bi bi-credit-card me-2"></i>Subscription</h6>
                                 </div>
                                 <div class="card-body">
                                     <div class="row">
-                                        <div class="col-md-12">
-                                            <strong>Final Credits:</strong><br>
-                                            <span class="h4 text-primary">${agency.finalCredits !== undefined && agency.finalCredits !== null ? agency.finalCredits : 'N/A'}</span>
-                                        </div>
+                                        ${(() => {
+                                            const subscription = agency.subscription || {};
+                                            return `
+                                                <div class="col-md-6 mb-3">
+                                                    <strong>Status:</strong><br>
+                                                    <span class="badge ${subscription.status === 'active' ? 'bg-success' : 'bg-secondary'}">${subscription.status || 'N/A'}</span>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <strong>Type:</strong><br>
+                                                    <span class="text-muted">${subscription.type || 'N/A'}</span>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <strong>Amount:</strong><br>
+                                                    <span class="text-muted">${subscription.amount !== undefined && subscription.amount !== null ? '₹' + subscription.amount.toLocaleString('en-IN') : 'N/A'}</span>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <strong>Validity:</strong><br>
+                                                    <span class="text-muted">${subscription.validity || 'N/A'}</span>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <strong>Quantity:</strong><br>
+                                                    <span class="text-muted">${subscription.quantity !== undefined && subscription.quantity !== null ? subscription.quantity : 'N/A'}</span>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <strong>User Type:</strong><br>
+                                                    <span class="text-muted">${subscription.user_type || 'N/A'}</span>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <strong>Created At:</strong><br>
+                                                    <span class="text-muted">${formatDate(subscription.createdAt || subscription.created_at)}</span>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <strong>Updated At:</strong><br>
+                                                    <span class="text-muted">${formatDate(subscription.updatedAt || subscription.updated_at)}</span>
+                                                </div>
+                                            `;
+                                        })()}
                                     </div>
                                 </div>
                             </div>

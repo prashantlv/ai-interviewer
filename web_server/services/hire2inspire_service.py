@@ -331,31 +331,56 @@ class Hire2InspireService:
             return []
     
     async def get_agency_details(self, agency_id: str) -> Optional[Dict[str, Any]]:
-        """Get details of a specific agency by ID"""
+        """Get details of a specific agency by ID - No token required"""
         try:
-            token = await self._ensure_token()
-            
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(
                     f"{self.base_url}/agency/{agency_id}",
                     headers={
-                        "Authorization": f"Bearer {token}",
                         "Accept": "application/json"
                     }
                 )
+                
+                logger.info(f"📡 Agency details API response status: {response.status_code}")
+                
                 response.raise_for_status()
                 data = response.json()
                 
+                # Log the response structure for debugging
+                logger.debug(f"📋 Agency details response keys: {list(data.keys()) if isinstance(data, dict) else 'not a dict'}")
+                
                 # Extract agency details from response
-                if "data" in data:
+                agency_data = None
+                if isinstance(data, dict):
+                    if "data" in data:
+                        agency_data = data["data"]
+                        logger.debug(f"📋 Agency data keys: {list(agency_data.keys()) if isinstance(agency_data, dict) else 'not a dict'}")
+                    else:
+                        # Response might be the agency data directly
+                        agency_data = data
+                        logger.debug(f"📋 Using response as agency data directly")
+                elif isinstance(data, list) and len(data) > 0:
+                    agency_data = data[0]
+                    logger.debug(f"📋 Using first item from list response")
+                
+                if agency_data:
                     logger.info(f"✅ Fetched agency details for {agency_id}")
-                    return data["data"]
+                    # Log sample fields to help debug
+                    sample_fields = ['first_name', 'last_name', 'personal_email', 'agency_location', 'subscription']
+                    for field in sample_fields:
+                        if field in agency_data:
+                            logger.debug(f"📋 Found field '{field}': {agency_data[field]}")
+                    return agency_data
                 else:
                     logger.warning(f"⚠️ No agency data in response for {agency_id}")
                     return None
                     
+        except httpx.HTTPStatusError as e:
+            error_text = e.response.text[:200] if e.response.text else "No error message"
+            logger.error(f"❌ HTTP error getting agency details: {e.response.status_code} - {error_text}")
+            return None
         except Exception as e:
-            logger.error(f"❌ Failed to get agency details: {e}")
+            logger.error(f"❌ Failed to get agency details: {e}", exc_info=True)
             return None
 
 
