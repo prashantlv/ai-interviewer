@@ -235,20 +235,45 @@ class Hire2InspireService:
                         "Accept": "application/json"
                     }
                 )
+                
+                logger.info(f"📡 Agency list API response status: {response.status_code}")
+                
+                # Log response for debugging
+                response_text = response.text
+                logger.debug(f"📋 Agency list API response: {response_text[:500]}")
+                
                 response.raise_for_status()
                 data = response.json()
                 
-                # Extract agencies from response
-                if "data" in data:
-                    agencies = data["data"]
-                    logger.info(f"✅ Fetched {len(agencies)} agencies from Hire2Inspire")
-                    return agencies
-                else:
-                    logger.warning("⚠️ No agencies data in response")
-                    return []
+                logger.debug(f"📋 Parsed response keys: {list(data.keys()) if isinstance(data, dict) else 'not a dict'}")
+                
+                # Extract agencies from response - check multiple possible structures
+                agencies = []
+                if isinstance(data, list):
+                    # Response is directly a list
+                    agencies = data
+                elif isinstance(data, dict):
+                    # Check for data field
+                    if "data" in data:
+                        if isinstance(data["data"], list):
+                            agencies = data["data"]
+                        elif isinstance(data["data"], dict) and "agencies" in data["data"]:
+                            agencies = data["data"]["agencies"]
+                        else:
+                            logger.warning(f"⚠️ Unexpected data structure: {type(data['data'])}")
+                    elif "agencies" in data:
+                        agencies = data["agencies"]
+                    else:
+                        logger.warning(f"⚠️ No agencies found in response. Keys: {list(data.keys())}")
+                
+                logger.info(f"✅ Fetched {len(agencies)} agencies from Hire2Inspire")
+                return agencies
                     
+        except httpx.HTTPStatusError as e:
+            logger.error(f"❌ HTTP error fetching agencies: {e.response.status_code} - {e.response.text}")
+            return []
         except Exception as e:
-            logger.error(f"❌ Failed to fetch agencies: {e}")
+            logger.error(f"❌ Failed to fetch agencies: {e}", exc_info=True)
             return []
     
     async def get_agency_details(self, agency_id: str) -> Optional[Dict[str, Any]]:

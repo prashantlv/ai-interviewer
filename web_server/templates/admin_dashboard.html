@@ -428,7 +428,7 @@
                                 <i class="bi bi-arrow-clockwise me-1"></i>Refresh
                             </button>
                         </div>
-                        {% if agencies %}
+                        {% if agencies and agencies|length > 0 %}
                         <div class="table-responsive">
                             <table class="table table-hover">
                                 <thead>
@@ -470,7 +470,19 @@
                             </table>
                         </div>
                         {% else %}
-                        <p class="text-muted text-center py-4">No agencies found</p>
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>No agencies found.</strong> 
+                            <br>This could mean:
+                            <ul class="mb-0 mt-2">
+                                <li>The API returned an empty list</li>
+                                <li>There was an error fetching agencies (check server logs)</li>
+                                <li>Authentication token may need to be refreshed</li>
+                            </ul>
+                            <button class="btn btn-sm btn-primary mt-2" onclick="loadAgencies()">
+                                <i class="bi bi-arrow-clockwise me-1"></i>Try Again
+                            </button>
+                        </div>
                         {% endif %}
                     </div>
                 </div>
