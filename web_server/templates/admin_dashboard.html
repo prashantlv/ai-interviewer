@@ -718,10 +718,35 @@
                     
                     // Get subscription - it's an array, get the first active one or first one
                     let subscription = {};
-                    if (agency.subscription && Array.isArray(agency.subscription) && agency.subscription.length > 0) {
-                        // Find active subscription first, otherwise use first one
-                        subscription = agency.subscription.find(sub => sub.status === 'active') || agency.subscription[0];
+                    console.log('Agency subscription:', agency.subscription);
+                    console.log('Is array?', Array.isArray(agency.subscription));
+                    
+                    if (agency.subscription) {
+                        if (Array.isArray(agency.subscription) && agency.subscription.length > 0) {
+                            // Find active subscription first, otherwise use first one
+                            const activeSub = agency.subscription.find(sub => sub && sub.status === 'active');
+                            subscription = activeSub || agency.subscription[0];
+                            console.log('Found subscription from array:', subscription);
+                            console.log('Subscription has status?', 'status' in subscription);
+                            console.log('Subscription has type?', 'type' in subscription);
+                        } else if (typeof agency.subscription === 'object' && !Array.isArray(agency.subscription)) {
+                            // If it's already an object (not array), use it directly
+                            subscription = agency.subscription;
+                            console.log('Using subscription as object:', subscription);
+                        }
+                    } else {
+                        console.log('No subscription found in agency data');
                     }
+                    
+                    // Debug subscription - log all keys
+                    console.log('Final subscription object:', subscription);
+                    console.log('Subscription keys:', Object.keys(subscription));
+                    console.log('Subscription.status:', subscription.status);
+                    console.log('Subscription.type:', subscription.type);
+                    console.log('Subscription.amount:', subscription.amount);
+                    console.log('Subscription.validity:', subscription.validity);
+                    console.log('Subscription.quantity:', subscription.quantity);
+                    console.log('Subscription.user_type:', subscription.user_type);
                     
                     let html = `
                         <div class="agency-details">
@@ -818,46 +843,59 @@
                                     <h6 class="mb-0"><i class="bi bi-credit-card me-2"></i>Subscription</h6>
                                 </div>
                                 <div class="card-body">
-                                    <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <strong>Status:</strong><br>
-                                            <span class="badge ${subscription.status === 'active' ? 'bg-success' : 'bg-secondary'}">${subscription.status || getValue(agency, 'status') || 'N/A'}</span>
-                                        </div>
-                                        <div class="col-md-6 mb-3">
-                                            <strong>Type:</strong><br>
-                                            <span class="text-muted">${subscription.type || getValue(agency, 'type', 'subscription_type') || 'N/A'}</span>
-                                        </div>
-                                        <div class="col-md-6 mb-3">
-                                            <strong>Amount:</strong><br>
-                                            <span class="text-muted">${(() => {
-                                                const amount = subscription.amount !== undefined && subscription.amount !== null ? subscription.amount : getValue(agency, 'amount');
-                                                return amount !== null && amount !== undefined ? '₹' + amount.toLocaleString('en-IN') : 'N/A';
-                                            })()}</span>
-                                        </div>
-                                        <div class="col-md-6 mb-3">
-                                            <strong>Validity:</strong><br>
-                                            <span class="text-muted">${subscription.validity || getValue(agency, 'validity') || 'N/A'}</span>
-                                        </div>
-                                        <div class="col-md-6 mb-3">
-                                            <strong>Quantity:</strong><br>
-                                            <span class="text-muted">${(() => {
-                                                const qty = subscription.quantity !== undefined && subscription.quantity !== null ? subscription.quantity : getValue(agency, 'quantity');
-                                                return qty !== null && qty !== undefined ? qty : 'N/A';
-                                            })()}</span>
-                                        </div>
-                                        <div class="col-md-6 mb-3">
-                                            <strong>User Type:</strong><br>
-                                            <span class="text-muted">${subscription.user_type || getValue(agency, 'user_type', 'userType') || 'N/A'}</span>
-                                        </div>
-                                        <div class="col-md-6 mb-3">
-                                            <strong>Created At:</strong><br>
-                                            <span class="text-muted">${formatDate(subscription.createdAt || subscription.created_at || getValue(agency, 'subscription_created_at'))}</span>
-                                        </div>
-                                        <div class="col-md-6 mb-3">
-                                            <strong>Updated At:</strong><br>
-                                            <span class="text-muted">${formatDate(subscription.updatedAt || subscription.updated_at || getValue(agency, 'subscription_updated_at'))}</span>
-                                        </div>
-                                    </div>
+                                    ${(() => {
+                                        // Ensure we have subscription data
+                                        const sub = subscription && Object.keys(subscription).length > 0 ? subscription : null;
+                                        if (!sub) {
+                                            return '<div class="alert alert-info">No subscription data available</div>';
+                                        }
+                                        
+                                        const subStatus = sub.status || 'N/A';
+                                        const subType = sub.type || 'N/A';
+                                        const subAmount = sub.amount !== undefined && sub.amount !== null ? '₹' + sub.amount.toLocaleString('en-IN') : 'N/A';
+                                        const subValidity = sub.validity || 'N/A';
+                                        const subQuantity = sub.quantity !== undefined && sub.quantity !== null ? sub.quantity : 'N/A';
+                                        const subUserType = sub.user_type || 'N/A';
+                                        const subCreatedAt = formatDate(sub.createdAt || sub.created_at);
+                                        const subUpdatedAt = formatDate(sub.updatedAt || sub.updated_at);
+                                        
+                                        return `
+                                            <div class="row">
+                                                <div class="col-md-6 mb-3">
+                                                    <strong>Status:</strong><br>
+                                                    <span class="badge ${subStatus === 'active' ? 'bg-success' : 'bg-secondary'}">${subStatus}</span>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <strong>Type:</strong><br>
+                                                    <span class="text-muted">${subType}</span>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <strong>Amount:</strong><br>
+                                                    <span class="text-muted">${subAmount}</span>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <strong>Validity:</strong><br>
+                                                    <span class="text-muted">${subValidity}</span>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <strong>Quantity:</strong><br>
+                                                    <span class="text-muted">${subQuantity}</span>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <strong>User Type:</strong><br>
+                                                    <span class="text-muted">${subUserType}</span>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <strong>Created At:</strong><br>
+                                                    <span class="text-muted">${subCreatedAt}</span>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <strong>Updated At:</strong><br>
+                                                    <span class="text-muted">${subUpdatedAt}</span>
+                                                </div>
+                                            </div>
+                                        `;
+                                    })()}
                                 </div>
                             </div>
                         </div>
