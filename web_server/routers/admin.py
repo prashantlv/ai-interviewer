@@ -193,10 +193,28 @@ async def get_agency_details(
     try:
         agency = await hire2inspire_service.get_agency_details(agency_id)
         if agency:
-            return JSONResponse({
+            # Explicitly verify subscription is in the response before returning
+            if isinstance(agency, dict):
+                logger.info(f"📤 Admin route: Agency has {len(agency)} keys")
+                if 'subscription' in agency:
+                    logger.info(f"✅ Admin route: Subscription confirmed in agency dict")
+                    logger.info(f"✅ Admin route: Subscription type: {type(agency['subscription'])}, is array: {isinstance(agency['subscription'], list)}")
+                else:
+                    logger.error(f"❌ Admin route: Subscription MISSING from agency dict!")
+                    logger.error(f"❌ Admin route: Available keys: {list(agency.keys())[:20]}")
+            
+            response_data = {
                 "success": True,
                 "data": agency
-            })
+            }
+            
+            # Double-check subscription in response
+            if isinstance(agency, dict) and 'subscription' not in agency:
+                logger.error(f"❌ Admin route: Subscription will NOT be in JSON response!")
+            else:
+                logger.info(f"✅ Admin route: Subscription WILL be in JSON response")
+            
+            return JSONResponse(response_data)
         else:
             raise HTTPException(status_code=404, detail="Agency not found")
     except Exception as e:
