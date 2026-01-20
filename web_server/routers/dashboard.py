@@ -450,11 +450,17 @@ async def create_interview(
     
     if scheduled_date and scheduled_time:
         try:
-            # Parse scheduled datetime
-            scheduled_datetime = datetime.strptime(f"{scheduled_date} {scheduled_time}", "%Y-%m-%d %H:%M")
-            now = datetime.now()
+            # Parse scheduled datetime (naive, no timezone)
+            scheduled_datetime_naive = datetime.strptime(f"{scheduled_date} {scheduled_time}", "%Y-%m-%d %H:%M")
             
-            if scheduled_datetime < now:
+            # CRITICAL FIX: Interpret user's input as UTC and store with timezone explicitly
+            # This ensures consistent comparison later
+            scheduled_datetime = scheduled_datetime_naive.replace(tzinfo=timezone.utc)
+            
+            # Use UTC for all comparisons
+            now_utc = datetime.now(timezone.utc)
+            
+            if scheduled_datetime < now_utc:
                 return templates.TemplateResponse("schedule_interview.html", {
                     "request": request,
                     "current_user": current_user,
@@ -462,16 +468,16 @@ async def create_interview(
                 })
             
             # Validate 72-hour maximum
-            max_datetime = now + timedelta(hours=72)
+            max_datetime = now_utc + timedelta(hours=72)
             if scheduled_datetime > max_datetime:
                 return templates.TemplateResponse("schedule_interview.html", {
                     "request": request,
                     "current_user": current_user,
-                    "error": f"Interviews can be scheduled up to 72 hours in advance. Latest available: {max_datetime.strftime('%Y-%m-%d %H:%M')}"
+                    "error": f"Interviews can be scheduled up to 72 hours in advance. Latest available: {max_datetime.strftime('%Y-%m-%d %H:%M')} UTC"
                 })
             
             is_future_schedule = True
-            print(f"📅 Future interview scheduled for: {scheduled_datetime}")
+            print(f"📅 Future interview scheduled for: {scheduled_datetime} UTC (current: {now_utc} UTC)")
         except ValueError as e:
             return templates.TemplateResponse("schedule_interview.html", {
                 "request": request,
@@ -601,7 +607,7 @@ async def create_interview(
                 "candidate_resume_raw": candidate_resume,
                 # NEW: Store replica_id if specified (bot will read this from interview_config)
                 "replica_id": replica_id if replica_id else None,
-                # NEW: Store scheduled_date for future interviews
+                # NEW: Store scheduled_date for future interviews (with timezone info)
                 "scheduled_date": scheduled_datetime.isoformat() if scheduled_datetime else None
             },
             status="scheduled"

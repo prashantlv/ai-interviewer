@@ -145,6 +145,17 @@ async def interview_room(request: Request, interview_id: str):
             # Join deadline: 10 minutes after scheduled time
             join_deadline_utc = scheduled_datetime_utc + timedelta(minutes=10)
             
+            # Debug logging
+            logger.info(f"🔍 SCHEDULED TIME DEBUG:")
+            logger.info(f"   Raw scheduled_date_str: {scheduled_date_str}")
+            logger.info(f"   Parsed scheduled_datetime: {scheduled_datetime}")
+            logger.info(f"   scheduled_datetime_utc: {scheduled_datetime_utc}")
+            logger.info(f"   now_utc: {now_utc}")
+            logger.info(f"   room_open_time_utc: {room_open_time_utc}")
+            logger.info(f"   join_deadline_utc: {join_deadline_utc}")
+            logger.info(f"   room_open > now? {room_open_time_utc > now_utc}")
+            logger.info(f"   now > join_deadline? {now_utc > join_deadline_utc}")
+            
             # Check if room open time is still in the future
             if room_open_time_utc > now_utc:
                 is_future_schedule = True
@@ -464,18 +475,32 @@ async def end_interview(interview_id: str, request: Request):
         is_future_schedule = False
         if scheduled_date_str:
             try:
-                from datetime import datetime
-                scheduled_datetime = datetime.fromisoformat(scheduled_date_str.replace('Z', '+00:00'))
-                now = datetime.now(scheduled_datetime.tzinfo) if scheduled_datetime.tzinfo else datetime.now()
-                if scheduled_datetime > now:
+                from datetime import datetime, timezone
+                # Parse scheduled datetime (handle both with and without timezone)
+                scheduled_datetime_str = scheduled_date_str.replace('Z', '+00:00') if 'Z' in scheduled_date_str else scheduled_date_str
+                try:
+                    scheduled_datetime = datetime.fromisoformat(scheduled_datetime_str)
+                except ValueError:
+                    scheduled_datetime = datetime.fromisoformat(scheduled_date_str)
+                
+                # Convert to UTC for consistent comparison
+                if scheduled_datetime.tzinfo:
+                    scheduled_datetime_utc = scheduled_datetime.astimezone(timezone.utc)
+                else:
+                    scheduled_datetime_utc = scheduled_datetime.replace(tzinfo=timezone.utc)
+                
+                # Use UTC for comparison
+                now_utc = datetime.now(timezone.utc)
+                
+                if scheduled_datetime_utc > now_utc:
                     is_future_schedule = True
-                    logger.warning(f"⚠️ Attempted to end interview scheduled for future: {scheduled_datetime}")
+                    logger.warning(f"⚠️ Attempted to end interview scheduled for future: {scheduled_datetime_utc} UTC (current: {now_utc} UTC)")
                     return {
                         "status": "error",
-                        "message": "Cannot end interview that hasn't started yet. Interview is scheduled for " + scheduled_datetime.strftime('%Y-%m-%d %H:%M')
+                        "message": "Cannot end interview that hasn't started yet. Interview is scheduled for " + scheduled_datetime_utc.strftime('%Y-%m-%d %H:%M') + " UTC"
                     }
             except Exception as e:
-                logger.warning(f"⚠️ Failed to parse scheduled_date: {e}")
+                logger.warning(f"⚠️ Failed to parse scheduled_date: {e}", exc_info=True)
         
         # Check if interview actually started (has transcript beyond placeholder)
         transcript_placeholder = "Interview scheduled - waiting for completion"
