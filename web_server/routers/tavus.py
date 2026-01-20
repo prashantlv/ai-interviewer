@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from typing import Optional
 from pydantic import BaseModel
+from datetime import datetime
 from services.tavus_service import tavus_service
 from services.voice_cloning_service import voice_cloning_service
 from dependencies import DbServiceDep, CurrentUserDep
@@ -431,11 +432,25 @@ async def get_default_replica_mapping(db: DbServiceDep):
     try:
         config = await db.get_default_replica_config()
         if config:
+            # Convert datetime objects to ISO format strings for JSON serialization
+            def serialize_datetime(obj):
+                """Recursively convert datetime objects to ISO format strings"""
+                if isinstance(obj, dict):
+                    return {k: serialize_datetime(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [serialize_datetime(item) for item in obj]
+                elif isinstance(obj, datetime):
+                    return obj.isoformat()
+                else:
+                    return obj
+            
+            serialized_config = serialize_datetime(config)
+            
             return JSONResponse(
                 status_code=200,
                 content={
                     "success": True,
-                    "data": config
+                    "data": serialized_config
                 }
             )
         else:

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from dependencies import DbServiceDep, BotManagerDep, CurrentUserDep
 from services.daily_service import daily_service
