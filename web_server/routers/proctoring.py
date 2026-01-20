@@ -158,7 +158,10 @@ async def interview_room(request: Request, interview_id: str):
             logger.info(f"   now > join_deadline? {now_utc > join_deadline_utc}")
             
             # Check if room open time is still in the future
-            if room_open_time_utc > now_utc:
+            # CRITICAL: Use >= instead of > to handle exact boundary case
+            # If now >= room_open_time, the room is open and interview is available
+            if now_utc < room_open_time_utc:
+                # Room hasn't opened yet
                 is_future_schedule = True
                 logger.info(f"📅 Interview scheduled for future: {scheduled_datetime_utc} UTC (current: {now_utc} UTC, room opens: {room_open_time_utc} UTC)")
             elif now_utc > join_deadline_utc:
@@ -168,7 +171,7 @@ async def interview_room(request: Request, interview_id: str):
             else:
                 # Between room open and join deadline - interview is available
                 is_future_schedule = False
-                logger.info(f"✅ Interview available: {scheduled_datetime_utc} UTC (current: {now_utc} UTC, join deadline: {join_deadline_utc} UTC)")
+                logger.info(f"✅ Interview available: {scheduled_datetime_utc} UTC (current: {now_utc} UTC, room open: {room_open_time_utc} UTC, join deadline: {join_deadline_utc} UTC)")
         except Exception as e:
             logger.warning(f"⚠️ Failed to parse scheduled_date '{scheduled_date_str}': {e}", exc_info=True)
     
