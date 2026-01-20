@@ -423,7 +423,7 @@
                         Your interview is scheduled for:
                     </p>
                     <p style="color: #856404; font-size: 1.3rem; font-weight: bold; margin-bottom: 16px;" id="scheduled-time-display">
-                        {{ scheduled_datetime }}
+                        {% if scheduled_datetime_ist %}{{ scheduled_datetime_ist }}{% else %}{{ scheduled_datetime }}{% endif %}
                     </p>
                     <p style="color: #856404; font-size: 0.95rem;">
                         You can join 10 minutes before or up to 10 minutes after the scheduled time.
@@ -441,7 +441,7 @@
                         The interview was scheduled for:
                     </p>
                     <p style="color: #721c24; font-size: 1.3rem; font-weight: bold; margin-bottom: 16px;" id="scheduled-time-display">
-                        {{ scheduled_datetime }}
+                        {% if scheduled_datetime_ist %}{{ scheduled_datetime_ist }}{% else %}{{ scheduled_datetime }}{% endif %}
                     </p>
                     <p style="color: #721c24; font-size: 0.95rem;">
                         The join window (10 minutes after scheduled time) has passed. Please contact the interviewer to reschedule.
@@ -570,13 +570,15 @@
             
             const timeDisplay = document.getElementById('scheduled-time-display');
             if (timeDisplay) {
-                timeDisplay.textContent = scheduledTime.toLocaleString('en-US', {
+                // Display time in IST (Asia/Kolkata)
+                timeDisplay.textContent = scheduledTime.toLocaleString('en-IN', {
                     weekday: 'long',
                     year: 'numeric',
                     month: 'long',
                     day: 'numeric',
                     hour: '2-digit',
                     minute: '2-digit',
+                    timeZone: 'Asia/Kolkata',
                     timeZoneName: 'short'
                 });
             }
@@ -759,7 +761,8 @@
                 const scheduledTime = new Date(SCHEDULED_DATETIME);
                 const now = new Date();
                 if (scheduledTime > now) {
-                    alert('This interview is scheduled for ' + scheduledTime.toLocaleString() + '. You cannot end an interview that hasn\'t started yet.');
+                    const istTime = scheduledTime.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true });
+                    alert('This interview is scheduled for ' + istTime + ' IST. You cannot end an interview that hasn\'t started yet.');
                     return;
                 }
             }
@@ -1093,7 +1096,8 @@
                 const roomOpenTime = new Date(scheduledTime.getTime() - 10 * 60 * 1000); // 10 min before
                 
                 if (now < roomOpenTime) {
-                    alert('This interview is scheduled for ' + scheduledTime.toLocaleString() + '. You can join 10 minutes before the scheduled time.');
+                    const istTime = scheduledTime.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true });
+                    alert('This interview is scheduled for ' + istTime + ' IST. You can join 10 minutes before the scheduled time.');
                     return;
                 }
             }
@@ -1103,7 +1107,8 @@
                 const joinDeadline = new Date(JOIN_DEADLINE);
                 const now = new Date();
                 if (now > joinDeadline) {
-                    alert('The join window for this interview has closed. The interview was scheduled for ' + new Date(SCHEDULED_DATETIME).toLocaleString() + '. Please contact the interviewer to reschedule.');
+                    const scheduledIST = new Date(SCHEDULED_DATETIME).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true });
+                    alert('The join window for this interview has closed. The interview was scheduled for ' + scheduledIST + ' IST. Please contact the interviewer to reschedule.');
                     return;
                 }
             }

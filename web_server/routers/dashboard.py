@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from typing import Optional
 from datetime import datetime, timedelta, timezone
+import pytz
 
 from dependencies import DbServiceDep, BotManagerDep, CurrentUserDep
 from services.daily_service import daily_service
@@ -431,8 +432,10 @@ async def create_interview(
     job_description: str = Form(...),  # NEW: JD text for GPT parsing
     candidate_resume: str = Form(...),  # NEW: Resume text for GPT parsing
     replica_id: str = Form(""),  # NEW: Optional replica selection
-    scheduled_date: str = Form(None),  # NEW: Scheduled date (YYYY-MM-DD)
-    scheduled_time: str = Form(None)  # NEW: Scheduled time (HH:MM)
+    scheduled_date: str = Form(None),  # Scheduled date (YYYY-MM-DD) - user's local time
+    scheduled_time: str = Form(None),  # Scheduled time (HH:MM) - user's local time
+    scheduled_date_utc: str = Form(None),  # UTC-converted date (from frontend)
+    scheduled_time_utc: str = Form(None)  # UTC-converted time (from frontend)
 ):
     """Create a new interview"""
     import uuid
@@ -448,32 +451,64 @@ async def create_interview(
     scheduled_datetime = None
     is_future_schedule = False
     
-    if scheduled_date and scheduled_time:
+    # CRITICAL: Users enter time in IST (Indian Standard Time, UTC+5:30)
+    # Convert IST to UTC for storage and comparison
+    IST = pytz.timezone('Asia/Kolkata')
+    
+    # Use UTC-converted values if provided (frontend converted from user's local timezone)
+    # Otherwise interpret input as IST (for backward compatibility, check if it looks like UTC or IST)
+    if scheduled_date_utc and scheduled_time_utc:
+        # Frontend already converted to UTC
+        date_to_use = scheduled_date_utc
+        time_to_use = scheduled_time_utc
+        is_utc = True
+    else:
+        # Assume user entered time in IST
+        date_to_use = scheduled_date
+        time_to_use = scheduled_time
+        is_utc = False
+    
+    if date_to_use and time_to_use:
         try:
-            # Parse scheduled datetime (naive, no timezone)
-            scheduled_datetime_naive = datetime.strptime(f"{scheduled_date} {scheduled_time}", "%Y-%m-%d %H:%M")
+            # Parse scheduled datetime (naive)
+            scheduled_datetime_naive = datetime.strptime(f"{date_to_use} {time_to_use}", "%Y-%m-%d %H:%M")
             
-            # CRITICAL FIX: Interpret user's input as UTC and store with timezone explicitly
-            # This ensures consistent comparison later
-            scheduled_datetime = scheduled_datetime_naive.replace(tzinfo=timezone.utc)
+            if is_utc:
+                # Already in UTC from frontend conversion
+                scheduled_datetime = scheduled_datetime_naive.replace(tzinfo=timezone.utc)
+                print(f"🕐 Using UTC-converted time: {scheduled_datetime} (from user's local {scheduled_date} {scheduled_time})")
+            else:
+                # Interpret as IST and convert to UTC
+                scheduled_datetime_ist = IST.localize(scheduled_datetime_naive)
+                scheduled_datetime = scheduled_datetime_ist.astimezone(timezone.utc)
+                print(f"🇮🇳 Interpreting as IST: {scheduled_datetime_ist} → UTC: {scheduled_datetime}")
             
             # Use UTC for all comparisons
             now_utc = datetime.now(timezone.utc)
             
+            # CRITICAL: Log server time for debugging clock sync issues
+            print(f"⏰ SERVER TIME CHECK: now_utc={now_utc} (If this seems wrong, check EC2 server clock sync!)")
+            
+            # Convert max_datetime to IST for user-friendly error message
+            max_datetime_ist = (now_utc + timedelta(hours=72)).astimezone(IST)
+            
             if scheduled_datetime < now_utc:
+                scheduled_ist = scheduled_datetime.astimezone(IST)
+                now_ist = now_utc.astimezone(IST)
                 return templates.TemplateResponse("schedule_interview.html", {
                     "request": request,
                     "current_user": current_user,
-                    "error": "Scheduled time cannot be in the past"
+                    "error": f"Scheduled time ({scheduled_ist.strftime('%Y-%m-%d %H:%M')} IST) cannot be in the past. Current time: {now_ist.strftime('%Y-%m-%d %H:%M')} IST"
                 })
             
             # Validate 72-hour maximum
             max_datetime = now_utc + timedelta(hours=72)
             if scheduled_datetime > max_datetime:
+                scheduled_ist = scheduled_datetime.astimezone(IST)
                 return templates.TemplateResponse("schedule_interview.html", {
                     "request": request,
                     "current_user": current_user,
-                    "error": f"Interviews can be scheduled up to 72 hours in advance. Latest available: {max_datetime.strftime('%Y-%m-%d %H:%M')} UTC"
+                    "error": f"Interviews can be scheduled up to 72 hours in advance. Latest available: {max_datetime_ist.strftime('%Y-%m-%d %H:%M')} IST (you entered: {scheduled_ist.strftime('%Y-%m-%d %H:%M')} IST)"
                 })
             
             is_future_schedule = True

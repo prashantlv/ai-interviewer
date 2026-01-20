@@ -12,6 +12,7 @@ import json
 import asyncio
 from datetime import datetime
 from typing import Dict, Any, Optional, List
+import pytz
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -134,6 +135,9 @@ async def interview_room(request: Request, interview_id: str):
             # Get current time - always use UTC for comparison to avoid timezone issues
             now_utc = datetime.now(timezone.utc)
             
+            # CRITICAL: Log server time for debugging clock sync issues
+            logger.warning(f"⏰ SERVER TIME CHECK: now_utc={now_utc} (If this seems wrong, check EC2 server clock sync!)")
+            
             # Convert scheduled_datetime to UTC if it has timezone info, otherwise assume UTC
             if scheduled_datetime.tzinfo:
                 scheduled_datetime_utc = scheduled_datetime.astimezone(timezone.utc)
@@ -245,7 +249,10 @@ async def interview_room(request: Request, interview_id: str):
             "interview_config_json": interview_config_json,
             "is_future_schedule": is_future_schedule,
             "scheduled_datetime": scheduled_datetime_utc.isoformat() if scheduled_datetime_utc else (scheduled_datetime.isoformat() if scheduled_datetime else None),
-            "join_deadline": join_deadline_utc.isoformat() if join_deadline_utc else None
+            "join_deadline": join_deadline_utc.isoformat() if join_deadline_utc else None,
+            # Convert to IST for display (formatted nicely)
+            "scheduled_datetime_ist": scheduled_datetime_utc.astimezone(pytz.timezone('Asia/Kolkata')).strftime('%B %d, %Y at %I:%M %p IST') if scheduled_datetime_utc else None,
+            "join_deadline_ist": join_deadline_utc.astimezone(pytz.timezone('Asia/Kolkata')).strftime('%B %d, %Y at %I:%M %p IST') if join_deadline_utc else None
         }
     )
 

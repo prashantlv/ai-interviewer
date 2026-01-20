@@ -89,13 +89,17 @@
                                 <input type="date" class="form-control" id="scheduled_date" name="scheduled_date" required>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label for="scheduled_time" class="form-label">Scheduled Time *</label>
+                                <label for="scheduled_time" class="form-label">Scheduled Time (Your Local Time) *</label>
                                 <input type="time" class="form-control" id="scheduled_time" name="scheduled_time" required>
+                                <small class="text-muted" id="utc_time_display"></small>
                             </div>
                         </div>
+                        <!-- Hidden fields for UTC-converted values -->
+                        <input type="hidden" id="scheduled_date_utc" name="scheduled_date_utc">
+                        <input type="hidden" id="scheduled_time_utc" name="scheduled_time_utc">
                         <div class="alert alert-info mb-3">
                             <i class="bi bi-info-circle"></i> 
-                            <strong>Note:</strong> Interviews can be scheduled up to 72 hours (3 days) in advance. The interview link will be active at the scheduled time.
+                            <strong>Note:</strong> Interviews can be scheduled up to 72 hours (3 days) in advance. Times should be entered in <strong>IST (Indian Standard Time)</strong>. The system will automatically convert to UTC for storage.
                         </div>
 
                         <div class="row">
@@ -644,6 +648,52 @@ document.addEventListener('DOMContentLoaded', function() {
         return { valid: true };
     }
     
+    // Convert IST time to UTC before submission
+    // User enters time in IST (Asia/Kolkata, UTC+5:30)
+    function convertISTToUTC(dateStr, timeStr) {
+        // Parse date and time components
+        const [year, month, day] = dateStr.split('-').map(Number);
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        
+        // Create a date object representing the IST time
+        // We'll use Intl.DateTimeFormat to properly handle IST timezone
+        // IST is UTC+5:30, so we need to subtract 5 hours 30 minutes to get UTC
+        
+        // Method: Create date string and parse it as if it's in IST
+        // Format: "YYYY-MM-DDTHH:MM:00+05:30" (IST offset)
+        const istDateTimeStr = `${dateStr}T${timeStr}:00+05:30`;
+        
+        // Parse as IST and convert to UTC
+        const istDate = new Date(istDateTimeStr);
+        
+        // Extract UTC date and time components
+        const utcDateStr = istDate.toISOString().split('T')[0];
+        const utcTimeStr = istDate.toISOString().split('T')[1].substring(0, 5); // HH:MM
+        
+        return { date: utcDateStr, time: utcTimeStr, full: istDate.toISOString() };
+    }
+    
+    // Update UTC time display as user types (showing IST → UTC conversion)
+    const dateInput = document.getElementById('scheduled_date');
+    const timeInput = document.getElementById('scheduled_time');
+    const utcDisplay = document.getElementById('utc_time_display');
+    
+    function updateUTCDisplay() {
+        if (dateInput.value && timeInput.value) {
+            const utc = convertISTToUTC(dateInput.value, timeInput.value);
+            // Show IST input and UTC conversion
+            utcDisplay.textContent = `You entered: ${dateInput.value} ${timeInput.value} IST → Will be stored as: ${utc.date} ${utc.time} UTC`;
+            utcDisplay.style.color = '#6c757d';
+            utcDisplay.style.fontSize = '0.875rem';
+        } else {
+            utcDisplay.textContent = '';
+        }
+    }
+    
+    dateInput.addEventListener('change', updateUTCDisplay);
+    timeInput.addEventListener('change', updateUTCDisplay);
+    timeInput.addEventListener('input', updateUTCDisplay);
+    
     // Add validation on form submit
     let formSubmitted = false;
     form.addEventListener('submit', function(e) {
@@ -659,6 +709,15 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             alert(validation.message);
             return false;
+        }
+        
+        // CRITICAL: Convert IST time to UTC before submitting
+        // User enters time in IST (Asia/Kolkata, UTC+5:30)
+        if (dateInput.value && timeInput.value) {
+            const utc = convertISTToUTC(dateInput.value, timeInput.value);
+            document.getElementById('scheduled_date_utc').value = utc.date;
+            document.getElementById('scheduled_time_utc').value = utc.time;
+            console.log(`🇮🇳 Converting IST to UTC: ${dateInput.value} ${timeInput.value} IST → ${utc.date} ${utc.time} UTC`);
         }
         
         formSubmitted = true;
