@@ -628,8 +628,14 @@
             modal.show();
             
             try {
-                const response = await fetch(`/api/v1/admin/agencies/${agencyId}`);
-                const result = await response.json();
+                // Fetch agency details and interview insights in parallel
+                const [agencyResponse, insightsResponse] = await Promise.all([
+                    fetch(`/api/v1/admin/agencies/${agencyId}`),
+                    fetch(`/api/v1/admin/agencies/${agencyId}/interview-insights`)
+                ]);
+                
+                const result = await agencyResponse.json();
+                const insightsResult = await insightsResponse.json();
                 
                 // Debug: Log the actual response
                 console.log('=== FULL RESPONSE DEBUG ===');
@@ -640,33 +646,7 @@
                 
                 if (result.success && result.data) {
                     const agency = result.data;
-                    console.log('=== AGENCY DATA DEBUG ===');
-                    console.log('Agency data type:', typeof agency);
-                    console.log('Agency is array?', Array.isArray(agency));
-                    console.log('Agency data keys:', Object.keys(agency));
-                    console.log('Total keys:', Object.keys(agency).length);
-                    console.log('Has subscription?', 'subscription' in agency);
-                    console.log('Subscription value:', agency.subscription);
-                    console.log('Subscription type:', typeof agency.subscription);
-                    console.log('Is subscription array?', Array.isArray(agency.subscription));
-                    
-                    // Check all keys for anything containing "subscription"
-                    const subscriptionKeys = Object.keys(agency).filter(k => k.toLowerCase().includes('subscription'));
-                    console.log('Keys containing "subscription":', subscriptionKeys);
-                    
-                    // Log first 10 and last 10 keys to see if subscription is somewhere
-                    const allKeys = Object.keys(agency);
-                    console.log('First 10 keys:', allKeys.slice(0, 10));
-                    console.log('Last 10 keys:', allKeys.slice(-10));
-                    
-                    if (agency.subscription && Array.isArray(agency.subscription)) {
-                        console.log('Subscription array length:', agency.subscription.length);
-                        if (agency.subscription.length > 0) {
-                            console.log('First subscription item:', agency.subscription[0]);
-                            console.log('First subscription keys:', Object.keys(agency.subscription[0]));
-                        }
-                    }
-                    console.log('=== END DEBUG ===');
+                    const insights = insightsResult.success ? insightsResult.data : null;
                     
                     // Format date
                     function formatDate(dateValue) {
@@ -931,6 +911,47 @@
                                     })()}
                                 </div>
                             </div>
+                            
+                            <!-- Interview Insights -->
+                            <div class="card mt-3">
+                                <div class="card-header bg-primary text-white">
+                                    <h6 class="mb-0"><i class="bi bi-graph-up me-2"></i>Interview Insights</h6>
+                                </div>
+                                <div class="card-body">
+                                    ${insights ? `
+                                        <div class="row">
+                                            <div class="col-md-3 mb-3">
+                                                <div class="text-center">
+                                                    <h6 class="text-muted mb-1">Total Interviews</h6>
+                                                    <h3 class="text-primary mb-0">${insights.total_interviews || 0}</h3>
+                                                    ${insights.growth_rate ? `<small class="text-success">📈 ${insights.growth_rate}% from last period</small>` : ''}
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3 mb-3">
+                                                <div class="text-center">
+                                                    <h6 class="text-muted mb-1">Average Score</h6>
+                                                    <h3 class="text-info mb-0">${insights.avg_score || 0}</h3>
+                                                    <small class="text-muted">Out of 100</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3 mb-3">
+                                                <div class="text-center">
+                                                    <h6 class="text-muted mb-1">Hire Rate</h6>
+                                                    <h3 class="text-success mb-0">${insights.hire_rate || 0}%</h3>
+                                                    <small class="text-muted">${insights.recommended_count || 0}/${insights.completed_count || 0} recommended</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3 mb-3">
+                                                <div class="text-center">
+                                                    <h6 class="text-muted mb-1">Completion Rate</h6>
+                                                    <h3 class="text-warning mb-0">${insights.completion_rate || 0}%</h3>
+                                                    <small class="text-muted">${insights.completed_count || 0} completed</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ` : '<div class="alert alert-info">Interview insights not available</div>'}
+                                </div>
+                            </div>
                         </div>
                     `;
                     
@@ -939,7 +960,8 @@
                     detailsDiv.innerHTML = '<div class="alert alert-danger">Failed to load agency details</div>';
                 }
             } catch (error) {
-                detailsDiv.innerHTML = '<div class="alert alert-danger">Error: ' + error.message + '</div>';
+                console.error('Error loading agency details:', error);
+                detailsDiv.innerHTML = '<div class="alert alert-danger">Error loading agency details: ' + error.message + '</div>';
             }
         }
         

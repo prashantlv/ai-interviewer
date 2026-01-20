@@ -221,6 +221,62 @@ async def get_agency_details(
         logger.error(f"❌ Error getting agency details: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/api/v1/admin/agencies/{agency_id}/interview-insights")
+async def get_agency_interview_insights(
+    agency_id: str,
+    admin: AdminUserDep,
+    db: DbServiceDep
+):
+    """Get interview insights/metrics for a specific agency"""
+    try:
+        # Get agency details to extract corporate_email for filtering
+        agency = await hire2inspire_service.get_agency_details(agency_id)
+        if not agency:
+            raise HTTPException(status_code=404, detail="Agency not found")
+        
+        # For now, get all interviews (since interviews don't have agency_id)
+        # TODO: In future, filter by agency_email or add agency_id to interviews
+        all_interviews = await db.get_interviews()
+        
+        # Calculate metrics similar to analytics page
+        total_interviews = len(all_interviews)
+        completed_interviews = [i for i in all_interviews if i.get("status") in ["completed", "ended_by_candidate"]]
+        completed_count = len(completed_interviews)
+        
+        # Average score
+        scored_interviews = [i for i in completed_interviews if i.get("score", 0) > 0]
+        avg_score = round(sum(i.get("score", 0) for i in scored_interviews) / len(scored_interviews), 1) if scored_interviews else 0
+        
+        # Hire rate (score >= 65)
+        recommended_count = len([i for i in completed_interviews if i.get("score", 0) >= 65])
+        hire_rate = round((recommended_count / completed_count * 100), 1) if completed_count > 0 else 0
+        
+        # Completion rate
+        completion_rate = round((completed_count / total_interviews * 100), 1) if total_interviews > 0 else 0
+        
+        # Growth rate (placeholder - could calculate from date range)
+        growth_rate = 0.0  # TODO: Calculate actual growth rate
+        
+        insights = {
+            "total_interviews": total_interviews,
+            "avg_score": avg_score,
+            "hire_rate": hire_rate,
+            "completion_rate": completion_rate,
+            "recommended_count": recommended_count,
+            "completed_count": completed_count,
+            "growth_rate": growth_rate
+        }
+        
+        return JSONResponse({
+            "success": True,
+            "data": insights
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error getting agency interview insights: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/api/v1/admin/replica-requests/{request_id}")
 async def get_replica_request(
     request_id: str,
