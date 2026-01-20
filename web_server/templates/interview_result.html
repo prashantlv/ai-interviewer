@@ -170,7 +170,7 @@
                                 <tbody class="proc-timeline">
                                     {% for v in interview.proctoring.violations[:20] %}
                                     <tr>
-                                        <td>{{ v.timestamp[11:19] if v.timestamp else 'N/A' }}</td>
+                                        <td>{{ v.timestamp|ist_time if v.timestamp else 'N/A' }}</td>
                                         <td>
                                             {% set vtype = (v.type or '') %}
                                             {% if vtype == 'tab_switch' %}

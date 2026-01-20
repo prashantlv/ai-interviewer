@@ -25,6 +25,7 @@ import uvicorn
 import os
 from datetime import datetime
 from typing import Optional, Dict, Any
+import pytz
 
 # Import our modules
 from routers import interviews, dashboard, feedback, bots, tavus, voices, scoring_settings, proctoring, admin
@@ -119,6 +120,45 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 templates.env.auto_reload = True
 templates.env.cache = None  # Completely disable cache
+
+# Add custom Jinja2 filter for IST date formatting
+def format_ist_datetime(dt, format_str='%Y-%m-%d %I:%M %p IST'):
+    """Format datetime in IST timezone"""
+    if not dt:
+        return 'N/A'
+    try:
+        IST = pytz.timezone('Asia/Kolkata')
+        if isinstance(dt, str):
+            # Parse ISO format string
+            dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
+        if dt.tzinfo is None:
+            # Assume UTC if timezone-naive
+            dt = dt.replace(tzinfo=pytz.UTC)
+        ist_dt = dt.astimezone(IST)
+        return ist_dt.strftime(format_str)
+    except Exception as e:
+        return str(dt)
+
+def format_ist_time_only(dt):
+    """Format datetime to show only time in IST"""
+    if not dt:
+        return 'N/A'
+    try:
+        IST = pytz.timezone('Asia/Kolkata')
+        if isinstance(dt, str):
+            dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=pytz.UTC)
+        ist_dt = dt.astimezone(IST)
+        return ist_dt.strftime('%I:%M %p IST')
+    except Exception as e:
+        # Fallback: try to extract time from string
+        if isinstance(dt, str) and len(dt) >= 19:
+            return dt[11:19] + ' IST'
+        return str(dt)
+
+templates.env.filters['ist_datetime'] = format_ist_datetime
+templates.env.filters['ist_time'] = format_ist_time_only
 
 # Make templates available to routers via app state
 app.state.templates = templates

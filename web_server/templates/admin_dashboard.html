@@ -233,7 +233,7 @@
                                                         <code title="User ID: {{ req.submitted_by }}">{{ req.submitted_by[:12] }}...</code>
                                                     {% endif %}
                                                 </td>
-                                                <td>{{ req.submitted_at.strftime('%Y-%m-%d %H:%M') if req.submitted_at else 'N/A' }}</td>
+                                                <td>{{ req.submitted_at|ist_datetime('%Y-%m-%d %I:%M %p IST') if req.submitted_at else 'N/A' }}</td>
                                                 <td><span class="badge bg-secondary">{{ req.model_name }}</span></td>
                                                 <td>
                                                     <button class="btn btn-sm btn-success me-1" onclick="approveRequest('{{ req.request_id }}')">
@@ -284,7 +284,7 @@
                                                     </a>
                                                 </td>
                                                 <td>{{ req.reviewed_by }}</td>
-                                                <td>{{ req.reviewed_at.strftime('%Y-%m-%d %H:%M') if req.reviewed_at else 'N/A' }}</td>
+                                                <td>{{ req.reviewed_at|ist_datetime('%Y-%m-%d %I:%M %p IST') if req.reviewed_at else 'N/A' }}</td>
                                                 <td>
                                                     <button class="btn btn-sm btn-primary" onclick="trainRequest('{{ req.request_id }}')">
                                                         <i class="bi bi-play-fill me-1"></i>Start Training
@@ -330,7 +330,7 @@
                                                         <span class="text-muted">-</span>
                                                     {% endif %}
                                                 </td>
-                                                <td>{{ req.trained_at.strftime('%Y-%m-%d %H:%M') if req.trained_at else 'N/A' }}</td>
+                                                <td>{{ req.trained_at|ist_datetime('%Y-%m-%d %I:%M %p IST') if req.trained_at else 'N/A' }}</td>
                                             </tr>
                                             {% endfor %}
                                         </tbody>
@@ -371,7 +371,7 @@
                                                         <span class="text-muted">-</span>
                                                     {% endif %}
                                                 </td>
-                                                <td>{{ req.completed_at.strftime('%Y-%m-%d %H:%M') if req.completed_at else 'N/A' }}</td>
+                                                <td>{{ req.completed_at|ist_datetime('%Y-%m-%d %I:%M %p IST') if req.completed_at else 'N/A' }}</td>
                                             </tr>
                                             {% endfor %}
                                         </tbody>
@@ -407,7 +407,7 @@
                                                 <td><code>{{ req.request_id }}</code></td>
                                                 <td><strong>{{ req.replica_name }}</strong></td>
                                                 <td>{{ req.reviewed_by }}</td>
-                                                <td>{{ req.reviewed_at.strftime('%Y-%m-%d %H:%M') if req.reviewed_at else 'N/A' }}</td>
+                                                <td>{{ req.reviewed_at|ist_datetime('%Y-%m-%d %I:%M %p IST') if req.reviewed_at else 'N/A' }}</td>
                                                 <td>{{ req.rejection_reason or 'No reason provided' }}</td>
                                             </tr>
                                             {% endfor %}
@@ -696,18 +696,20 @@
                     const agency = result.data;
                     const insights = insightsResult.success ? insightsResult.data : null;
                     
-                    // Format date
+                    // Format date in IST (Indian Standard Time)
                     function formatDate(dateValue) {
                         if (!dateValue) return 'N/A';
                         try {
                             const date = new Date(dateValue);
-                            return date.toLocaleString('en-US', { 
+                            return date.toLocaleString('en-IN', { 
+                                timeZone: 'Asia/Kolkata',
                                 year: 'numeric', 
                                 month: 'long', 
                                 day: 'numeric',
                                 hour: '2-digit',
-                                minute: '2-digit'
-                            });
+                                minute: '2-digit',
+                                hour12: true
+                            }) + ' IST';
                         } catch {
                             return dateValue;
                         }

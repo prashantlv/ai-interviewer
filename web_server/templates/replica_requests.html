@@ -128,7 +128,7 @@
                                 <td><strong>{{ req.replica_name }}</strong></td>
                                 <td>
                                     {% if req.submitted_at %}
-                                        {{ req.submitted_at.strftime('%Y-%m-%d %H:%M') if req.submitted_at is not string else req.submitted_at }}
+                                        {{ req.submitted_at|ist_datetime('%Y-%m-%d %I:%M %p IST') if req.submitted_at is not string else (req.submitted_at|ist_datetime('%Y-%m-%d %I:%M %p IST') if req.submitted_at else 'N/A') }}
                                     {% else %}
                                         N/A
                                     {% endif %}
@@ -171,7 +171,7 @@
                                 <td><strong>{{ req.replica_name }}</strong></td>
                                 <td>
                                     {% if req.reviewed_at %}
-                                        {{ req.reviewed_at.strftime('%Y-%m-%d %H:%M') if req.reviewed_at is not string else req.reviewed_at }}
+                                        {{ req.reviewed_at|ist_datetime('%Y-%m-%d %I:%M %p IST') if req.reviewed_at is not string else (req.reviewed_at|ist_datetime('%Y-%m-%d %I:%M %p IST') if req.reviewed_at else 'N/A') }}
                                     {% else %}
                                         N/A
                                     {% endif %}
@@ -222,7 +222,7 @@
                                 </td>
                                 <td>
                                     {% if req.trained_at %}
-                                        {{ req.trained_at.strftime('%Y-%m-%d %H:%M') if req.trained_at is not string else req.trained_at }}
+                                        {{ req.trained_at|ist_datetime('%Y-%m-%d %I:%M %p IST') if req.trained_at is not string else (req.trained_at|ist_datetime('%Y-%m-%d %I:%M %p IST') if req.trained_at else 'N/A') }}
                                     {% else %}
                                         N/A
                                     {% endif %}
@@ -273,7 +273,7 @@
                                 </td>
                                 <td>
                                     {% if req.completed_at %}
-                                        {{ req.completed_at.strftime('%Y-%m-%d %H:%M') if req.completed_at is not string else req.completed_at }}
+                                        {{ req.completed_at|ist_datetime('%Y-%m-%d %I:%M %p IST') if req.completed_at is not string else (req.completed_at|ist_datetime('%Y-%m-%d %I:%M %p IST') if req.completed_at else 'N/A') }}
                                     {% else %}
                                         N/A
                                     {% endif %}
@@ -317,7 +317,7 @@
                                 <td><strong>{{ req.replica_name }}</strong></td>
                                 <td>
                                     {% if req.reviewed_at %}
-                                        {{ req.reviewed_at.strftime('%Y-%m-%d %H:%M') if req.reviewed_at is not string else req.reviewed_at }}
+                                        {{ req.reviewed_at|ist_datetime('%Y-%m-%d %I:%M %p IST') if req.reviewed_at is not string else (req.reviewed_at|ist_datetime('%Y-%m-%d %I:%M %p IST') if req.reviewed_at else 'N/A') }}
                                     {% else %}
                                         N/A
                                     {% endif %}

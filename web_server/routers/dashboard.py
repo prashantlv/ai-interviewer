@@ -30,6 +30,7 @@ async def dashboard_home(
         # Use dependency-injected db service
         if db and db.database is not None:
             # Get ALL interviews for dashboard stats (use large limit)
+            # Note: get_interviews now returns full documents including proctoring
             interviews = await db.get_interviews(limit=1000, offset=0)
         else:
             print("⚠️ Database service not available")
@@ -265,25 +266,51 @@ async def interviews_page(
             
             # Calculate duration from proctoring data
             duration_display = "N/A"
-            proctoring = interview.get("proctoring", {})
+            proctoring = interview.get("proctoring")
+            
+            # Debug logging
+            if proctoring:
+                print(f"🔍 DEBUG Duration: Interview {interview_id} has proctoring data: {bool(proctoring.get('start_time'))} start, {bool(proctoring.get('end_time'))} end")
+            
             if proctoring and proctoring.get("start_time") and proctoring.get("end_time"):
                 try:
-                    start_time = datetime.fromisoformat(proctoring["start_time"].replace('Z', '+00:00'))
-                    end_time = datetime.fromisoformat(proctoring["end_time"].replace('Z', '+00:00'))
+                    start_time_str = proctoring["start_time"]
+                    end_time_str = proctoring["end_time"]
+                    
+                    # Parse ISO format datetime strings
+                    start_time = datetime.fromisoformat(start_time_str.replace('Z', '+00:00'))
+                    end_time = datetime.fromisoformat(end_time_str.replace('Z', '+00:00'))
+                    
                     duration_delta = end_time - start_time
                     total_seconds = int(duration_delta.total_seconds())
-                    hours = total_seconds // 3600
-                    minutes = (total_seconds % 3600) // 60
-                    seconds = total_seconds % 60
                     
-                    if hours > 0:
-                        duration_display = f"{hours}h {minutes}m {seconds}s"
-                    elif minutes > 0:
-                        duration_display = f"{minutes}m {seconds}s"
+                    if total_seconds < 0:
+                        print(f"⚠️ Negative duration for {interview_id}: {total_seconds}s")
+                        duration_display = "N/A"
                     else:
-                        duration_display = f"{seconds}s"
+                        hours = total_seconds // 3600
+                        minutes = (total_seconds % 3600) // 60
+                        seconds = total_seconds % 60
+                        
+                        if hours > 0:
+                            duration_display = f"{hours}h {minutes}m {seconds}s"
+                        elif minutes > 0:
+                            duration_display = f"{minutes}m {seconds}s"
+                        else:
+                            duration_display = f"{seconds}s"
+                        
+                        print(f"✅ Duration calculated for {interview_id}: {duration_display}")
                 except Exception as e:
-                    print(f"⚠️ Error calculating duration: {e}")
+                    print(f"⚠️ Error calculating duration for {interview_id}: {e}")
+                    import traceback
+                    traceback.print_exc()
+            else:
+                if not proctoring:
+                    print(f"⚠️ No proctoring data for interview {interview_id}")
+                elif not proctoring.get("start_time"):
+                    print(f"⚠️ No start_time in proctoring for interview {interview_id}")
+                elif not proctoring.get("end_time"):
+                    print(f"⚠️ No end_time in proctoring for interview {interview_id}")
             
             interview_list.append({
                 "id": interview.get("id", "unknown"),
@@ -524,7 +551,7 @@ async def interview_detail(
     return templates.TemplateResponse("interview_result.html", {
         "request": request,
         "interview": interview_data,
-        "current_date": datetime.now().strftime("%B %d, %Y")
+        "current_date": datetime.now(timezone.utc).astimezone(pytz.timezone('Asia/Kolkata')).strftime("%B %d, %Y %I:%M %p IST")
     })
 
 @router.get("/schedule", response_class=HTMLResponse)
@@ -1215,7 +1242,7 @@ async def system_health_page(
         "request": request,
         "system_status": system_status,
         "uptime": "Running",
-        "last_check": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "last_check": datetime.now(timezone.utc).astimezone(pytz.timezone('Asia/Kolkata')).strftime("%Y-%m-%d %I:%M:%S %p IST"),
         "active_services": active_services,
         "total_services": total_services,
         "health_score": health_score,

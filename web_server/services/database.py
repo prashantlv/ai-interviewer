@@ -289,8 +289,10 @@ class DatabaseService:
                     if date_value and hasattr(date_value, 'isoformat'):
                         date_value = date_value.isoformat()
                     
+                    # Include full document data (including proctoring) for duration calculation
                     results.append({
                         "id": doc.get("interview_id", "unknown"),
+                        "interview_id": doc.get("interview_id", "unknown"),  # Add interview_id for consistency
                         "candidate_name": evaluation.get("candidate_name", "Unknown"),
                         "candidate_email": evaluation.get("candidate_email", "N/A"),
                         "position": evaluation.get("position", "Unknown Position"),
@@ -299,7 +301,11 @@ class DatabaseService:
                         "created_at": date_value,
                         "scheduled_date": date_value,  # Alias for compatibility
                         "interview_type": evaluation.get("interview_type", "technical"),
-                        "transcript_available": bool(doc.get("transcript") and doc.get("transcript") != "Interview scheduled - waiting for completion")
+                        "transcript_available": bool(doc.get("transcript") and doc.get("transcript") != "Interview scheduled - waiting for completion"),
+                        # Include proctoring data for duration calculation
+                        "proctoring": doc.get("proctoring"),
+                        # Include evaluation for scheduled_date extraction
+                        "evaluation": evaluation
                     })
                 
                 return results
