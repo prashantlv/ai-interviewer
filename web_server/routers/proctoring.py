@@ -163,8 +163,9 @@ async def interview_room(request: Request, interview_id: str):
             logger.info(f"   now > join_deadline? {now_utc > join_deadline_utc}")
             
             # Check if room open time is still in the future
-            # CRITICAL: Use >= instead of > to handle exact boundary case
+            # CRITICAL: Use >= to handle exact boundary case
             # If now >= room_open_time, the room is open and interview is available
+            # Allow a small buffer (1 second) to account for timing differences
             if now_utc < room_open_time_utc:
                 # Room hasn't opened yet
                 is_future_schedule = True

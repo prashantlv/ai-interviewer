@@ -545,29 +545,9 @@
         }
         
         // Format scheduled datetime and show countdown if future schedule
+        // Note: The actual join interface enablement is handled in DOMContentLoaded listener below
         if (IS_FUTURE_SCHEDULE && SCHEDULED_DATETIME) {
             const scheduledTime = new Date(SCHEDULED_DATETIME);
-            const now = new Date();
-            
-            // Double-check if scheduled time has actually passed (client-side validation)
-            // Room opens 10 minutes before scheduled time
-            const roomOpenTime = new Date(scheduledTime.getTime() - 10 * 60 * 1000);
-            
-            console.log('Scheduled time check:', {
-                scheduledTime: scheduledTime.toISOString(),
-                roomOpenTime: roomOpenTime.toISOString(),
-                now: now.toISOString(),
-                isFuture: now < roomOpenTime,
-                IS_FUTURE_SCHEDULE: IS_FUTURE_SCHEDULE
-            });
-            
-            if (now >= roomOpenTime) {
-                // Scheduled time has passed - reload page to show normal join interface
-                console.log('✅ Scheduled time has passed, reloading page to enable join...');
-                location.reload();
-                return;
-            }
-            
             const timeDisplay = document.getElementById('scheduled-time-display');
             if (timeDisplay) {
                 // Display time in IST (Asia/Kolkata)
@@ -697,11 +677,52 @@
         // Only request permissions if interview is NOT scheduled for future
         window.addEventListener('DOMContentLoaded', () => {
             console.log('📄 Page loaded - IS_FUTURE_SCHEDULE:', IS_FUTURE_SCHEDULE);
+            console.log('📄 SCHEDULED_DATETIME:', SCHEDULED_DATETIME);
+            console.log('📄 JOIN_DEADLINE:', JOIN_DEADLINE);
+            
+            // Double-check if scheduled time has actually passed (client-side validation)
+            if (IS_FUTURE_SCHEDULE && SCHEDULED_DATETIME) {
+                const scheduledTime = new Date(SCHEDULED_DATETIME);
+                const now = new Date();
+                // Room opens 10 minutes before scheduled time
+                const roomOpenTime = new Date(scheduledTime.getTime() - 10 * 60 * 1000);
+                
+                console.log('🔍 Client-side time check:', {
+                    scheduledTime: scheduledTime.toISOString(),
+                    roomOpenTime: roomOpenTime.toISOString(),
+                    now: now.toISOString(),
+                    isFuture: now < roomOpenTime,
+                    IS_FUTURE_SCHEDULE: IS_FUTURE_SCHEDULE
+                });
+                
+                // If room open time has passed, override IS_FUTURE_SCHEDULE
+                if (now >= roomOpenTime) {
+                    console.log('✅ Room open time has passed - enabling join interface');
+                    IS_FUTURE_SCHEDULE = false;
+                    // Remove the "Interview Not Available Yet" message if present
+                    const scheduledMsg = document.querySelector('.scheduled-message');
+                    if (scheduledMsg) {
+                        scheduledMsg.style.display = 'none';
+                    }
+                    // Enable the join button
+                    const joinBtn = document.getElementById('join-btn');
+                    if (joinBtn) {
+                        joinBtn.textContent = 'Join Interview';
+                        joinBtn.onclick = startInterview;
+                    }
+                    // Request permissions
+                    requestPermissionsAndShowPreview();
+                    return;
+                } else {
+                    console.log('⏰ Interview scheduled for future - skipping permission request');
+                    return;
+                }
+            }
+            
+            // If not a future schedule, request permissions immediately
             if (!IS_FUTURE_SCHEDULE) {
                 console.log('📄 Requesting permissions (proctoring NOT active yet)');
                 requestPermissionsAndShowPreview();
-            } else {
-                console.log('⏰ Interview scheduled for future - skipping permission request');
             }
         });
         
