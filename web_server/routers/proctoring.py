@@ -115,6 +115,7 @@ async def interview_room(request: Request, interview_id: str):
     scheduled_date_str = evaluation.get("scheduled_date")
     is_future_schedule = False
     scheduled_datetime = None
+    scheduled_datetime_utc = None
     join_deadline_utc = None  # 10 minutes after scheduled time
     
     if scheduled_date_str:
@@ -240,7 +241,7 @@ async def interview_room(request: Request, interview_id: str):
             "api_base": api_base,
             "interview_config_json": interview_config_json,
             "is_future_schedule": is_future_schedule,
-            "scheduled_datetime": scheduled_datetime.isoformat() if scheduled_datetime else None,
+            "scheduled_datetime": scheduled_datetime_utc.isoformat() if scheduled_datetime_utc else (scheduled_datetime.isoformat() if scheduled_datetime else None),
             "join_deadline": join_deadline_utc.isoformat() if join_deadline_utc else None
         }
     )

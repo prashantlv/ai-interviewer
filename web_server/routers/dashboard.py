@@ -628,6 +628,12 @@ async def create_interview(
                 now_utc = datetime.now(timezone.utc)
                 delay_timedelta = scheduled_datetime - now_utc
                 bot_delay_seconds = int(delay_timedelta.total_seconds())
+                
+                # Safety check: ensure delay is not negative (shouldn't happen due to validation, but safeguard)
+                if bot_delay_seconds < 0:
+                    print(f"⚠️ Bot delay is negative ({bot_delay_seconds}s) - scheduling immediately instead")
+                    bot_delay_seconds = 0
+                
                 print(f"⏰ Bot will start in {bot_delay_seconds} seconds ({delay_timedelta})")
                 print(f"⏰ Room will be available 10 minutes before bot starts")
             
