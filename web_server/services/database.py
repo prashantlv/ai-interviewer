@@ -620,10 +620,11 @@ class DatabaseService:
     async def list_replica_requests(
         self,
         status: Optional[str] = None,
+        submitted_by: Optional[str] = None,
         limit: int = 100,
         offset: int = 0
     ) -> List[Dict[str, Any]]:
-        """List replica requests with optional status filter"""
+        """List replica requests with optional status and submitted_by filter"""
         if self.database is None:
             return []
         
@@ -631,6 +632,8 @@ class DatabaseService:
             query = {}
             if status:
                 query["status"] = status
+            if submitted_by:
+                query["submitted_by"] = submitted_by
             
             requests = []
             cursor = self.database.replica_requests.find(query).sort(

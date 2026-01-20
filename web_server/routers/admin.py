@@ -149,6 +149,7 @@ async def admin_dashboard(
 @router.get("/api/v1/admin/replica-requests")
 async def list_replica_requests(
     admin: AdminUserDep,
+    db: DbServiceDep,
     status: Optional[str] = None,
     limit: int = 100,
     offset: int = 0

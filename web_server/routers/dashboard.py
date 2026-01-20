@@ -1058,3 +1058,56 @@ async def generate_interview_link(
     except Exception as e:
         print(f"❌ Error generating interview link: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/replica-requests", response_class=HTMLResponse)
+async def replica_requests_page(
+    request: Request,
+    db: DbServiceDep,
+    current_user: CurrentUserDep
+):
+    """Display user's replica requests status"""
+    try:
+        # Get user identifier from JWT token
+        user_id = current_user.get("userId", "unknown")
+        payload = current_user.get("payload", {})
+        user_email = payload.get("email") or payload.get("userEmail") or None
+        
+        # Use email if available, otherwise user_id (matches how requests are stored)
+        submitted_by = user_email if user_email else user_id
+        
+        # Get all replica requests for this user
+        all_requests = await db.list_replica_requests(
+            submitted_by=submitted_by,
+            limit=1000
+        )
+        
+        # Group by status
+        pending_requests = [r for r in all_requests if r.get("status") == "pending"]
+        approved_requests = [r for r in all_requests if r.get("status") == "approved"]
+        rejected_requests = [r for r in all_requests if r.get("status") == "rejected"]
+        training_requests = [r for r in all_requests if r.get("status") == "training"]
+        completed_requests = [r for r in all_requests if r.get("status") == "completed"]
+        
+        stats = {
+            "total": len(all_requests),
+            "pending": len(pending_requests),
+            "approved": len(approved_requests),
+            "rejected": len(rejected_requests),
+            "training": len(training_requests),
+            "completed": len(completed_requests)
+        }
+        
+        return templates.TemplateResponse("replica_requests.html", {
+            "request": request,
+            "pending_requests": pending_requests,
+            "approved_requests": approved_requests,
+            "rejected_requests": rejected_requests,
+            "training_requests": training_requests,
+            "completed_requests": completed_requests,
+            "stats": stats
+        })
+    except Exception as e:
+        print(f"❌ Error loading replica requests: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))

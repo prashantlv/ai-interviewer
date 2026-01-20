@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+
+{% block title %}Replica Requests - AI Interviewer{% endblock %}
+
+{% block page_title %}Replica Requests{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stat-card {
+        border: none;
+        border-radius: 12px;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    .status-badge {
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+    .status-pending { background-color: #fef3c7; color: #92400e; }
+    .status-approved { background-color: #dbeafe; color: #1e40af; }
+    .status-rejected { background-color: #fee2e2; color: #991b1b; }
+    .status-training { background-color: #e0e7ff; color: #4338ca; }
+    .status-completed { background-color: #d1fae5; color: #065f46; }
+    .table th {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: #6c757d;
+        border-bottom: 2px solid #dee2e6;
+    }
+    .table td { vertical-align: middle; font-size: 0.875rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Stats Overview -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+        <div class="card stat-card h-100">
+            <div class="card-body py-3">
+                <div class="text-primary text-uppercase small fw-bold mb-1">Total Requests</div>
+                <div class="h3 mb-0 fw-bold">{{ stats.total }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card stat-card h-100">
+            <div class="card-body py-3">
+                <div class="text-warning text-uppercase small fw-bold mb-1">Pending</div>
+                <div class="h3 mb-0 fw-bold">{{ stats.pending }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card stat-card h-100">
+            <div class="card-body py-3">
+                <div class="text-info text-uppercase small fw-bold mb-1">Approved</div>
+                <div class="h3 mb-0 fw-bold">{{ stats.approved }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card stat-card h-100">
+            <div class="card-body py-3">
+                <div class="text-success text-uppercase small fw-bold mb-1">Completed</div>
+                <div class="h3 mb-0 fw-bold">{{ stats.completed }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs Navigation -->
+<ul class="nav nav-tabs mb-4" id="requestTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button" role="tab">
+            Pending <span class="badge bg-warning ms-1">{{ stats.pending }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="approved-tab" data-bs-toggle="tab" data-bs-target="#approved" type="button" role="tab">
+            Approved <span class="badge bg-info ms-1">{{ stats.approved }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="training-tab" data-bs-toggle="tab" data-bs-target="#training" type="button" role="tab">
+            Training <span class="badge bg-primary ms-1">{{ stats.training }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="completed-tab" data-bs-toggle="tab" data-bs-target="#completed" type="button" role="tab">
+            Completed <span class="badge bg-success ms-1">{{ stats.completed }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="rejected-tab" data-bs-toggle="tab" data-bs-target="#rejected" type="button" role="tab">
+            Rejected <span class="badge bg-danger ms-1">{{ stats.rejected }}</span>
+        </button>
+    </li>
+</ul>
+
+<!-- Tab Content -->
+<div class="tab-content" id="requestTabsContent">
+    <!-- Pending Requests -->
+    <div class="tab-pane fade show active" id="pending" role="tabpanel">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Pending Requests</h5>
+                {% if pending_requests %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Request ID</th>
+                                <th>Replica Name</th>
+                                <th>Submitted At</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for req in pending_requests %}
+                            <tr>
+                                <td><code>{{ req.request_id }}</code></td>
+                                <td><strong>{{ req.replica_name }}</strong></td>
+                                <td>
+                                    {% if req.submitted_at %}
+                                        {{ req.submitted_at.strftime('%Y-%m-%d %H:%M') if req.submitted_at is not string else req.submitted_at }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="status-badge status-pending">Pending</span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4">No pending requests</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Approved Requests -->
+    <div class="tab-pane fade" id="approved" role="tabpanel">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Approved Requests</h5>
+                {% if approved_requests %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Request ID</th>
+                                <th>Replica Name</th>
+                                <th>Approved At</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for req in approved_requests %}
+                            <tr>
+                                <td><code>{{ req.request_id }}</code></td>
+                                <td><strong>{{ req.replica_name }}</strong></td>
+                                <td>
+                                    {% if req.reviewed_at %}
+                                        {{ req.reviewed_at.strftime('%Y-%m-%d %H:%M') if req.reviewed_at is not string else req.reviewed_at }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="status-badge status-approved">Approved</span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4">No approved requests</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Training Requests -->
+    <div class="tab-pane fade" id="training" role="tabpanel">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Training Requests</h5>
+                {% if training_requests %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Request ID</th>
+                                <th>Replica Name</th>
+                                <th>Replica ID</th>
+                                <th>Training Started</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for req in training_requests %}
+                            <tr>
+                                <td><code>{{ req.request_id }}</code></td>
+                                <td><strong>{{ req.replica_name }}</strong></td>
+                                <td>
+                                    {% if req.tavus_replica_id %}
+                                        <code>{{ req.tavus_replica_id }}</code>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if req.trained_at %}
+                                        {{ req.trained_at.strftime('%Y-%m-%d %H:%M') if req.trained_at is not string else req.trained_at }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="status-badge status-training">Training</span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4">No requests in training</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Completed Requests -->
+    <div class="tab-pane fade" id="completed" role="tabpanel">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Completed Requests</h5>
+                {% if completed_requests %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Request ID</th>
+                                <th>Replica Name</th>
+                                <th>Replica ID</th>
+                                <th>Completed At</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for req in completed_requests %}
+                            <tr>
+                                <td><code>{{ req.request_id }}</code></td>
+                                <td><strong>{{ req.replica_name }}</strong></td>
+                                <td>
+                                    {% if req.tavus_replica_id %}
+                                        <code>{{ req.tavus_replica_id }}</code>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if req.completed_at %}
+                                        {{ req.completed_at.strftime('%Y-%m-%d %H:%M') if req.completed_at is not string else req.completed_at }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="status-badge status-completed">Completed</span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4">No completed requests</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Rejected Requests -->
+    <div class="tab-pane fade" id="rejected" role="tabpanel">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Rejected Requests</h5>
+                {% if rejected_requests %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Request ID</th>
+                                <th>Replica Name</th>
+                                <th>Rejected At</th>
+                                <th>Reason</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for req in rejected_requests %}
+                            <tr>
+                                <td><code>{{ req.request_id }}</code></td>
+                                <td><strong>{{ req.replica_name }}</strong></td>
+                                <td>
+                                    {% if req.reviewed_at %}
+                                        {{ req.reviewed_at.strftime('%Y-%m-%d %H:%M') if req.reviewed_at is not string else req.reviewed_at }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if req.rejection_reason %}
+                                        <small class="text-muted">{{ req.rejection_reason }}</small>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="status-badge status-rejected">Rejected</span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4">No rejected requests</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
