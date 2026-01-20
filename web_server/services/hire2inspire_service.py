@@ -26,17 +26,45 @@ class Hire2InspireService:
         self.token_expiry: Optional[datetime] = None
         if self.token:
             # Token valid for 24 hours from now if manually provided
+            # Note: If token is provided via env var, we'll use it even if "expired"
+            # The API will reject it if truly invalid
             self.token_expiry = datetime.now() + timedelta(hours=24)
-            logger.info("✅ Using pre-configured access token")
+            logger.info("✅ Using pre-configured access token from H2I_ACCESS_TOKEN")
+        else:
+            logger.warning("⚠️ H2I_ACCESS_TOKEN not set - will attempt login with credentials")
         
     async def _ensure_token(self) -> str:
         """Ensure we have a valid token, refresh if needed"""
-        if self.token and self.token_expiry and datetime.now() < self.token_expiry:
+        # If we have a pre-configured token from env var, prefer it (don't try to login)
+        env_token = os.getenv("H2I_ACCESS_TOKEN")
+        if env_token:
+            logger.info("✅ Using token from H2I_ACCESS_TOKEN environment variable")
+            self.token = env_token
+            self.token_expiry = datetime.now() + timedelta(hours=24)  # Assume valid for 24h
             return self.token
+        
+        # If we have a token and it's not expired, use it
+        if self.token and self.token_expiry and datetime.now() < self.token_expiry:
+            logger.debug("✅ Using existing valid token")
+            return self.token
+        
+        # If token exists but expired, try to login
+        if self.token:
+            logger.warning("⚠️ Token expired, attempting to login...")
+        else:
+            logger.info("🔑 No token found, attempting to login...")
             
         # Login to get new token
-        await self._login()
-        return self.token
+        try:
+            await self._login()
+            return self.token
+        except Exception as e:
+            logger.error(f"❌ Login failed: {e}")
+            # If login fails but we have a token (even if expired), try using it anyway
+            if self.token:
+                logger.warning(f"⚠️ Login failed, but attempting to use existing token anyway")
+                return self.token
+            raise
     
     async def _login(self):
         """Login to Hire2Inspire and get access token"""
@@ -225,7 +253,22 @@ class Hire2InspireService:
     async def get_agency_list(self) -> List[Dict[str, Any]]:
         """Get list of all registered agencies"""
         try:
-            token = await self._ensure_token()
+            # Try to get token, but if login fails, try with existing token anyway
+            token = None
+            try:
+                token = await self._ensure_token()
+            except Exception as login_error:
+                logger.warning(f"⚠️ Token acquisition failed: {login_error}")
+                # If we have a token set via env var, use it even if expired
+                if self.token:
+                    logger.info("🔄 Attempting to use token from environment variable")
+                    token = self.token
+                else:
+                    raise
+            
+            if not token:
+                logger.error("❌ No token available for API call")
+                return []
             
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(
@@ -242,6 +285,11 @@ class Hire2InspireService:
                 response_text = response.text
                 logger.debug(f"📋 Agency list API response: {response_text[:500]}")
                 
+                # Check for authentication errors
+                if response.status_code == 401:
+                    logger.error("❌ Authentication failed - token may be invalid or expired")
+                    return []
+                
                 response.raise_for_status()
                 data = response.json()
                 
@@ -253,6 +301,11 @@ class Hire2InspireService:
                     # Response is directly a list
                     agencies = data
                 elif isinstance(data, dict):
+                    # Check for error first
+                    if data.get("error"):
+                        logger.error(f"❌ API returned error: {data.get('message', 'Unknown error')}")
+                        return []
+                    
                     # Check for data field
                     if "data" in data:
                         if isinstance(data["data"], list):
@@ -270,7 +323,8 @@ class Hire2InspireService:
                 return agencies
                     
         except httpx.HTTPStatusError as e:
-            logger.error(f"❌ HTTP error fetching agencies: {e.response.status_code} - {e.response.text}")
+            error_text = e.response.text[:200] if e.response.text else "No error message"
+            logger.error(f"❌ HTTP error fetching agencies: {e.response.status_code} - {error_text}")
             return []
         except Exception as e:
             logger.error(f"❌ Failed to fetch agencies: {e}", exc_info=True)
