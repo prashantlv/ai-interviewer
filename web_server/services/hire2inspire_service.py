@@ -378,15 +378,17 @@ class Hire2InspireService:
                             logger.warning(f"⚠️ data.data is not a dict, it's: {type(data['data'])}")
                 
                 # Extract agency details from response
+                # IMPORTANT: Use deep copy or direct assignment to preserve ALL fields including subscription
                 agency_data = None
                 if isinstance(data, dict):
                     if "data" in data:
-                        agency_data = data["data"].copy() if isinstance(data["data"], dict) else data["data"]
-                        logger.info(f"📋 Extracted agency_data from data.data")
+                        # Direct assignment to preserve all fields (don't use .copy() as it might cause issues)
+                        agency_data = data["data"]
+                        logger.info(f"📋 Extracted agency_data from data.data (direct assignment)")
                         logger.info(f"📋 Agency data type: {type(agency_data)}")
                         if isinstance(agency_data, dict):
                             logger.info(f"📋 Agency data keys count: {len(agency_data)}")
-                            logger.info(f"📋 Agency data keys: {list(agency_data.keys())}")
+                            logger.info(f"📋 Agency data ALL keys: {list(agency_data.keys())}")
                             # Explicitly check subscription right after extraction
                             if "subscription" in agency_data:
                                 logger.info(f"✅ Subscription EXISTS in agency_data after extraction!")
@@ -395,21 +397,18 @@ class Hire2InspireService:
                                     logger.info(f"✅ Subscription is array with {len(agency_data['subscription'])} items")
                                     if len(agency_data['subscription']) > 0:
                                         logger.info(f"✅ First subscription item keys: {list(agency_data['subscription'][0].keys())}")
+                                        logger.info(f"✅ First subscription status: {agency_data['subscription'][0].get('status')}")
                             else:
                                 logger.error(f"❌ Subscription NOT in agency_data after extraction!")
-                                # Try to manually add it if it exists in original
-                                if isinstance(data["data"], dict) and "subscription" in data["data"]:
-                                    logger.warning(f"⚠️ Subscription exists in original data['data'] but missing from copy - fixing!")
-                                    agency_data["subscription"] = data["data"]["subscription"]
-                                    logger.info(f"✅ Manually added subscription to agency_data")
+                                logger.error(f"❌ This should not happen if subscription is in data.data")
                     else:
                         # Response might be the agency data directly
-                        agency_data = data.copy() if isinstance(data, dict) else data
+                        agency_data = data
                         logger.info(f"📋 Using response as agency data directly")
                         if isinstance(agency_data, dict) and "subscription" in agency_data:
                             logger.info(f"✅ Subscription found in direct response")
                 elif isinstance(data, list) and len(data) > 0:
-                    agency_data = data[0].copy() if isinstance(data[0], dict) else data[0]
+                    agency_data = data[0]
                     logger.info(f"📋 Using first item from list response")
                     if isinstance(agency_data, dict) and "subscription" in agency_data:
                         logger.info(f"✅ Subscription found in list item")
