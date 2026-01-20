@@ -704,19 +704,24 @@
                         return null;
                     }
                     
-                    // Extract values with fallbacks for different naming conventions and nested structures
-                    const firstName = getValue(agency, 'first_name', 'firstName', 'firstname', 'user.first_name', 'user.firstName', 'contact.first_name');
-                    const lastName = getValue(agency, 'last_name', 'lastName', 'lastname', 'user.last_name', 'user.lastName', 'contact.last_name');
-                    const personalEmail = getValue(agency, 'personal_email', 'personalEmail', 'personalemail', 'user.personal_email', 'contact.personal_email', 'email');
-                    const personalPhone = getValue(agency, 'personal_phone', 'personalPhone', 'personalphone', 'user.personal_phone', 'contact.personal_phone', 'phone');
-                    const extension = getValue(agency, 'extension', 'phone_extension', 'phoneExtension', 'user.extension', 'contact.extension');
-                    const linkedinUrl = getValue(agency, 'personal_linkedin_url', 'personalLinkedinUrl', 'linkedin_url', 'linkedinUrl', 'linkedin', 'user.personal_linkedin_url', 'contact.linkedin');
-                    const agencyLocation = getValue(agency, 'agency_location', 'agencyLocation', 'location', 'city', 'address.city', 'address.location');
-                    const createdAt = getValue(agency, 'createdAt', 'created_at', 'created', 'dateCreated');
-                    const loginTime = getValue(agency, 'login_time', 'loginTime', 'last_login', 'lastLogin');
+                    // Extract values - contact person fields are in agency_account_info
+                    const accountInfo = agency.agency_account_info || {};
+                    const firstName = accountInfo.first_name || getValue(agency, 'first_name', 'firstName');
+                    const lastName = accountInfo.last_name || getValue(agency, 'last_name', 'lastName');
+                    const personalEmail = accountInfo.personal_email || getValue(agency, 'personal_email', 'personalEmail');
+                    const personalPhone = accountInfo.personal_phone || getValue(agency, 'personal_phone', 'personalPhone');
+                    const extension = accountInfo.extension || getValue(agency, 'extension');
+                    const linkedinUrl = accountInfo.personal_linkedin_url || getValue(agency, 'personal_linkedin_url', 'linkedin_url');
+                    const agencyLocation = accountInfo.agency_location || getValue(agency, 'agency_location', 'location');
+                    const createdAt = getValue(agency, 'createdAt', 'created_at', 'created');
+                    const loginTime = getValue(agency, 'login_time', 'loginTime', 'last_login');
                     
-                    // Get subscription - might be nested or at root
-                    const subscription = agency.subscription || agency.subscription_data || agency.subscriptionInfo || {};
+                    // Get subscription - it's an array, get the first active one or first one
+                    let subscription = {};
+                    if (agency.subscription && Array.isArray(agency.subscription) && agency.subscription.length > 0) {
+                        // Find active subscription first, otherwise use first one
+                        subscription = agency.subscription.find(sub => sub.status === 'active') || agency.subscription[0];
+                    }
                     
                     let html = `
                         <div class="agency-details">
