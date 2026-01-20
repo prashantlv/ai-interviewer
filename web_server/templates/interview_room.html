@@ -524,8 +524,8 @@
         let CANDIDATE_NAME = '';
         let API_BASE = '';
         let IS_FUTURE_SCHEDULE = {{ 'true' if is_future_schedule else 'false' }};
-        let SCHEDULED_DATETIME = {{ ('"' + scheduled_datetime + '"') if scheduled_datetime else 'null' }};
-        let JOIN_DEADLINE = {{ ('"' + join_deadline + '"') if join_deadline else 'null' }};
+        let SCHEDULED_DATETIME = {% if scheduled_datetime %}{{ scheduled_datetime|tojson }}{% else %}null{% endif %};
+        let JOIN_DEADLINE = {% if join_deadline %}{{ join_deadline|tojson }}{% else %}null{% endif %};
         
         console.log('📋 INITIAL VALUES:', {
             IS_FUTURE_SCHEDULE: IS_FUTURE_SCHEDULE,
