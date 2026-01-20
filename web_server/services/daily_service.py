@@ -31,7 +31,8 @@ class DailyService:
         interview_id: str,
         candidate_name: str = "Candidate",
         expires_in_minutes: Optional[int] = None,
-        scheduled_time: Optional[datetime] = None
+        scheduled_time: Optional[datetime] = None,
+        scheduled_datetime: Optional[datetime] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Create a unique Daily.co room for an interview
@@ -40,7 +41,8 @@ class DailyService:
             interview_id: Unique interview identifier
             candidate_name: Name of the candidate (for room name)
             expires_in_minutes: Room expiration time (default: 60 minutes)
-            scheduled_time: Optional datetime when room should become available (sets nbf)
+            scheduled_time: Optional datetime when room should become available (sets nbf) - usually 10 min before scheduled_datetime
+            scheduled_datetime: Optional actual scheduled interview time (used for exp calculation)
             
         Returns:
             Dict with room details including URL, or None if failed
@@ -55,11 +57,17 @@ class DailyService:
         
         # Calculate expiry timestamp
         if scheduled_time:
-            # For scheduled rooms: exp = scheduled_time + expiration duration
-            exp_datetime = scheduled_time + timedelta(minutes=room_exp_minutes)
+            # For scheduled rooms: 
+            # nbf = scheduled_time (room opens at this time, usually 10 min before scheduled_datetime)
+            # exp = scheduled_datetime + expiration duration (room expires 1 hour after actual interview time)
+            # If scheduled_datetime is not provided, fall back to scheduled_time + expiration
+            if scheduled_datetime:
+                exp_datetime = scheduled_datetime + timedelta(minutes=room_exp_minutes)
+            else:
+                exp_datetime = scheduled_time + timedelta(minutes=room_exp_minutes)
             exp_timestamp = int(exp_datetime.timestamp())
             nbf_timestamp = int(scheduled_time.timestamp())
-            logger.info(f"📅 Scheduled room: nbf={nbf_timestamp} ({scheduled_time}), exp={exp_timestamp} ({exp_datetime})")
+            logger.info(f"📅 Scheduled room: nbf={nbf_timestamp} ({scheduled_time}), exp={exp_timestamp} ({exp_datetime}), scheduled_datetime={scheduled_datetime}")
         else:
             # For immediate rooms: exp = now + expiration duration
             exp_timestamp = self._calculate_expiry(room_exp_minutes)
@@ -127,7 +135,8 @@ class DailyService:
         self,
         room_name: str,
         expires_in_minutes: Optional[int] = None,
-        not_before: Optional[datetime] = None
+        not_before: Optional[datetime] = None,
+        scheduled_datetime: Optional[datetime] = None
     ) -> Optional[str]:
         """
         Create a meeting token for the AI bot (owner access)
@@ -137,6 +146,8 @@ class DailyService:
         Args:
             room_name: Name of the room
             expires_in_minutes: Token expiration time
+            not_before: Optional datetime when token becomes valid (sets nbf) - usually 10 min before scheduled_datetime
+            scheduled_datetime: Optional actual scheduled interview time (used for exp calculation)
             
         Returns:
             Meeting token string, or None if failed
@@ -149,11 +160,17 @@ class DailyService:
         
         # Calculate expiry timestamp
         if not_before:
-            # For scheduled tokens: exp = not_before + expiration duration
-            exp_datetime = not_before + timedelta(minutes=token_exp_minutes)
+            # For scheduled tokens:
+            # nbf = not_before (token becomes valid when room opens, usually 10 min before scheduled_datetime)
+            # exp = scheduled_datetime + expiration duration (token expires 1 hour after actual interview time)
+            # If scheduled_datetime is not provided, fall back to not_before + expiration
+            if scheduled_datetime:
+                exp_datetime = scheduled_datetime + timedelta(minutes=token_exp_minutes)
+            else:
+                exp_datetime = not_before + timedelta(minutes=token_exp_minutes)
             exp_timestamp = int(exp_datetime.timestamp())
             nbf_timestamp = int(not_before.timestamp())
-            logger.info(f"📅 Scheduled token: nbf={nbf_timestamp} ({not_before}), exp={exp_timestamp} ({exp_datetime})")
+            logger.info(f"📅 Scheduled bot token: nbf={nbf_timestamp} ({not_before}), exp={exp_timestamp} ({exp_datetime}), scheduled_datetime={scheduled_datetime}")
         else:
             # For immediate tokens: exp = now + expiration duration
             exp_timestamp = self._calculate_expiry(token_exp_minutes)
@@ -203,7 +220,8 @@ class DailyService:
         room_name: str,
         candidate_name: str,
         expires_in_minutes: Optional[int] = None,
-        not_before: Optional[datetime] = None
+        not_before: Optional[datetime] = None,
+        scheduled_datetime: Optional[datetime] = None
     ) -> Optional[str]:
         """
         Create a meeting token for the candidate (participant access)
@@ -214,7 +232,8 @@ class DailyService:
             room_name: Name of the room
             candidate_name: Name of the candidate
             expires_in_minutes: Token expiration time
-            not_before: Optional datetime when token becomes valid (sets nbf)
+            not_before: Optional datetime when token becomes valid (sets nbf) - usually 10 min before scheduled_datetime
+            scheduled_datetime: Optional actual scheduled interview time (used for exp calculation)
             
         Returns:
             Meeting token string, or None if failed
@@ -227,11 +246,17 @@ class DailyService:
         
         # Calculate expiry timestamp
         if not_before:
-            # For scheduled tokens: exp = not_before + expiration duration
-            exp_datetime = not_before + timedelta(minutes=token_exp_minutes)
+            # For scheduled tokens:
+            # nbf = not_before (token becomes valid when room opens, usually 10 min before scheduled_datetime)
+            # exp = scheduled_datetime + expiration duration (token expires 1 hour after actual interview time)
+            # If scheduled_datetime is not provided, fall back to not_before + expiration
+            if scheduled_datetime:
+                exp_datetime = scheduled_datetime + timedelta(minutes=token_exp_minutes)
+            else:
+                exp_datetime = not_before + timedelta(minutes=token_exp_minutes)
             exp_timestamp = int(exp_datetime.timestamp())
             nbf_timestamp = int(not_before.timestamp())
-            logger.info(f"📅 Scheduled candidate token: nbf={nbf_timestamp} ({not_before}), exp={exp_timestamp} ({exp_datetime})")
+            logger.info(f"📅 Scheduled candidate token: nbf={nbf_timestamp} ({not_before}), exp={exp_timestamp} ({exp_datetime}), scheduled_datetime={scheduled_datetime}")
         else:
             # For immediate tokens: exp = now + expiration duration
             exp_timestamp = self._calculate_expiry(token_exp_minutes)

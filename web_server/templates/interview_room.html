@@ -557,7 +557,8 @@
                 scheduledTime: scheduledTime.toISOString(),
                 roomOpenTime: roomOpenTime.toISOString(),
                 now: now.toISOString(),
-                isFuture: now < roomOpenTime
+                isFuture: now < roomOpenTime,
+                IS_FUTURE_SCHEDULE: IS_FUTURE_SCHEDULE
             });
             
             if (now >= roomOpenTime) {
@@ -609,9 +610,18 @@
             setInterval(updateCountdown, 1000);
             
             // Hide camera preview and instructions for future schedules
-            document.getElementById('camera-preview-container').style.display = 'none';
+            const cameraContainer = document.getElementById('camera-preview-container');
+            if (cameraContainer) cameraContainer.style.display = 'none';
             const instructions = document.querySelector('.instructions');
             if (instructions) instructions.style.display = 'none';
+            
+            // Don't request camera permissions for future schedules
+            console.log('⏰ Interview scheduled for future - skipping camera permission request');
+        } else {
+            // Interview is available - ensure camera preview is visible and request permissions
+            const cameraContainer = document.getElementById('camera-preview-container');
+            if (cameraContainer) cameraContainer.style.display = 'block';
+            console.log('✅ Interview is available - will request camera permissions');
         }
         
         // ============= CAMERA/MIC PREVIEW (Before Proctoring) =============
@@ -682,9 +692,15 @@
         }
         
         // Start permission request when page loads (but BEFORE proctoring activates)
+        // Only request permissions if interview is NOT scheduled for future
         window.addEventListener('DOMContentLoaded', () => {
-            console.log('📄 Page loaded - requesting permissions (proctoring NOT active yet)');
-            requestPermissionsAndShowPreview();
+            console.log('📄 Page loaded - IS_FUTURE_SCHEDULE:', IS_FUTURE_SCHEDULE);
+            if (!IS_FUTURE_SCHEDULE) {
+                console.log('📄 Requesting permissions (proctoring NOT active yet)');
+                requestPermissionsAndShowPreview();
+            } else {
+                console.log('⏰ Interview scheduled for future - skipping permission request');
+            }
         });
         
         // ============= PROCTORING STATE =============

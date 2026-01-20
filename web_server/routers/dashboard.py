@@ -519,8 +519,9 @@ async def create_interview(
     room_data = await daily_service.create_interview_room(
         interview_id=interview_id,
         candidate_name=candidate_name,
-        scheduled_time=room_nbf,  # Pass nbf time
-        expires_in_minutes=room_exp_minutes
+        scheduled_time=room_nbf,  # Pass nbf time (room opens 10 min before scheduled)
+        expires_in_minutes=room_exp_minutes,
+        scheduled_datetime=scheduled_datetime if is_future_schedule else None  # Pass actual scheduled time for exp calculation
     )
     
     if not room_data:
@@ -536,7 +537,8 @@ async def create_interview(
         room_name=room_data["room_name"],
         candidate_name=candidate_name,
         expires_in_minutes=token_exp_minutes,
-        not_before=room_nbf  # Token also has nbf
+        not_before=room_nbf,  # Token becomes valid when room opens (10 min before scheduled)
+        scheduled_datetime=scheduled_datetime if is_future_schedule else None  # Pass actual scheduled time for exp calculation
     )
     
     # Store original Daily.co URL with token (for internal use)
@@ -646,7 +648,8 @@ async def create_interview(
                     bot_token = await daily_service.create_bot_token(
                         room_name=room_data["room_name"],
                         expires_in_minutes=room_exp_minutes if is_future_schedule else None,
-                        not_before=room_nbf if is_future_schedule else None
+                        not_before=room_nbf if is_future_schedule else None,
+                        scheduled_datetime=scheduled_datetime if is_future_schedule else None  # Pass actual scheduled time for exp calculation
                     )
                     
                     # Bot joins with token for owner access
