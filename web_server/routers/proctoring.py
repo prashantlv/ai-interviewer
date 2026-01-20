@@ -115,6 +115,7 @@ async def interview_room(request: Request, interview_id: str):
     # Check if interview is scheduled for future
     scheduled_date_str = evaluation.get("scheduled_date")
     is_future_schedule = False
+    join_deadline_passed = False  # Flag to track if join deadline has passed
     scheduled_datetime = None
     scheduled_datetime_utc = None
     join_deadline_utc = None  # 10 minutes after scheduled time
@@ -171,10 +172,12 @@ async def interview_room(request: Request, interview_id: str):
             elif now_utc > join_deadline_utc:
                 # More than 10 minutes after scheduled time - join deadline passed
                 is_future_schedule = False
+                join_deadline_passed = True  # Flag to indicate deadline has passed
                 logger.info(f"⏰ Join deadline passed: {join_deadline_utc} UTC (current: {now_utc} UTC, scheduled: {scheduled_datetime_utc} UTC)")
             else:
                 # Between room open and join deadline - interview is available
                 is_future_schedule = False
+                join_deadline_passed = False  # Deadline hasn't passed yet
                 logger.info(f"✅ Interview available: {scheduled_datetime_utc} UTC (current: {now_utc} UTC, room open: {room_open_time_utc} UTC, join deadline: {join_deadline_utc} UTC)")
         except Exception as e:
             logger.warning(f"⚠️ Failed to parse scheduled_date '{scheduled_date_str}': {e}", exc_info=True)
@@ -248,6 +251,7 @@ async def interview_room(request: Request, interview_id: str):
             "api_base": api_base,
             "interview_config_json": interview_config_json,
             "is_future_schedule": is_future_schedule,
+            "join_deadline_passed": join_deadline_passed,  # Flag to indicate if deadline has passed
             "scheduled_datetime": scheduled_datetime_utc.isoformat() if scheduled_datetime_utc else (scheduled_datetime.isoformat() if scheduled_datetime else None),
             "join_deadline": join_deadline_utc.isoformat() if join_deadline_utc else None,
             # Convert to IST for display (formatted nicely)
