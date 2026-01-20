@@ -516,6 +516,8 @@
 
     <!-- Proctoring JavaScript -->
     <script>
+        console.log('🚀 SCRIPT STARTING - Interview Room JavaScript Initializing...');
+        
         // Interview Configuration - Extract from JSON script tag (safest method)
         let INTERVIEW_ID = '';
         let ROOM_URL = '';
@@ -524,6 +526,14 @@
         let IS_FUTURE_SCHEDULE = {{ 'true' if is_future_schedule else 'false' }};
         let SCHEDULED_DATETIME = {{ ('"' + scheduled_datetime + '"') if scheduled_datetime else 'null' }};
         let JOIN_DEADLINE = {{ ('"' + join_deadline + '"') if join_deadline else 'null' }};
+        
+        console.log('📋 INITIAL VALUES:', {
+            IS_FUTURE_SCHEDULE: IS_FUTURE_SCHEDULE,
+            SCHEDULED_DATETIME: SCHEDULED_DATETIME,
+            JOIN_DEADLINE: JOIN_DEADLINE,
+            typeof_IS_FUTURE_SCHEDULE: typeof IS_FUTURE_SCHEDULE,
+            typeof_SCHEDULED_DATETIME: typeof SCHEDULED_DATETIME
+        });
         
         try {
             const configScript = document.getElementById('interview-config');
@@ -612,13 +622,40 @@
         
         // Request camera/mic permissions immediately when page loads
         async function requestPermissionsAndShowPreview() {
+            console.log('🔵 requestPermissionsAndShowPreview() CALLED');
+            
             const previewVideo = document.getElementById('preview-video');
             const previewStatus = document.getElementById('preview-status');
             const permissionError = document.getElementById('permission-error');
             const joinBtn = document.getElementById('join-btn');
             
+            console.log('🔍 ELEMENT CHECK:', {
+                previewVideo: !!previewVideo,
+                previewStatus: !!previewStatus,
+                permissionError: !!permissionError,
+                joinBtn: !!joinBtn,
+                navigator_mediaDevices: !!navigator.mediaDevices,
+                getUserMedia: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+            });
+            
+            if (!previewVideo || !previewStatus || !joinBtn) {
+                console.error('❌ CRITICAL: Required DOM elements not found!', {
+                    previewVideo: previewVideo,
+                    previewStatus: previewStatus,
+                    joinBtn: joinBtn
+                });
+                return;
+            }
+            
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                console.error('❌ CRITICAL: getUserMedia not available!');
+                alert('Your browser does not support camera/microphone access. Please use a modern browser.');
+                return;
+            }
+            
             try {
-                console.log('📹 Requesting camera and microphone permissions...');
+                console.log('📹 STEP 1: Requesting camera and microphone permissions...');
+                console.log('📹 STEP 1.1: Calling getUserMedia...');
                 
                 // Request both camera and microphone
                 const stream = await navigator.mediaDevices.getUserMedia({
@@ -629,34 +666,56 @@
                     audio: true
                 });
                 
+                console.log('✅ STEP 2: getUserMedia SUCCESS - stream received:', stream);
+                console.log('📹 STEP 2.1: Stream tracks:', stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, readyState: t.readyState })));
+                
                 // Store stream reference to stop it later
                 previewStream = stream;
+                console.log('📹 STEP 2.2: Stream stored in previewStream');
                 
                 // Show preview
+                console.log('📹 STEP 3: Setting up video preview...');
                 previewVideo.srcObject = stream;
                 previewStatus.style.display = 'none';
-                permissionError.style.display = 'none';
+                if (permissionError) permissionError.style.display = 'none';
+                console.log('📹 STEP 3.1: Video preview set, status hidden');
                 
                 // Enable join button
+                console.log('📹 STEP 4: Enabling join button...');
                 joinBtn.disabled = false;
+                joinBtn.style.opacity = '1';
+                joinBtn.style.cursor = 'pointer';
                 joinBtn.textContent = 'Join Interview';
+                console.log('✅ STEP 4.1: Join button enabled:', {
+                    disabled: joinBtn.disabled,
+                    opacity: joinBtn.style.opacity,
+                    textContent: joinBtn.textContent
+                });
                 
-                console.log('✅ Camera and microphone access granted');
+                console.log('✅ STEP 5: Camera and microphone access granted - ALL SUCCESS!');
                 showToast('✅ Camera and microphone ready!', 'success');
                 
             } catch (error) {
-                console.error('❌ Failed to get media permissions:', error);
+                console.error('❌ STEP FAILED: Error in requestPermissionsAndShowPreview:', error);
+                console.error('❌ Error name:', error.name);
+                console.error('❌ Error message:', error.message);
+                console.error('❌ Error stack:', error.stack);
                 
                 // Show error message
-                previewStatus.innerHTML = `
-                    <div class="icon">🚫</div>
-                    <div>Camera access required</div>
-                `;
-                permissionError.style.display = 'block';
+                if (previewStatus) {
+                    previewStatus.innerHTML = `
+                        <div class="icon">🚫</div>
+                        <div>Camera access required</div>
+                    `;
+                }
+                if (permissionError) permissionError.style.display = 'block';
                 
                 // Keep button disabled
-                joinBtn.disabled = true;
-                joinBtn.textContent = 'Camera Access Required';
+                if (joinBtn) {
+                    joinBtn.disabled = true;
+                    joinBtn.textContent = 'Camera Access Required';
+                    console.log('❌ Join button kept disabled due to error');
+                }
                 
                 showToast('❌ Camera/microphone access denied', 'warning');
             }
@@ -675,83 +734,157 @@
         
         // Start permission request when page loads (but BEFORE proctoring activates)
         // ALWAYS check client-side time to determine if interview is available
+        console.log('🔵 Setting up DOMContentLoaded listener...');
+        
         window.addEventListener('DOMContentLoaded', () => {
-            console.log('📄 Page loaded - IS_FUTURE_SCHEDULE:', IS_FUTURE_SCHEDULE);
-            console.log('📄 SCHEDULED_DATETIME:', SCHEDULED_DATETIME);
-            console.log('📄 JOIN_DEADLINE:', JOIN_DEADLINE);
+            console.log('✅ DOMContentLoaded FIRED - Starting permission check logic...');
+            console.log('📄 Current values:', {
+                IS_FUTURE_SCHEDULE: IS_FUTURE_SCHEDULE,
+                typeof_IS_FUTURE_SCHEDULE: typeof IS_FUTURE_SCHEDULE,
+                SCHEDULED_DATETIME: SCHEDULED_DATETIME,
+                typeof_SCHEDULED_DATETIME: typeof SCHEDULED_DATETIME,
+                JOIN_DEADLINE: JOIN_DEADLINE
+            });
             
             let shouldRequestPermissions = false;
             let shouldShowJoinInterface = false;
             
             // ALWAYS check client-side time if we have a scheduled datetime
-            if (SCHEDULED_DATETIME) {
+            if (SCHEDULED_DATETIME && SCHEDULED_DATETIME !== 'null' && SCHEDULED_DATETIME !== null) {
+                console.log('🔍 STEP 1: Has SCHEDULED_DATETIME, parsing...');
                 const scheduledTime = new Date(SCHEDULED_DATETIME);
                 const now = new Date();
-                // Room opens 10 minutes before scheduled time
-                const roomOpenTime = new Date(scheduledTime.getTime() - 10 * 60 * 1000);
-                // Join deadline: 10 minutes after scheduled time
-                const joinDeadline = JOIN_DEADLINE ? new Date(JOIN_DEADLINE) : new Date(scheduledTime.getTime() + 10 * 60 * 1000);
                 
-                console.log('🔍 Client-side time check:', {
-                    scheduledTime: scheduledTime.toISOString(),
-                    roomOpenTime: roomOpenTime.toISOString(),
-                    joinDeadline: joinDeadline.toISOString(),
-                    now: now.toISOString(),
-                    isRoomOpen: now >= roomOpenTime,
-                    isDeadlinePassed: now > joinDeadline,
-                    IS_FUTURE_SCHEDULE: IS_FUTURE_SCHEDULE
+                console.log('🔍 STEP 1.1: Date parsing result:', {
+                    scheduledTime: scheduledTime,
+                    scheduledTimeISO: scheduledTime.toISOString(),
+                    now: now,
+                    nowISO: now.toISOString(),
+                    isValidScheduled: !isNaN(scheduledTime.getTime()),
+                    isValidNow: !isNaN(now.getTime())
                 });
                 
-                // Check if room is open and deadline hasn't passed
-                if (now >= roomOpenTime && now <= joinDeadline) {
-                    console.log('✅ Interview is available - enabling join interface');
+                if (isNaN(scheduledTime.getTime())) {
+                    console.error('❌ CRITICAL: Invalid SCHEDULED_DATETIME:', SCHEDULED_DATETIME);
+                    // Treat as immediate interview if date is invalid
                     shouldRequestPermissions = true;
                     shouldShowJoinInterface = true;
-                    IS_FUTURE_SCHEDULE = false;
-                } else if (now < roomOpenTime) {
-                    console.log('⏰ Interview scheduled for future - room opens at:', roomOpenTime.toISOString());
-                    shouldRequestPermissions = false;
-                    shouldShowJoinInterface = false;
-                } else if (now > joinDeadline) {
-                    console.log('⏰ Join deadline has passed - interview window closed');
-                    shouldRequestPermissions = false;
-                    shouldShowJoinInterface = false;
+                } else {
+                    // Room opens 10 minutes before scheduled time
+                    const roomOpenTime = new Date(scheduledTime.getTime() - 10 * 60 * 1000);
+                    // Join deadline: 10 minutes after scheduled time
+                    const joinDeadline = JOIN_DEADLINE && JOIN_DEADLINE !== 'null' && JOIN_DEADLINE !== null 
+                        ? new Date(JOIN_DEADLINE) 
+                        : new Date(scheduledTime.getTime() + 10 * 60 * 1000);
+                    
+                    console.log('🔍 STEP 2: Time calculations:', {
+                        scheduledTime: scheduledTime.toISOString(),
+                        roomOpenTime: roomOpenTime.toISOString(),
+                        joinDeadline: joinDeadline.toISOString(),
+                        now: now.toISOString(),
+                        isRoomOpen: now >= roomOpenTime,
+                        isDeadlinePassed: now > joinDeadline,
+                        timeUntilRoomOpen: roomOpenTime.getTime() - now.getTime(),
+                        timeSinceDeadline: now.getTime() - joinDeadline.getTime()
+                    });
+                    
+                    // Check if room is open and deadline hasn't passed
+                    if (now >= roomOpenTime && now <= joinDeadline) {
+                        console.log('✅ STEP 3: Interview is AVAILABLE - enabling join interface');
+                        shouldRequestPermissions = true;
+                        shouldShowJoinInterface = true;
+                        IS_FUTURE_SCHEDULE = false;
+                    } else if (now < roomOpenTime) {
+                        console.log('⏰ STEP 3: Interview scheduled for FUTURE - room opens at:', roomOpenTime.toISOString());
+                        shouldRequestPermissions = false;
+                        shouldShowJoinInterface = false;
+                    } else if (now > joinDeadline) {
+                        console.log('⏰ STEP 3: Join deadline PASSED - interview window closed');
+                        shouldRequestPermissions = false;
+                        shouldShowJoinInterface = false;
+                    }
                 }
             } else {
                 // No scheduled datetime - treat as immediate interview
-                console.log('📄 No scheduled datetime - treating as immediate interview');
+                console.log('📄 STEP 1: No scheduled datetime - treating as IMMEDIATE interview');
                 shouldRequestPermissions = true;
                 shouldShowJoinInterface = true;
             }
             
+            console.log('🔍 STEP 4: Decision made:', {
+                shouldRequestPermissions: shouldRequestPermissions,
+                shouldShowJoinInterface: shouldShowJoinInterface
+            });
+            
             // Update UI based on availability
             if (shouldShowJoinInterface) {
+                console.log('🔍 STEP 5: Updating UI to show join interface...');
+                
                 // Remove the "Interview Not Available Yet" or "Join Window Closed" messages
                 const scheduledMsg = document.querySelector('.scheduled-message');
+                console.log('🔍 STEP 5.1: Scheduled message element:', scheduledMsg);
                 if (scheduledMsg) {
                     scheduledMsg.style.display = 'none';
+                    console.log('✅ STEP 5.1: Scheduled message hidden');
                 }
                 
                 // Enable the join button
                 const joinBtn = document.getElementById('join-btn');
+                console.log('🔍 STEP 5.2: Join button element:', joinBtn);
                 if (joinBtn) {
+                    console.log('🔍 STEP 5.2.1: Join button BEFORE update:', {
+                        disabled: joinBtn.disabled,
+                        opacity: joinBtn.style.opacity,
+                        cursor: joinBtn.style.cursor,
+                        textContent: joinBtn.textContent,
+                        onclick: joinBtn.onclick
+                    });
+                    
                     joinBtn.disabled = false;
                     joinBtn.style.opacity = '1';
                     joinBtn.style.cursor = 'pointer';
                     joinBtn.textContent = 'Join Interview';
                     joinBtn.onclick = startInterview;
-                    console.log('✅ Join button enabled');
+                    
+                    console.log('✅ STEP 5.2.2: Join button AFTER update:', {
+                        disabled: joinBtn.disabled,
+                        opacity: joinBtn.style.opacity,
+                        cursor: joinBtn.style.cursor,
+                        textContent: joinBtn.textContent,
+                        onclick: joinBtn.onclick
+                    });
+                } else {
+                    console.error('❌ CRITICAL: Join button element not found!');
                 }
+            } else {
+                console.log('⏸️ STEP 5: Skipping UI update - interview not available');
             }
             
             // Request permissions if interview is available
             if (shouldRequestPermissions) {
-                console.log('📄 Requesting camera and microphone permissions...');
-                requestPermissionsAndShowPreview();
+                console.log('📄 STEP 6: Interview is available - CALLING requestPermissionsAndShowPreview()...');
+                try {
+                    requestPermissionsAndShowPreview();
+                    console.log('✅ STEP 6.1: requestPermissionsAndShowPreview() called successfully');
+                } catch (error) {
+                    console.error('❌ STEP 6.1: Error calling requestPermissionsAndShowPreview():', error);
+                }
             } else {
-                console.log('⏸️ Skipping permission request - interview not available yet');
+                console.log('⏸️ STEP 6: Skipping permission request - interview not available yet');
+                console.log('⏸️ Reason: shouldRequestPermissions =', shouldRequestPermissions);
             }
+            
+            console.log('🏁 DOMContentLoaded handler COMPLETE');
         });
+        
+        // Also check if DOM is already loaded (in case script runs after DOMContentLoaded)
+        if (document.readyState === 'loading') {
+            console.log('📄 Document still loading, waiting for DOMContentLoaded...');
+        } else {
+            console.log('📄 Document already loaded, triggering logic immediately...');
+            // Trigger the logic immediately
+            window.dispatchEvent(new Event('DOMContentLoaded'));
+        }
         
         // ============= PROCTORING STATE =============
         
