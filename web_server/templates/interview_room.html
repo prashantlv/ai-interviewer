@@ -674,55 +674,82 @@
         }
         
         // Start permission request when page loads (but BEFORE proctoring activates)
-        // Only request permissions if interview is NOT scheduled for future
+        // ALWAYS check client-side time to determine if interview is available
         window.addEventListener('DOMContentLoaded', () => {
             console.log('📄 Page loaded - IS_FUTURE_SCHEDULE:', IS_FUTURE_SCHEDULE);
             console.log('📄 SCHEDULED_DATETIME:', SCHEDULED_DATETIME);
             console.log('📄 JOIN_DEADLINE:', JOIN_DEADLINE);
             
-            // Double-check if scheduled time has actually passed (client-side validation)
-            if (IS_FUTURE_SCHEDULE && SCHEDULED_DATETIME) {
+            let shouldRequestPermissions = false;
+            let shouldShowJoinInterface = false;
+            
+            // ALWAYS check client-side time if we have a scheduled datetime
+            if (SCHEDULED_DATETIME) {
                 const scheduledTime = new Date(SCHEDULED_DATETIME);
                 const now = new Date();
                 // Room opens 10 minutes before scheduled time
                 const roomOpenTime = new Date(scheduledTime.getTime() - 10 * 60 * 1000);
+                // Join deadline: 10 minutes after scheduled time
+                const joinDeadline = JOIN_DEADLINE ? new Date(JOIN_DEADLINE) : new Date(scheduledTime.getTime() + 10 * 60 * 1000);
                 
                 console.log('🔍 Client-side time check:', {
                     scheduledTime: scheduledTime.toISOString(),
                     roomOpenTime: roomOpenTime.toISOString(),
+                    joinDeadline: joinDeadline.toISOString(),
                     now: now.toISOString(),
-                    isFuture: now < roomOpenTime,
+                    isRoomOpen: now >= roomOpenTime,
+                    isDeadlinePassed: now > joinDeadline,
                     IS_FUTURE_SCHEDULE: IS_FUTURE_SCHEDULE
                 });
                 
-                // If room open time has passed, override IS_FUTURE_SCHEDULE
-                if (now >= roomOpenTime) {
-                    console.log('✅ Room open time has passed - enabling join interface');
+                // Check if room is open and deadline hasn't passed
+                if (now >= roomOpenTime && now <= joinDeadline) {
+                    console.log('✅ Interview is available - enabling join interface');
+                    shouldRequestPermissions = true;
+                    shouldShowJoinInterface = true;
                     IS_FUTURE_SCHEDULE = false;
-                    // Remove the "Interview Not Available Yet" message if present
-                    const scheduledMsg = document.querySelector('.scheduled-message');
-                    if (scheduledMsg) {
-                        scheduledMsg.style.display = 'none';
-                    }
-                    // Enable the join button
-                    const joinBtn = document.getElementById('join-btn');
-                    if (joinBtn) {
-                        joinBtn.textContent = 'Join Interview';
-                        joinBtn.onclick = startInterview;
-                    }
-                    // Request permissions
-                    requestPermissionsAndShowPreview();
-                    return;
-                } else {
-                    console.log('⏰ Interview scheduled for future - skipping permission request');
-                    return;
+                } else if (now < roomOpenTime) {
+                    console.log('⏰ Interview scheduled for future - room opens at:', roomOpenTime.toISOString());
+                    shouldRequestPermissions = false;
+                    shouldShowJoinInterface = false;
+                } else if (now > joinDeadline) {
+                    console.log('⏰ Join deadline has passed - interview window closed');
+                    shouldRequestPermissions = false;
+                    shouldShowJoinInterface = false;
+                }
+            } else {
+                // No scheduled datetime - treat as immediate interview
+                console.log('📄 No scheduled datetime - treating as immediate interview');
+                shouldRequestPermissions = true;
+                shouldShowJoinInterface = true;
+            }
+            
+            // Update UI based on availability
+            if (shouldShowJoinInterface) {
+                // Remove the "Interview Not Available Yet" or "Join Window Closed" messages
+                const scheduledMsg = document.querySelector('.scheduled-message');
+                if (scheduledMsg) {
+                    scheduledMsg.style.display = 'none';
+                }
+                
+                // Enable the join button
+                const joinBtn = document.getElementById('join-btn');
+                if (joinBtn) {
+                    joinBtn.disabled = false;
+                    joinBtn.style.opacity = '1';
+                    joinBtn.style.cursor = 'pointer';
+                    joinBtn.textContent = 'Join Interview';
+                    joinBtn.onclick = startInterview;
+                    console.log('✅ Join button enabled');
                 }
             }
             
-            // If not a future schedule, request permissions immediately
-            if (!IS_FUTURE_SCHEDULE) {
-                console.log('📄 Requesting permissions (proctoring NOT active yet)');
+            // Request permissions if interview is available
+            if (shouldRequestPermissions) {
+                console.log('📄 Requesting camera and microphone permissions...');
                 requestPermissionsAndShowPreview();
+            } else {
+                console.log('⏸️ Skipping permission request - interview not available yet');
             }
         });
         
