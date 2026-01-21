@@ -504,7 +504,7 @@ async def interviews_page(
         if i.get("position")
     ))
     
-        return templates.TemplateResponse("interviews.html", {
+    return templates.TemplateResponse("interviews.html", {
         "request": request,
         "interviews": interview_list,
         "current_status": status or "all",
