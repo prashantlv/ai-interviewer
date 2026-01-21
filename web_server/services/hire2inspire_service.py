@@ -271,12 +271,12 @@ class Hire2InspireService:
                     token = await self._ensure_token()
                 except Exception as login_error:
                     logger.warning(f"⚠️ Token acquisition failed: {login_error}")
-                # If we have a token set via env var, use it even if expired
+                    # If we have a token set via env var, use it even if expired
                     if self.token:
-                    logger.info("🔄 Attempting to use token from environment variable")
-                    token = self.token
+                        logger.info("🔄 Attempting to use token from environment variable")
+                        token = self.token
                     else:
-                    raise
+                        raise
             
             if not token:
                 logger.error("❌ No token available for API call")
