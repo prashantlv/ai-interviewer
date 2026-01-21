@@ -506,3 +506,111 @@ async def train_replica_request(
     except Exception as e:
         logger.error(f"❌ Error training replica request: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/v1/admin/replica-requests/sync-status")
+async def sync_replica_statuses(
+    admin: AdminUserDep,
+    db: DbServiceDep
+):
+    """Sync replica request statuses with Tavus API
+    
+    Checks all requests with status "training" and updates their status
+    based on the current status from Tavus API.
+    """
+    try:
+        # Get all requests with status "training" that have tavus_replica_id
+        training_requests = await db.list_replica_requests(status="training", limit=1000)
+        
+        if not training_requests:
+            return JSONResponse({
+                "success": True,
+                "message": "No training requests to sync",
+                "synced": 0,
+                "updated": 0
+            })
+        
+        synced_count = 0
+        updated_count = 0
+        errors = []
+        
+        logger.info(f"🔄 Syncing {len(training_requests)} training requests with Tavus API...")
+        
+        for request_data in training_requests:
+            tavus_replica_id = request_data.get("tavus_replica_id")
+            request_id = request_data.get("request_id")
+            
+            if not tavus_replica_id:
+                logger.warning(f"⚠️ Request {request_id} has no tavus_replica_id, skipping")
+                continue
+            
+            try:
+                # Get current status from Tavus API
+                tavus_replica = await tavus_service.get_replica(tavus_replica_id)
+                
+                if not tavus_replica:
+                    logger.warning(f"⚠️ Replica {tavus_replica_id} not found in Tavus API")
+                    errors.append(f"Replica {tavus_replica_id} not found")
+                    continue
+                
+                synced_count += 1
+                tavus_status = tavus_replica.get("status", "").lower()
+                
+                # Map Tavus status to our database status
+                # Tavus statuses: "completed", "started", "error"
+                new_status = None
+                error_message = None
+                
+                if tavus_status == "completed":
+                    new_status = "completed"
+                    logger.info(f"✅ Replica {tavus_replica_id} (request {request_id}) completed training")
+                elif tavus_status == "error":
+                    # Mark as rejected with error info
+                    new_status = "rejected"
+                    error_message = tavus_replica.get("error_message") or tavus_replica.get("error") or "Training failed in Tavus"
+                    logger.warning(f"⚠️ Replica {tavus_replica_id} (request {request_id}) failed: {error_message}")
+                elif tavus_status == "started":
+                    # Still training, keep status as "training"
+                    new_status = "training"
+                    logger.debug(f"🔄 Replica {tavus_replica_id} (request {request_id}) still training")
+                else:
+                    # Unknown status, log but don't update
+                    logger.warning(f"⚠️ Unknown Tavus status '{tavus_status}' for replica {tavus_replica_id}")
+                    continue
+                
+                # Update database if status changed
+                if new_status and new_status != request_data.get("status"):
+                    success = await db.update_replica_request_status(
+                        request_id=request_id,
+                        status=new_status,
+                        tavus_status=tavus_status,
+                        error_message=error_message
+                    )
+                    if success:
+                        updated_count += 1
+                        logger.info(f"✅ Updated request {request_id} from 'training' to '{new_status}'")
+                    else:
+                        errors.append(f"Failed to update request {request_id}")
+                
+            except Exception as e:
+                logger.error(f"❌ Error syncing replica {tavus_replica_id}: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                errors.append(f"Error syncing {tavus_replica_id}: {str(e)}")
+                continue
+        
+        logger.info(f"✅ Sync completed: {synced_count} checked, {updated_count} updated")
+        
+        return JSONResponse({
+            "success": True,
+            "message": f"Sync completed: {synced_count} checked, {updated_count} updated",
+            "synced": synced_count,
+            "updated": updated_count,
+            "errors": errors if errors else None
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error syncing replica statuses: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))

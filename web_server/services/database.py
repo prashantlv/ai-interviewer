@@ -733,5 +733,42 @@ class DatabaseService:
             return False
 
 
+
+    async def update_replica_request_status(
+        self,
+        request_id: str,
+        status: str,
+        tavus_status: Optional[str] = None,
+        error_message: Optional[str] = None
+    ) -> bool:
+        """Update replica request status (used for syncing with Tavus)"""
+        if self.database is None:
+            return False
+        
+        try:
+            update_data = {
+                "status": status,
+                "last_synced_at": datetime.now()
+            }
+            
+            if tavus_status:
+                update_data["tavus_status"] = tavus_status
+            
+            if error_message:
+                update_data["error_message"] = error_message
+            
+            # Set completed_at if status is completed
+            if status == "completed":
+                update_data["completed_at"] = datetime.now()
+            
+            result = await self.database.replica_requests.update_one(
+                {"request_id": request_id},
+                {"$set": update_data}
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"❌ Error updating replica request status: {e}")
+            return False
+
 # Global database instance
 db_service = DatabaseService()
