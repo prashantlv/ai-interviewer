@@ -250,21 +250,25 @@ class Hire2InspireService:
             logger.error(f"❌ Failed to get candidate details: {e}")
             return None
     
-    async def get_agency_list(self, user_type: str = "agencies") -> List[Dict[str, Any]]:
+    async def get_agency_list(self, user_type: str = "agencies", token: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Get list of agencies or employers from Hire2Inspire API
         
         Args:
             user_type: Either "agencies" or "employers" (default: "agencies")
+            token: Optional access token from sign-in. If provided, uses this instead of env var or login.
         
         Returns:
             List of agency/employer dictionaries
         """
         try:
-            # Try to get token, but if login fails, try with existing token anyway
-            token = None
-            try:
-                token = await self._ensure_token()
+            # Use provided token if available (from sign-in) - highest priority
+            if token:
+                logger.info("✅ Using token provided from sign-in")
+            else:
+                # Try to get token, but if login fails, try with existing token anyway
+                try:
+                    token = await self._ensure_token()
             except Exception as login_error:
                 logger.warning(f"⚠️ Token acquisition failed: {login_error}")
                 # If we have a token set via env var, use it even if expired
@@ -339,15 +343,27 @@ class Hire2InspireService:
             logger.error(f"❌ Failed to fetch agencies: {e}", exc_info=True)
             return []
     
-    async def get_agency_details(self, agency_id: str) -> Optional[Dict[str, Any]]:
-        """Get details of a specific agency by ID - No token required"""
+    async def get_agency_details(self, agency_id: str, token: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Get details of a specific agency by ID
+        
+        Args:
+            agency_id: The agency ID to fetch
+            token: Optional access token from sign-in. If provided, uses this for authenticated requests.
+        """
         try:
+            headers = {
+                "Accept": "application/json"
+            }
+            
+            # Add Authorization header if token is provided
+            if token:
+                headers["Authorization"] = f"Bearer {token}"
+                logger.info("✅ Using token provided from sign-in for agency details")
+            
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(
                     f"{self.base_url}/agency/{agency_id}",
-                    headers={
-                        "Accept": "application/json"
-                    }
+                    headers=headers
                 )
                 
                 logger.info(f"📡 Agency details API response status: {response.status_code}")

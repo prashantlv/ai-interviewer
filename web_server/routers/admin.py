@@ -183,10 +183,17 @@ async def admin_dashboard(
             "completed": len(completed_requests)
         }
         
+        # Get access token from sign-in (cookie) - prefer this over env var
+        access_token = request.cookies.get("accessToken") or request.cookies.get("access_token")
+        if access_token:
+            logger.info("✅ Using access token from sign-in cookie for Hire2Inspire API calls")
+        else:
+            logger.warning("⚠️ No access token found in cookies - will use env var or login")
+        
         # Get agencies list
         agencies = []
         try:
-            agencies = await hire2inspire_service.get_agency_list(user_type="agencies")
+            agencies = await hire2inspire_service.get_agency_list(user_type="agencies", token=access_token)
             logger.info(f"📊 Loaded {len(agencies)} agencies for admin dashboard")
             if len(agencies) == 0:
                 logger.warning("⚠️ No agencies returned from API - check logs for details")
@@ -197,7 +204,7 @@ async def admin_dashboard(
         # Get employers list
         employers = []
         try:
-            employers = await hire2inspire_service.get_agency_list(user_type="employers")
+            employers = await hire2inspire_service.get_agency_list(user_type="employers", token=access_token)
             logger.info(f"📊 Loaded {len(employers)} employers for admin dashboard")
             if len(employers) == 0:
                 logger.warning("⚠️ No employers returned from API - check logs for details")
@@ -254,11 +261,17 @@ async def list_replica_requests(
 @router.get("/api/v1/admin/agencies/{agency_id}")
 async def get_agency_details(
     agency_id: str,
-    admin: AdminUserDep
+    admin: AdminUserDep,
+    request: Request
 ):
     """Get details of a specific agency"""
     try:
-        agency = await hire2inspire_service.get_agency_details(agency_id)
+        # Get access token from sign-in (cookie) - prefer this over env var
+        access_token = request.cookies.get("accessToken") or request.cookies.get("access_token")
+        if access_token:
+            logger.info("✅ Using access token from sign-in cookie for agency details")
+        
+        agency = await hire2inspire_service.get_agency_details(agency_id, token=access_token)
         if agency:
             # Explicitly verify subscription is in the response before returning
             if isinstance(agency, dict):
@@ -292,12 +305,18 @@ async def get_agency_details(
 async def get_agency_interview_insights(
     agency_id: str,
     admin: AdminUserDep,
-    db: DbServiceDep
+    db: DbServiceDep,
+    request: Request
 ):
     """Get interview insights/metrics for a specific agency"""
     try:
+        # Get access token from sign-in (cookie) - prefer this over env var
+        access_token = request.cookies.get("accessToken") or request.cookies.get("access_token")
+        if access_token:
+            logger.info("✅ Using access token from sign-in cookie for agency details")
+        
         # Get agency details to extract corporate_email for filtering
-        agency = await hire2inspire_service.get_agency_details(agency_id)
+        agency = await hire2inspire_service.get_agency_details(agency_id, token=access_token)
         if not agency:
             raise HTTPException(status_code=404, detail="Agency not found")
         
