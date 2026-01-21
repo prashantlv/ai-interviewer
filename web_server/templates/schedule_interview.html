@@ -737,13 +737,28 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Set date constraints: today to 3 days from now (72 hours max)
-    const dateInput = document.getElementById('scheduled_date');
-    const today = new Date();
-    const maxDate = new Date();
-    maxDate.setDate(maxDate.getDate() + 3);
-    
-    dateInput.min = today.toISOString().split('T')[0]; // Can schedule from today
-    dateInput.max = maxDate.toISOString().split('T')[0]; // Maximum 3 days ahead
+    // NOTE: dateInput is already declared above (line 677), don't redeclare it
+    if (dateInput) {
+        const today = new Date();
+        // Calculate max date as 72 hours from now (not just 3 calendar days)
+        const maxDateTime = new Date();
+        maxDateTime.setTime(maxDateTime.getTime() + (72 * 60 * 60 * 1000)); // 72 hours from now
+        
+        // Set min to today
+        dateInput.min = today.toISOString().split('T')[0];
+        
+        // Set max to the date that is 72 hours from now
+        dateInput.max = maxDateTime.toISOString().split('T')[0];
+        
+        console.log('📅 Date constraints set:', {
+            min: dateInput.min,
+            max: dateInput.max,
+            today: today.toISOString().split('T')[0],
+            maxDateTime: maxDateTime.toISOString().split('T')[0]
+        });
+    } else {
+        console.error('❌ Could not find scheduled_date input element');
+    }
 });
 </script>
 {% endblock %}
