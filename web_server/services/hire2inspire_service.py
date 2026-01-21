@@ -149,32 +149,10 @@ class Hire2InspireService:
         except Exception as e:
             logger.warning(f"⚠️ Logout failed: {e}")
     
-        async def get_all_jobs(self, token: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get all job descriptions for the agency
-        
-        Args:
-            token: Optional access token from sign-in. If provided, uses this instead of env var or login.
-        """
+    async def get_all_jobs(self) -> List[Dict[str, Any]]:
+        """Get all job descriptions for the agency"""
         try:
-            # Use provided token if available (from sign-in) - highest priority
-            if token:
-                logger.info("✅ Using token provided from sign-in for get_all_jobs")
-            else:
-                # Try to get token, but if login fails, try with existing token anyway
-                try:
-                    token = await self._ensure_token()
-                except Exception as login_error:
-                    logger.warning(f"⚠️ Token acquisition failed: {login_error}")
-                    # If we have a token set via env var, use it even if expired
-                    if self.token:
-                        logger.info("🔄 Attempting to use token from environment variable")
-                        token = self.token
-                    else:
-                        raise
-            
-            if not token:
-                logger.error("❌ No token available for API call")
-                return []
+            token = await self._ensure_token()
             
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(
@@ -194,49 +172,22 @@ class Hire2InspireService:
                     return jobs
                 else:
                     logger.warning("⚠️ No jobs data in response")
-                    logger.debug(f"Response structure: {list(data.keys())}")
                     return []
                     
-        except httpx.HTTPStatusError as e:
-            logger.error(f"❌ HTTP error fetching jobs: {e.response.status_code} - {e.response.text}")
-            return []
         except Exception as e:
-            logger.error(f"❌ Failed to fetch jobs: {e}", exc_info=True)
+            logger.error(f"❌ Failed to fetch jobs: {e}")
             return []
     
     async def get_shortlisted_candidates(
         self, 
         job_hash_id: str,
         page: int = 1,
-        limit: int = 100,
-        token: Optional[str] = None
+        limit: int = 100
     ) -> List[Dict[str, Any]]:
-                """Get shortlisted candidates for a specific job
-        
-        Args:
-            job_hash_id: The job hash ID
-            page: Page number (default: 1)
-            limit: Results per page (default: 100)
-            token: Optional access token from sign-in. If provided, uses this instead of env var or login.
-        """
-                try:
-            # Use provided token if available (from sign-in) - highest priority
-            if token:
-                logger.info("✅ Using token provided from sign-in for get_shortlisted_candidates")
-            else:
-                try:
-                    token = await self._ensure_token()
-                except Exception as login_error:
-                    logger.warning(f"⚠️ Token acquisition failed: {login_error}")
-                    if self.token:
-                        logger.info("🔄 Attempting to use token from environment variable")
-                        token = self.token
-                    else:
-                        raise
+        """Get shortlisted candidates for a specific job"""
+        try:
+            token = await self._ensure_token()
             
-            if not token:
-                logger.error("❌ No token available for API call")
-                return []
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(
                     f"{self.base_url}/shortlist_candidate/",
@@ -267,12 +218,10 @@ class Hire2InspireService:
                 logger.warning(f"⚠️ No candidates found for job {job_hash_id}")
                 return []
                     
-                except httpx.HTTPStatusError as e:
-            logger.error(f"❌ HTTP error fetching candidates: {e.response.status_code} - {e.response.text}")
-            return []
         except Exception as e:
-            logger.error(f"❌ Failed to fetch candidates: {e}", exc_info=True)
+            logger.error(f"❌ Failed to fetch candidates: {e}")
             return []
+    
     async def get_job_details(self, job_hash_id: str) -> Optional[Dict[str, Any]]:
         """Get details of a specific job by hash_id"""
         try:
