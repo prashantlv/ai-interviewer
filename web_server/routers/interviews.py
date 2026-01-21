@@ -3,12 +3,15 @@ Interviews API Router - REST API endpoints for interview management
 """
 
 import os
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from dependencies import DbServiceDep
 from services.hire2inspire_service import hire2inspire_service
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -279,24 +282,46 @@ async def complete_interview(
 
 # Hire2Inspire Integration Endpoints
 @router.get("/h2i/jobs")
-async def get_h2i_jobs():
+async def get_h2i_jobs(request: Request):
     """Get all job descriptions from Hire2Inspire"""
     try:
-        jobs = await hire2inspire_service.get_all_jobs()
+        # Get access token from sign-in (cookie) - prefer this over env var
+        access_token = request.cookies.get("accessToken") or request.cookies.get("access_token")
+        if access_token:
+            logger.info("✅ Using access token from sign-in cookie for get_all_jobs")
+        else:
+            logger.warning("⚠️ No access token found in cookies - will use env var or login")
+        
+        jobs = await hire2inspire_service.get_all_jobs(token=access_token)
+        
+        # Log the result for debugging
+        logger.info(f"📊 Returning {len(jobs)} jobs to frontend")
+        
         return {
             "success": True,
             "count": len(jobs),
             "jobs": jobs
         }
     except Exception as e:
+        logger.error(f"❌ Error fetching jobs: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/h2i/candidates/{job_hash_id}")
-async def get_h2i_candidates(job_hash_id: str):
+async def get_h2i_candidates(job_hash_id: str, request: Request):
     """Get shortlisted candidates for a specific job"""
     try:
-        candidates = await hire2inspire_service.get_shortlisted_candidates(job_hash_id)
+        # Get access token from sign-in (cookie)
+        access_token = request.cookies.get("accessToken") or request.cookies.get("access_token")
+        if access_token:
+            logger.info("✅ Using access token from sign-in cookie for get_shortlisted_candidates")
+        else:
+            logger.warning("⚠️ No access token found in cookies - will use env var or login")
+        
+        candidates = await hire2inspire_service.get_shortlisted_candidates(
+            job_hash_id, 
+            token=access_token
+        )
         return {
             "success": True,
             "job_hash_id": job_hash_id,
@@ -304,4 +329,5 @@ async def get_h2i_candidates(job_hash_id: str):
             "candidates": candidates
         }
     except Exception as e:
+        logger.error(f"❌ Error fetching candidates: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
