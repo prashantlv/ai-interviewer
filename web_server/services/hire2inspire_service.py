@@ -269,7 +269,7 @@ class Hire2InspireService:
                 # Try to get token, but if login fails, try with existing token anyway
                 try:
                     token = await self._ensure_token()
-            except Exception as login_error:
+                except Exception as login_error:
                 logger.warning(f"⚠️ Token acquisition failed: {login_error}")
                 # If we have a token set via env var, use it even if expired
                 if self.token:
