@@ -244,6 +244,9 @@ async def interviews_page(
     db: DbServiceDep,
     current_user: CurrentUserDep,
     status: Optional[str] = None,
+    position: Optional[str] = None,
+    date: Optional[str] = None,
+    search: Optional[str] = None,
     page: int = 1
 ):
     """Interviews management page with filtering and pagination - Requires authentication"""
