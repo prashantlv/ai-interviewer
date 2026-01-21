@@ -89,32 +89,44 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-3">
-                            <select class="form-select">
-                                <option>All Statuses</option>
-                                <option>Scheduled</option>
-                                <option>In Progress</option>
-                                <option>Completed</option>
-                                <option>Cancelled</option>
-                            </select>
+                    <form id="filterForm" method="GET" action="/dashboard/interviews">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <label for="statusFilter" class="form-label small text-muted">Status</label>
+                                <select id="statusFilter" name="status" class="form-select">
+                                    <option value="all" {% if current_status == "all" %}selected{% endif %}>All Statuses</option>
+                                    <option value="scheduled" {% if current_status == "scheduled" %}selected{% endif %}>Scheduled</option>
+                                    <option value="in_progress" {% if current_status == "in_progress" %}selected{% endif %}>In Progress</option>
+                                    <option value="completed" {% if current_status == "completed" %}selected{% endif %}>Completed</option>
+                                    <option value="cancelled" {% if current_status == "cancelled" %}selected{% endif %}>Cancelled</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="positionFilter" class="form-label small text-muted">Position</label>
+                                <select id="positionFilter" name="position" class="form-select">
+                                    <option value="all" {% if current_position == "all" %}selected{% endif %}>All Positions</option>
+                                    {% for pos in positions %}
+                                    <option value="{{ pos }}" {% if current_position == pos %}selected{% endif %}>{{ pos }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="dateFilter" class="form-label small text-muted">Date</label>
+                                <input type="date" id="dateFilter" name="date" class="form-control" value="{{ current_date }}" placeholder="Date">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="searchFilter" class="form-label small text-muted">Search</label>
+                                <div class="input-group">
+                                    <input type="text" id="searchFilter" name="search" class="form-control" value="{{ current_search }}" placeholder="Search candidate...">
+                                    <button type="button" class="btn btn-outline-secondary" onclick="clearFilters()" title="Clear all filters">
+                                        <i class="bi bi-x-circle"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-3">
-                            <select class="form-select">
-                                <option>All Positions</option>
-                                <option>Frontend Developer</option>
-                                <option>Backend Developer</option>
-                                <option>Full Stack Developer</option>
-                                <option>DevOps Engineer</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <input type="date" class="form-control" placeholder="Date">
-                        </div>
-                        <div class="col-md-3">
-                            <input type="text" class="form-control" placeholder="Search candidate...">
-                        </div>
-                    </div>
+                        <!-- Hidden field to preserve page when filters change -->
+                        <input type="hidden" name="page" value="1" id="pageInput">
+                    </form>
                 </div>
             </div>
         </div>
@@ -299,6 +311,43 @@
 
 {% block extra_js %}
 <script>
+// Filter handling
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-submit form when filters change
+    const filterInputs = ['statusFilter', 'positionFilter', 'dateFilter', 'searchFilter'];
+    filterInputs.forEach(function(id) {
+        const element = document.getElementById(id);
+        if (element) {
+            element.addEventListener('change', function() {
+                document.getElementById('pageInput').value = '1'; // Reset to page 1 when filter changes
+                document.getElementById('filterForm').submit();
+            });
+        }
+    });
+    
+    // Handle Enter key in search field
+    const searchInput = document.getElementById('searchFilter');
+    if (searchInput) {
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                document.getElementById('pageInput').value = '1';
+                document.getElementById('filterForm').submit();
+            }
+        });
+    }
+});
+
+function clearFilters() {
+    // Reset all filters and submit
+    document.getElementById('statusFilter').value = 'all';
+    document.getElementById('positionFilter').value = 'all';
+    document.getElementById('dateFilter').value = '';
+    document.getElementById('searchFilter').value = '';
+    document.getElementById('pageInput').value = '1';
+    document.getElementById('filterForm').submit();
+}
+
 async function showInterviewLink(joinUrl, interviewId) {
     console.log('🔍 Copy URL button clicked:', { joinUrl, interviewId });
     
