@@ -256,6 +256,7 @@ async def interviews_page(
     
     # Get interviews from database directly
     all_interviews = []  # Initialize early to avoid NameError
+    original_interviews = []  # Store original for positions dropdown
     try:
         if db and db.database is not None:
             # Get ALL interviews (use large limit to get everything)
@@ -265,9 +266,65 @@ async def interviews_page(
         else:
             print("⚠️ Database service not available for interviews page")
             all_interviews = []
+        
+        # Store original list for positions dropdown (before filtering)
+        original_interviews = all_interviews.copy()
     
-        # Sort by date - most recent first (already sorted by DB, but ensure)
-        all_interviews.sort(key=lambda x: (
+        # Apply filters
+        filtered_interviews = []
+        for interview in all_interviews:
+            # Status filter
+            if status and status != "all":
+                interview_status = interview.get("status", "").lower()
+                # Map UI status values to database status values
+                status_map = {
+                    "scheduled": ["scheduled"],
+                    "in_progress": ["in_progress"],
+                    "completed": ["completed", "ended_by_candidate"],
+                    "cancelled": ["cancelled"]
+                }
+                if status.lower() in status_map:
+                    if interview_status not in status_map[status.lower()]:
+                        continue
+                elif interview_status != status.lower():
+                    continue
+            
+            # Position filter
+            if position and position != "all":
+                interview_position = interview.get("position", "").lower()
+                if interview_position != position.lower():
+                    continue
+            
+            # Date filter
+            if date:
+                try:
+                    filter_date = datetime.fromisoformat(date).date()
+                    interview_date_str = interview.get("scheduled_date") or interview.get("created_at") or ""
+                    if interview_date_str and interview_date_str != "N/A":
+                        if isinstance(interview_date_str, str):
+                            interview_date = datetime.fromisoformat(interview_date_str.replace('Z', '+00:00')).date()
+                        else:
+                            interview_date = interview_date_str.date()
+                        if interview_date != filter_date:
+                            continue
+                    else:
+                        continue  # Skip interviews without dates when date filter is active
+                except Exception as e:
+                    print(f"⚠️ Error filtering by date: {e}")
+                    # If date parsing fails, include the interview
+            
+            # Search filter (candidate name or email)
+            if search:
+                search_lower = search.lower()
+                candidate_name = interview.get("candidate_name", "").lower()
+                candidate_email = interview.get("candidate_email", "").lower()
+                if search_lower not in candidate_name and search_lower not in candidate_email:
+                    continue
+            
+            filtered_interviews.append(interview)
+        
+        # Sort by date - most recent first
+        filtered_interviews.sort(key=lambda x: (
             x.get("scheduled_date") or x.get("created_at") or ""
         ), reverse=True)
         
