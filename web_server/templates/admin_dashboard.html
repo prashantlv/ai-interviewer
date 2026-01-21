@@ -114,7 +114,22 @@
         <div class="tab-content" id="mainTabsContent">
             <!-- Replica Requests Tab -->
             <div class="tab-pane fade show active" id="replica-requests" role="tabpanel">
-                <!-- Statistics Cards -->
+                                <!-- Sync Status Button -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="mb-0">Replica Requests Management</h5>
+                                <small class="text-muted">Manage and monitor replica training requests</small>
+                            </div>
+                            <button type="button" class="btn btn-primary" onclick="syncReplicaStatuses()" id="syncBtn">
+                                <i class="bi bi-arrow-clockwise me-2"></i>Sync Status with Tavus
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+<!-- Statistics Cards -->
                 <div class="row mb-4">
                     <div class="col-md-2">
                         <div class="card stat-card">
@@ -667,6 +682,39 @@
                 btn.innerHTML = originalText;
             }
         }
+        
+        async function syncReplicaStatuses() {
+            const btn = document.getElementById('syncBtn');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Syncing...';
+            
+            try {
+                const response = await fetch('/api/v1/admin/replica-requests/sync-status', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    const message = `Sync completed!\n\n` +
+                        `Checked: ${result.synced} requests\n` +
+                        `Updated: ${result.updated} requests` +
+                        (result.errors && result.errors.length > 0 ? `\n\nErrors: ${result.errors.length}` : '');
+                    alert(message);
+                    location.reload();
+                } else {
+                    alert('Failed: ' + (result.detail || 'Unknown error'));
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+
         
         async function viewAgencyDetails(agencyId) {
             const modal = new bootstrap.Modal(document.getElementById('agencyModal'));
