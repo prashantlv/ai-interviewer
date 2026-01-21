@@ -227,6 +227,70 @@
                             </tbody>
                         </table>
                     </div>
+                    {% if total_pages > 1 %}
+                    <div class="card-footer">
+                        <nav aria-label="Interview pagination">
+                            <ul class="pagination justify-content-center mb-0">
+                                {% if has_prev %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ prev_page }}{% if current_status != 'all' %}&status={{ current_status }}{% endif %}{% if current_position != 'all' %}&position={{ current_position }}{% endif %}{% if current_date %}&date={{ current_date }}{% endif %}{% if current_search %}&search={{ current_search }}{% endif %}">Previous</a>
+                                </li>
+                                {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">Previous</span>
+                                </li>
+                                {% endif %}
+                                
+                                {% if current_page > 1 %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page=1{% if current_status != 'all' %}&status={{ current_status }}{% endif %}{% if current_position != 'all' %}&position={{ current_position }}{% endif %}{% if current_date %}&date={{ current_date }}{% endif %}{% if current_search %}&search={{ current_search }}{% endif %}">1</a>
+                                </li>
+                                {% endif %}
+                                {% if current_page > 3 %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                                {% endif %}
+                                {% if current_page > 2 %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ current_page - 1 }}{% if current_status != 'all' %}&status={{ current_status }}{% endif %}{% if current_position != 'all' %}&position={{ current_position }}{% endif %}{% if current_date %}&date={{ current_date }}{% endif %}{% if current_search %}&search={{ current_search }}{% endif %}">{{ current_page - 1 }}</a>
+                                </li>
+                                {% endif %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ current_page }}</span>
+                                </li>
+                                {% if current_page < total_pages %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ current_page + 1 }}{% if current_status != 'all' %}&status={{ current_status }}{% endif %}{% if current_position != 'all' %}&position={{ current_position }}{% endif %}{% if current_date %}&date={{ current_date }}{% endif %}{% if current_search %}&search={{ current_search }}{% endif %}">{{ current_page + 1 }}</a>
+                                </li>
+                                {% endif %}
+                                {% if current_page < total_pages - 2 %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                                {% endif %}
+                                {% if current_page < total_pages %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ total_pages }}{% if current_status != 'all' %}&status={{ current_status }}{% endif %}{% if current_position != 'all' %}&position={{ current_position }}{% endif %}{% if current_date %}&date={{ current_date }}{% endif %}{% if current_search %}&search={{ current_search }}{% endif %}">{{ total_pages }}</a>
+                                </li>
+                                {% endif %}
+                                
+                                {% if has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ next_page }}{% if current_status != 'all' %}&status={{ current_status }}{% endif %}{% if current_position != 'all' %}&position={{ current_position }}{% endif %}{% if current_date %}&date={{ current_date }}{% endif %}{% if current_search %}&search={{ current_search }}{% endif %}">Next</a>
+                                </li>
+                                {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">Next</span>
+                                </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                        <div class="text-center mt-2">
+                            <small class="text-muted">Page {{ current_page }} of {{ total_pages }} ({{ total_interviews }} total interviews)</small>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
