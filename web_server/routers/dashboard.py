@@ -328,12 +328,17 @@ async def interviews_page(
             x.get("scheduled_date") or x.get("created_at") or ""
         ), reverse=True)
         
-        # Apply pagination
+        # Apply pagination to FILTERED interviews
         start_idx = offset
         end_idx = offset + per_page
-        interviews = all_interviews[start_idx:end_idx]
+        interviews = filtered_interviews[start_idx:end_idx]
         
-        total_interviews = len(all_interviews)
+        # Use filtered count for pagination
+        total_interviews = len(filtered_interviews)
+        total_pages = (total_interviews + per_page - 1) // per_page if total_interviews > 0 else 0
+        
+        # Update all_interviews to filtered for statistics calculation
+        all_interviews = filtered_interviews
         total_pages = (total_interviews + per_page - 1) // per_page if total_interviews > 0 else 0
         
         # Transform data for template
@@ -446,6 +451,7 @@ async def interviews_page(
         print(f"❌ Error getting interviews: {e}")
         # Fallback to empty list
         all_interviews = []
+        original_interviews = []
         interview_list = []
         total_interviews = 0
         total_pages = 0
@@ -491,10 +497,20 @@ async def interviews_page(
                 print(f"⚠️ Date parsing error for {interview.get('id')}: {date_str} - {e}")
                 pass
     
-    return templates.TemplateResponse("interviews.html", {
+    # Get unique positions for filter dropdown (from original unfiltered interviews)
+    all_positions = sorted(set(
+        i.get("position", "Unknown Position") 
+        for i in original_interviews
+        if i.get("position")
+    ))
+    
+        return templates.TemplateResponse("interviews.html", {
         "request": request,
         "interviews": interview_list,
-        "current_status": status,
+        "current_status": status or "all",
+        "current_position": position or "all",
+        "current_date": date or "",
+        "current_search": search or "",
         "current_page": page,
         "total_pages": total_pages,
         "total_interviews": total_interviews,
@@ -502,6 +518,7 @@ async def interviews_page(
         "has_next": page < total_pages,
         "prev_page": page - 1 if page > 1 else 1,
         "next_page": page + 1 if page < total_pages else total_pages,
+        "positions": all_positions,
         # Real statistics - FIX #4
         "this_month_count": this_month_count,
         "completed_count": completed_count,
