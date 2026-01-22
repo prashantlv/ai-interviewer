@@ -21,36 +21,30 @@ class Hire2InspireService:
         self.base_url = "https://api.hire2inspire.com/api"
         self.email = os.getenv("H2I_EMAIL", "hire2inspireh2i@gmail.com")
         self.password = os.getenv("H2I_PASSWORD", "Sant@1506")
-        # Use pre-existing token if available (for testing/development)
-        self.token: Optional[str] = os.getenv("H2I_ACCESS_TOKEN")
+        # Token is always obtained from cookies (via request) or login
+        self.token: Optional[str] = None
         self.token_expiry: Optional[datetime] = None
-        if self.token:
-            # Token valid for 24 hours from now if manually provided
-            # Note: If token is provided via env var, we'll use it even if "expired"
-            # The API will reject it if truly invalid
-            self.token_expiry = datetime.now() + timedelta(hours=24)
-            logger.info("✅ Using pre-configured access token from H2I_ACCESS_TOKEN")
-        else:
-            logger.warning("⚠️ H2I_ACCESS_TOKEN not set - will attempt login with credentials")
         
-    async def _ensure_token(self) -> str:
-        """Ensure we have a valid token, refresh if needed"""
-        # If we have a pre-configured token from env var, prefer it (don't try to login)
-        env_token = os.getenv("H2I_ACCESS_TOKEN")
-        if env_token:
-            logger.info("✅ Using token from H2I_ACCESS_TOKEN environment variable")
-            self.token = env_token
-            self.token_expiry = datetime.now() + timedelta(hours=24)  # Assume valid for 24h
-            return self.token
+    async def _ensure_token(self, token: Optional[str] = None) -> str:
+        """Ensure we have a valid token, refresh if needed
         
-        # If we have a token and it's not expired, use it
+        Args:
+            token: Optional token from cookies. If provided, uses this token.
+                   If not provided, falls back to cached token or login.
+        """
+        # If token is provided (from cookies), use it
+        if token:
+            logger.info("✅ Using token provided from cookies")
+            return token
+        
+        # If we have a cached token and it's not expired, use it
         if self.token and self.token_expiry and datetime.now() < self.token_expiry:
-            logger.debug("✅ Using existing valid token")
+            logger.debug("✅ Using existing valid cached token")
             return self.token
         
         # If token exists but expired, try to login
         if self.token:
-            logger.warning("⚠️ Token expired, attempting to login...")
+            logger.warning("⚠️ Cached token expired, attempting to login...")
         else:
             logger.info("🔑 No token found, attempting to login...")
             
@@ -149,10 +143,14 @@ class Hire2InspireService:
         except Exception as e:
             logger.warning(f"⚠️ Logout failed: {e}")
     
-    async def get_all_jobs(self) -> List[Dict[str, Any]]:
-        """Get all job descriptions for the agency"""
+    async def get_all_jobs(self, token: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get all job descriptions for the agency
+        
+        Args:
+            token: Optional access token from cookies. If provided, uses this token.
+        """
         try:
-            token = await self._ensure_token()
+            token = await self._ensure_token(token)
             
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(
@@ -182,11 +180,19 @@ class Hire2InspireService:
         self, 
         job_hash_id: str,
         page: int = 1,
-        limit: int = 100
+        limit: int = 100,
+        token: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Get shortlisted candidates for a specific job"""
+        """Get shortlisted candidates for a specific job
+        
+        Args:
+            job_hash_id: The job hash ID
+            page: Page number for pagination
+            limit: Number of items per page
+            token: Optional access token from cookies. If provided, uses this token.
+        """
         try:
-            token = await self._ensure_token()
+            token = await self._ensure_token(token)
             
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(
@@ -222,10 +228,15 @@ class Hire2InspireService:
             logger.error(f"❌ Failed to fetch candidates: {e}")
             return []
     
-    async def get_job_details(self, job_hash_id: str) -> Optional[Dict[str, Any]]:
-        """Get details of a specific job by hash_id"""
+    async def get_job_details(self, job_hash_id: str, token: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Get details of a specific job by hash_id
+        
+        Args:
+            job_hash_id: The job hash ID
+            token: Optional access token from cookies. If provided, uses this token.
+        """
         try:
-            jobs = await self.get_all_jobs()
+            jobs = await self.get_all_jobs(token=token)
             for job in jobs:
                 if job.get("hash_id") == job_hash_id:
                     return job
@@ -237,11 +248,18 @@ class Hire2InspireService:
     async def get_candidate_details(
         self, 
         job_hash_id: str, 
-        candidate_id: str
+        candidate_id: str,
+        token: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
-        """Get details of a specific candidate"""
+        """Get details of a specific candidate
+        
+        Args:
+            job_hash_id: The job hash ID
+            candidate_id: The candidate ID
+            token: Optional access token from cookies. If provided, uses this token.
+        """
         try:
-            candidates = await self.get_shortlisted_candidates(job_hash_id)
+            candidates = await self.get_shortlisted_candidates(job_hash_id, token=token)
             for candidate in candidates:
                 if candidate.get("_id") == candidate_id or candidate.get("hash_id") == candidate_id:
                     return candidate
@@ -256,27 +274,13 @@ class Hire2InspireService:
         
         Args:
             user_type: Either "agencies" or "employers" (default: "agencies")
-            token: Optional access token from sign-in. If provided, uses this instead of env var or login.
+            token: Optional access token from cookies. If provided, uses this token.
         
         Returns:
             List of agency/employer dictionaries
         """
         try:
-            # Use provided token if available (from sign-in) - highest priority
-            if token:
-                logger.info("✅ Using token provided from sign-in")
-            else:
-                # Try to get token, but if login fails, try with existing token anyway
-                try:
-                    token = await self._ensure_token()
-                except Exception as login_error:
-                    logger.warning(f"⚠️ Token acquisition failed: {login_error}")
-                    # If we have a token set via env var, use it even if expired
-                    if self.token:
-                        logger.info("🔄 Attempting to use token from environment variable")
-                        token = self.token
-                    else:
-                        raise
+            token = await self._ensure_token(token)
             
             if not token:
                 logger.error("❌ No token available for API call")
@@ -348,7 +352,7 @@ class Hire2InspireService:
         
         Args:
             agency_id: The agency ID to fetch
-            token: Optional access token from sign-in. If provided, uses this for authenticated requests.
+            token: Optional access token from cookies. If provided, uses this for authenticated requests.
         """
         try:
             headers = {
@@ -358,7 +362,7 @@ class Hire2InspireService:
             # Add Authorization header if token is provided
             if token:
                 headers["Authorization"] = f"Bearer {token}"
-                logger.info("✅ Using token provided from sign-in for agency details")
+                logger.info("✅ Using token provided from cookies for agency details")
             
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(
