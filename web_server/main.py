@@ -723,15 +723,31 @@ async def get_interview_config(interview_id: str, scoring_level: Optional[str] =
             scoring_config = await scoring_config_service.get_default_config()
         
         # Get replica_id from interview if specified (for per-interview replica selection)
+        # Priority: 1) Interview-specific replica_id, 2) User's default_replica_id from config, 3) None
         replica_id = None
-        if interview and interview.get("evaluation"):
-            replica_id = interview.get("evaluation", {}).get("replica_id")
+        user_id = None
+        
+        if interview:
+            # Get user_id from interview if available
+            user_id = interview.get("user_id") or interview.get("userId")
+            
+            # Check for interview-specific replica_id first
+            if interview.get("evaluation"):
+                replica_id = interview.get("evaluation", {}).get("replica_id")
+            
+            # If no interview-specific replica, check user's config
+            if not replica_id and user_id:
+                tavus_config = await db_service.get_user_integration_config(user_id, "tavus")
+                if tavus_config and tavus_config.get("default_replica_id"):
+                    replica_id = tavus_config.get("default_replica_id")
+                    print(f"✅ Using user's default replica from config: {replica_id}")
         
         return {
             "interview_id": interview_id,
             "questions": questions,
             "scoring_config": scoring_config,  # Full DB-based scoring config
             "replica_id": replica_id,  # Optional: allows per-interview replica selection
+            "user_id": user_id,  # Include user_id so bot can use it for replica-config
             "candidate_info": {
                 "name": candidate_resume.get("personal_info", {}).get("name", "Unknown"),
                 "email": candidate_resume.get("personal_info", {}).get("email", "N/A"),
@@ -746,9 +762,18 @@ async def get_interview_config(interview_id: str, scoring_level: Optional[str] =
         raise HTTPException(status_code=500, detail=f"Failed to get interview config: {str(e)}")
 
 @app.get("/api/v1/bot/replica-config")
-async def get_replica_config(replica_id: Optional[str] = None):
+async def get_replica_config(
+    replica_id: Optional[str] = None,
+    user_id: Optional[str] = None
+):
     """
     Get replica-voice configuration for bot.
+    
+    Priority order:
+    1. User's config from user_integrations (if user_id provided)
+    2. Specific replica mapping from replica_voice_mappings (if replica_id provided)
+    3. Default replica mapping from replica_voice_mappings
+    4. Environment variables
     
     If replica_id is provided, returns config for that replica (auto-cloning voice if needed).
     Otherwise, returns the default replica config.
@@ -759,8 +784,35 @@ async def get_replica_config(replica_id: Optional[str] = None):
         config = None
         target_replica_id = replica_id
         
-        if replica_id:
-            # Specific replica requested - try to get its mapping
+        # Priority 1: Check user's config from user_integrations if user_id provided
+        if user_id:
+            tavus_config = await db_service.get_user_integration_config(user_id, "tavus")
+            cartesia_config = await db_service.get_user_integration_config(user_id, "cartesia")
+            
+            if tavus_config and tavus_config.get("default_replica_id"):
+                user_replica_id = tavus_config.get("default_replica_id")
+                # Use user's default replica if no specific replica requested
+                if not replica_id:
+                    target_replica_id = user_replica_id
+                    replica_id = user_replica_id
+                    print(f"✅ Using user's default replica from config: {user_replica_id}")
+                
+                # Get voice from user's cartesia config or fallback
+                user_voice_id = None
+                if cartesia_config:
+                    user_voice_id = cartesia_config.get("default_voice_id")
+                
+                if user_voice_id:
+                    config = {
+                        "replica_id": target_replica_id or user_replica_id,
+                        "voice_id": user_voice_id,
+                        "is_default": True,
+                        "source": "user_config"
+                    }
+                    print(f"✅ Using user's config: replica={config['replica_id']}, voice={user_voice_id}")
+        
+        # Priority 2: Specific replica requested - try to get its mapping
+        if replica_id and not config:
             config = await db_service.get_replica_config(replica_id)
             
             # If no mapping exists for this replica, auto-clone its voice
@@ -778,7 +830,16 @@ async def get_replica_config(replica_id: Optional[str] = None):
                     }
                 else:
                     # Use fallback voice but still use the requested replica
-                    fallback_voice = os.getenv("CARTESIA_VOICE_ID", "a0e99841-438c-4a64-b679-ae501e7d6091")
+                    # Check user's cartesia config first
+                    fallback_voice = None
+                    if user_id:
+                        cartesia_config = await db_service.get_user_integration_config(user_id, "cartesia")
+                        if cartesia_config:
+                            fallback_voice = cartesia_config.get("default_voice_id")
+                    
+                    if not fallback_voice:
+                        fallback_voice = os.getenv("CARTESIA_VOICE_ID", "a0e99841-438c-4a64-b679-ae501e7d6091")
+                    
                     print(f"⚠️ Auto-clone failed for {replica_id}, using fallback voice: {fallback_voice}")
                     config = {
                         "replica_id": replica_id,
@@ -786,8 +847,9 @@ async def get_replica_config(replica_id: Optional[str] = None):
                         "is_default": False,
                         "source": "fallback"
                     }
-        else:
-            # No specific replica - get default config
+        
+        # Priority 3: No specific replica - get default config from replica_voice_mappings
+        if not config and not replica_id:
             config = await db_service.get_default_replica_config()
             if config:
                 target_replica_id = config.get("replica_id")
@@ -800,12 +862,20 @@ async def get_replica_config(replica_id: Optional[str] = None):
                 config["voice_id"] = cloned_voice_id
                 print(f"✅ Auto-cloned voice: {cloned_voice_id}")
             else:
-                # Fallback to default Cartesia voice
-                fallback = os.getenv("CARTESIA_VOICE_ID", "a0e99841-438c-4a64-b679-ae501e7d6091")
+                # Fallback to user's cartesia config or env var
+                fallback = None
+                if user_id:
+                    cartesia_config = await db_service.get_user_integration_config(user_id, "cartesia")
+                    if cartesia_config:
+                        fallback = cartesia_config.get("default_voice_id")
+                
+                if not fallback:
+                    fallback = os.getenv("CARTESIA_VOICE_ID", "a0e99841-438c-4a64-b679-ae501e7d6091")
+                
                 config["voice_id"] = fallback
                 print(f"⚠️ Auto-clone failed, using fallback: {fallback}")
         
-        # Fallback to environment variables ONLY if no replica specified and no default
+        # Priority 4: Fallback to environment variables ONLY if no replica specified and no default
         if not config:
             replica_id_env = os.getenv("TAVUS_REPLICA_ID")
             voice_id_env = os.getenv("CARTESIA_VOICE_ID", "a0e99841-438c-4a64-b679-ae501e7d6091")

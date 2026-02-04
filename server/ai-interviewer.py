@@ -168,12 +168,17 @@ async def fetch_interview_config(session: aiohttp.ClientSession, interview_id: s
         logger.error(f"Error fetching interview config: {e}")
         return None
 
-async def fetch_replica_config(session: aiohttp.ClientSession, replica_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+async def fetch_replica_config(session: aiohttp.ClientSession, replica_id: Optional[str] = None, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Fetch replica-voice configuration from web server"""
     try:
         url = f"{WEB_SERVER_URL}/api/v1/bot/replica-config"
+        params = []
         if replica_id:
-            url += f"?replica_id={replica_id}"
+            params.append(f"replica_id={replica_id}")
+        if user_id:
+            params.append(f"user_id={user_id}")
+        if params:
+            url += "?" + "&".join(params)
         logger.info(f"Fetching replica config from: {url}")
         
         async with session.get(url) as response:
@@ -864,7 +869,8 @@ async def run_bot(
     # Fetch replica-voice configuration from web server
     # Check if interview config specifies a replica_id, otherwise use default
     interview_replica_id = interview_config.get("replica_id") if interview_config else None
-    replica_config = await fetch_replica_config(session, replica_id=interview_replica_id)
+    interview_user_id = interview_config.get("user_id") if interview_config else None
+    replica_config = await fetch_replica_config(session, replica_id=interview_replica_id, user_id=interview_user_id)
     
     # Extract replica_id and voice_id (fallback to env vars if not in database)
     if replica_config:

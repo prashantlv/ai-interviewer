@@ -269,9 +269,51 @@ async def get_user_api_keys(
     
     return api_keys
 
+
+async def get_user_integration_configs(
+    current_user: CurrentUserDep,
+    db: DbServiceDep
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Dependency to get user's integration configurations from database
+    
+    Fetches config from user_integrations collection for each provider.
+    
+    Returns:
+        Dict with provider names as keys and config dicts as values
+        Example: {
+            "tavus": {"default_replica_id": "r0518ad3a314"},
+            "cartesia": {"default_voice_id": "c252b73c-...", "model": "sonic-english", "language": "en"},
+            "openai": {},
+            "daily": {}
+        }
+    """
+    user_id = current_user.get("userId")
+    if not user_id:
+        return {
+            "openai": {},
+            "tavus": {},
+            "cartesia": {},
+            "daily": {}
+        }
+    
+    # Fetch user's configs from database
+    configs = {
+        "openai": await db.get_user_integration_config(user_id, "openai") or {},
+        "tavus": await db.get_user_integration_config(user_id, "tavus") or {},
+        "cartesia": await db.get_user_integration_config(user_id, "cartesia") or {},
+        "daily": await db.get_user_integration_config(user_id, "daily") or {}
+    }
+    
+    return configs
+
 # Type alias for user API keys dependency
 UserApiKeysDep = Annotated[Dict[str, Optional[str]], Depends(get_user_api_keys)]
 """User API keys dependency - injects user's API keys (with env fallback)"""
+
+# Type alias for user integration configs dependency
+UserIntegrationConfigsDep = Annotated[Dict[str, Dict[str, Any]], Depends(get_user_integration_configs)]
+"""User integration configs dependency - injects user's integration configurations"""
 
 
 # =============================================================================
