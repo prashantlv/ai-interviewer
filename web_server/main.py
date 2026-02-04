@@ -351,7 +351,7 @@ async def logout(request: Request):
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.post(
-                    "https://api.hire2inspire.com/api/agency/logout",
+                    "https://pro.hire2inspire.com/api/agency/logout",
                     headers={"Authorization": f"Bearer {token}"}
                 )
                 print(f"✅ Logout API called - Status: {response.status_code}")

@@ -18,7 +18,7 @@ class Hire2InspireService:
     """Service to interact with Hire2Inspire API"""
     
     def __init__(self):
-        self.base_url = "https://api.hire2inspire.com/api"
+        self.base_url = "https://pro.hireinspire.com/api"
         self.email = os.getenv("H2I_EMAIL", "hire2inspireh2i@gmail.com")
         self.password = os.getenv("H2I_PASSWORD", "Sant@1506")
         # Token is always obtained from cookies (via request) or login
