@@ -17,6 +17,7 @@ class SetApiKeyRequest(BaseModel):
     """Request model for setting API key"""
     api_key: str = Field(..., description="API key to store (will be encrypted)")
     is_active: bool = Field(True, description="Whether the key is active")
+    config: Optional[Dict[str, Any]] = Field(None, description="Provider-specific configuration (e.g., default_replica_id, default_voice_id)")
 
 
 class IntegrationStatus(BaseModel):
@@ -72,8 +73,20 @@ async def list_user_integrations(
                 is_active=integration.get("is_active", False) if integration else False
             ))
         
+        # Include config in response if available
+        integrations_with_config = []
+        for status in statuses:
+            integration = next(
+                (i for i in integrations_data if i.get("provider") == status.provider),
+                None
+            )
+            status_dict = status.dict()
+            if integration and integration.get("config"):
+                status_dict["config"] = integration.get("config")
+            integrations_with_config.append(status_dict)
+        
         return IntegrationListResponse(
-            integrations=statuses,
+            integrations=integrations_with_config if integrations_with_config else statuses,
             total=len([s for s in statuses if s.is_configured])
         )
     except HTTPException:
@@ -120,12 +133,13 @@ async def set_user_api_key(
         if not request.api_key or not request.api_key.strip():
             raise HTTPException(status_code=400, detail="API key cannot be empty")
         
-        # Store the API key
+        # Store the API key with optional config
         success = await db.set_user_api_key(
             user_id=user_id,
             provider=provider.lower(),
             api_key=request.api_key.strip(),
-            is_active=request.is_active
+            is_active=request.is_active,
+            config=request.config
         )
         
         if not success:
@@ -245,7 +259,8 @@ async def get_integrations_status(
                 "has_user_key": integration is not None,
                 "is_active": integration.get("is_active", False) if integration else False,
                 "has_env_fallback": bool(env_key),
-                "using": "user_key" if integration and integration.get("is_active") else ("env_var" if env_key else "none")
+                "using": "user_key" if integration and integration.get("is_active") else ("env_var" if env_key else "none"),
+                "config": integration.get("config", {}) if integration else {}
             }
         
         return {
@@ -258,4 +273,159 @@ async def get_integrations_status(
         raise
     except Exception as e:
         logger.error(f"❌ Error getting integration status: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class UpdateConfigRequest(BaseModel):
+    """Request model for updating integration configuration"""
+    config: Dict[str, Any] = Field(..., description="Configuration to update (e.g., default_replica_id, default_voice_id)")
+
+
+@router.put("/api/v1/user/integrations/{provider}/config")
+async def update_integration_config(
+    provider: str,
+    request: UpdateConfigRequest,
+    current_user: CurrentUserDep,
+    db: DbServiceDep
+) -> Dict[str, Any]:
+    """
+    Update configuration for a user's integration (without changing API key)
+    
+    Example for Tavus:
+        {
+            "config": {
+                "default_replica_id": "r0518ad3a314"
+            }
+        }
+    
+    Example for Cartesia:
+        {
+            "config": {
+                "default_voice_id": "c252b73c-8627-4b1d-b9e1-9e03e8550d47",
+                "model": "sonic-english",
+                "language": "en"
+            }
+        }
+    """
+    try:
+        user_id = current_user.get("userId")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="User ID not found in token")
+        
+        # Validate provider
+        valid_providers = ["openai", "tavus", "cartesia", "daily"]
+        if provider.lower() not in valid_providers:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid provider. Must be one of: {', '.join(valid_providers)}"
+            )
+        
+        # Check if integration exists
+        integration = await db.database.user_integrations.find_one(
+            {
+                "user_id": user_id,
+                "provider": provider.lower()
+            }
+        )
+        
+        if not integration:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Integration not found for provider {provider}. Please set API key first."
+            )
+        
+        # Update config
+        success = await db.update_user_integration_config(
+            user_id=user_id,
+            provider=provider.lower(),
+            config=request.config
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to update configuration"
+            )
+        
+        logger.info(f"✅ Updated config for user {user_id}, provider {provider}")
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "message": f"Configuration for {provider} updated successfully",
+                "provider": provider.lower(),
+                "config": request.config
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error updating config: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/v1/user/integrations/{provider}/config")
+async def get_integration_config(
+    provider: str,
+    current_user: CurrentUserDep,
+    db: DbServiceDep
+) -> Dict[str, Any]:
+    """
+    Get configuration for a user's integration
+    """
+    try:
+        user_id = current_user.get("userId")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="User ID not found in token")
+        
+        # Validate provider
+        valid_providers = ["openai", "tavus", "cartesia", "daily"]
+        if provider.lower() not in valid_providers:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid provider. Must be one of: {', '.join(valid_providers)}"
+            )
+        
+        # Get config
+        config = await db.get_user_integration_config(
+            user_id=user_id,
+            provider=provider.lower()
+        )
+        
+        if config is None:
+            # Check if integration exists
+            integration = await db.database.user_integrations.find_one(
+                {
+                    "user_id": user_id,
+                    "provider": provider.lower()
+                }
+            )
+            
+            if not integration:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Integration not found for provider {provider}"
+                )
+            
+            # Integration exists but no config
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "provider": provider.lower(),
+                    "config": {}
+                }
+            )
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "provider": provider.lower(),
+                "config": config
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error getting config: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

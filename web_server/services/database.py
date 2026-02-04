@@ -788,16 +788,18 @@ class DatabaseService:
         user_id: str,
         provider: str,
         api_key: str,
-        is_active: bool = True
+        is_active: bool = True,
+        config: Optional[Dict[str, Any]] = None
     ) -> bool:
         """
-        Store encrypted API key for a user
+        Store encrypted API key for a user with optional configuration
         
         Args:
             user_id: User identifier
             provider: Provider name (e.g., "openai", "tavus", "cartesia")
             api_key: API key to encrypt and store
             is_active: Whether the key is active
+            config: Optional provider-specific configuration (e.g., default_replica_id, default_voice_id)
         
         Returns:
             True if successful, False otherwise
@@ -812,6 +814,17 @@ class DatabaseService:
             # Encrypt the API key
             encrypted_key = encryption_service.encrypt(api_key)
             
+            # Build update document
+            update_doc = {
+                "api_key_encrypted": encrypted_key,
+                "is_active": is_active,
+                "updated_at": datetime.now()
+            }
+            
+            # Add config if provided (merge with existing config if present)
+            if config is not None:
+                update_doc["config"] = config
+            
             # Store in database
             await self.database.user_integrations.update_one(
                 {
@@ -819,11 +832,7 @@ class DatabaseService:
                     "provider": provider
                 },
                 {
-                    "$set": {
-                        "api_key_encrypted": encrypted_key,
-                        "is_active": is_active,
-                        "updated_at": datetime.now()
-                    },
+                    "$set": update_doc,
                     "$setOnInsert": {
                         "user_id": user_id,
                         "provider": provider,
@@ -834,12 +843,110 @@ class DatabaseService:
             )
             
             print(f"✅ Stored API key for user {user_id}, provider {provider}")
+            if config:
+                print(f"   Config: {config}")
             return True
         except Exception as e:
             print(f"❌ Error storing API key: {e}")
             import traceback
             traceback.print_exc()
             return False
+    
+    async def update_user_integration_config(
+        self,
+        user_id: str,
+        provider: str,
+        config: Dict[str, Any]
+    ) -> bool:
+        """
+        Update configuration for a user's integration (without changing API key)
+        
+        Args:
+            user_id: User identifier
+            provider: Provider name (e.g., "tavus", "cartesia")
+            config: Configuration to update (will be merged with existing config)
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        if self.database is None:
+            print("⚠️ Database not connected - cannot update config")
+            return False
+        
+        try:
+            # Get existing integration
+            integration = await self.database.user_integrations.find_one(
+                {
+                    "user_id": user_id,
+                    "provider": provider
+                }
+            )
+            
+            if not integration:
+                print(f"⚠️ Integration not found for user {user_id}, provider {provider}")
+                return False
+            
+            # Merge with existing config
+            existing_config = integration.get("config", {})
+            merged_config = {**existing_config, **config}
+            
+            # Update config
+            await self.database.user_integrations.update_one(
+                {
+                    "user_id": user_id,
+                    "provider": provider
+                },
+                {
+                    "$set": {
+                        "config": merged_config,
+                        "updated_at": datetime.now()
+                    }
+                }
+            )
+            
+            print(f"✅ Updated config for user {user_id}, provider {provider}")
+            print(f"   Config: {merged_config}")
+            return True
+        except Exception as e:
+            print(f"❌ Error updating config: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    async def get_user_integration_config(
+        self,
+        user_id: str,
+        provider: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get configuration for a user's integration
+        
+        Args:
+            user_id: User identifier
+            provider: Provider name
+        
+        Returns:
+            Configuration dict or None if not found
+        """
+        if self.database is None:
+            return None
+        
+        try:
+            integration = await self.database.user_integrations.find_one(
+                {
+                    "user_id": user_id,
+                    "provider": provider,
+                    "is_active": True
+                }
+            )
+            
+            if not integration:
+                return None
+            
+            return integration.get("config", {})
+        except Exception as e:
+            print(f"❌ Error getting config: {e}")
+            return None
     
     async def get_user_api_key(
         self,
@@ -934,7 +1041,7 @@ class DatabaseService:
             user_id: User identifier
         
         Returns:
-            List of integration dictionaries (without decrypted keys)
+            List of integration dictionaries (without decrypted keys, but includes config)
         """
         if self.database is None:
             return []
@@ -947,11 +1054,12 @@ class DatabaseService:
                 }
             ).to_list(length=100)
             
-            # Remove encrypted keys and MongoDB _id from response
+            # Remove encrypted keys and MongoDB _id from response, but keep config
             result = []
             for integration in integrations:
                 integration.pop('_id', None)
                 integration.pop('api_key_encrypted', None)  # Don't expose encrypted keys
+                # Keep config field if present
                 result.append(integration)
             
             return result
