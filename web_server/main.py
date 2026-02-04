@@ -28,7 +28,7 @@ from typing import Optional, Dict, Any
 import pytz
 
 # Import our modules
-from routers import interviews, dashboard, feedback, bots, tavus, voices, scoring_settings, proctoring, admin
+from routers import interviews, dashboard, feedback, bots, tavus, voices, scoring_settings, proctoring, admin, integrations
 from services.database import DatabaseService
 from services.question_engine import QuestionEngine
 from services.scoring_engine import ScoringEngine
@@ -192,6 +192,7 @@ app.include_router(voices.router, prefix="/api/v1/voices", tags=["voices-v1"])
 # API: /api/v1/tavus/* (backend still uses tavus service)
 app.include_router(tavus.router, tags=["replicas"])
 app.include_router(proctoring.router, tags=["proctoring"])
+app.include_router(integrations.router, tags=["integrations"])
 
 # Admin routes
 # Login: /admin/login
