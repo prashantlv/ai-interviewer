@@ -13,12 +13,13 @@ class VoiceCloningService:
     """Service for cloning voices using Cartesia Instant Voice Cloning API"""
     
     def __init__(self):
-        self.api_key = os.getenv("CARTESIA_API_KEY")
+        # Default API key from environment (for backward compatibility)
+        self.default_api_key = os.getenv("CARTESIA_API_KEY")
         self.api_url = "https://api.cartesia.ai/voices/clone"
         self.api_version = "2024-06-10"
         
-        if not self.api_key:
-            logger.warning("⚠️  CARTESIA_API_KEY not set - voice cloning will not work")
+        if not self.default_api_key:
+            logger.warning("⚠️  CARTESIA_API_KEY not set - voice cloning will not work without per-user keys")
     
     async def clone_voice(
         self,
@@ -26,7 +27,8 @@ class VoiceCloningService:
         voice_name: str,
         language: str = "en",
         mode: str = "similarity",
-        enhance: bool = False
+        enhance: bool = False,
+        api_key: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Clone a voice from audio data using Cartesia Instant Voice Cloning
@@ -39,6 +41,7 @@ class VoiceCloningService:
                   - similarity: Matches voice characteristics closely
                   - stability: More stable but less accurate
             enhance: Clean and denoise the audio (use if noisy)
+            api_key: Optional Cartesia API key. If not provided, uses default from env.
         
         Returns:
             Dict with voice_id, name, and metadata
@@ -46,14 +49,15 @@ class VoiceCloningService:
         Raises:
             Exception if cloning fails
         """
-        if not self.api_key:
-            raise ValueError("CARTESIA_API_KEY not configured")
+        key = api_key or self.default_api_key
+        if not key:
+            raise ValueError("Cartesia API key not provided and CARTESIA_API_KEY env var not set")
         
         try:
             logger.info(f"🎤 Cloning voice: {voice_name} (language: {language}, mode: {mode})")
             
             headers = {
-                "X-API-Key": self.api_key,
+                "X-API-Key": key,
                 "Cartesia-Version": self.api_version,
             }
             
@@ -104,22 +108,24 @@ class VoiceCloningService:
             logger.error(f"❌ Voice cloning error: {str(e)}")
             raise
     
-    async def get_voice(self, voice_id: str) -> Optional[Dict[str, Any]]:
+    async def get_voice(self, voice_id: str, api_key: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Get voice metadata from Cartesia
         
         Args:
             voice_id: The voice ID to retrieve
+            api_key: Optional Cartesia API key. If not provided, uses default from env.
             
         Returns:
             Voice metadata dict or None if not found
         """
-        if not self.api_key:
+        key = api_key or self.default_api_key
+        if not key:
             return None
         
         try:
             headers = {
-                "X-API-Key": self.api_key,
+                "X-API-Key": key,
                 "Cartesia-Version": self.api_version,
             }
             
@@ -139,19 +145,23 @@ class VoiceCloningService:
             logger.error(f"❌ Error fetching voice: {str(e)}")
             return None
     
-    async def list_voices(self) -> list[Dict[str, Any]]:
+    async def list_voices(self, api_key: Optional[str] = None) -> list[Dict[str, Any]]:
         """
         List all available voices (including cloned ones)
+        
+        Args:
+            api_key: Optional Cartesia API key. If not provided, uses default from env.
         
         Returns:
             List of voice metadata dicts
         """
-        if not self.api_key:
+        key = api_key or self.default_api_key
+        if not key:
             return []
         
         try:
             headers = {
-                "X-API-Key": self.api_key,
+                "X-API-Key": key,
                 "Cartesia-Version": self.api_version,
             }
             

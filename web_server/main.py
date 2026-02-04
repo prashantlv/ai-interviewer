@@ -703,11 +703,16 @@ async def get_interview_config(interview_id: str, scoring_level: Optional[str] =
             "question_count": 8
         }
         
+        # Get OpenAI API key (use env fallback for bot endpoints)
+        # Note: This endpoint is called by bots, not users, so we use env fallback
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        
         # Generate questions based on JD and resume
         questions = await question_engine.generate_questions(
             job_description=job_description,
             resume_data=candidate_resume,
-            interview_config=interview_config
+            interview_config=interview_config,
+            api_key=openai_api_key
         )
         
         # Get scoring configuration from database

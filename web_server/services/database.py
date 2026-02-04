@@ -15,7 +15,7 @@ class DatabaseService:
         self.database = None
         
         # MongoDB connection settings (will be updated with real schema)
-        self.mongodb_url = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+        self.mongodb_url = os.getenv("MONGODB_URL", "mongodb+srv://root:XejrWinDai6SUHJc@cluster0.1rbkzbp.mongodb.net/hire2inspire_dev_db?retryWrites=true&w=majority")
         self.database_name = os.getenv("DATABASE_NAME", "ai_interviewer")
         
         # Connection pool settings
@@ -149,6 +149,15 @@ class DatabaseService:
             await self.database.replica_requests.create_index("submitted_at")
             await self.database.replica_requests.create_index("submitted_by")
             print("✅ Created 'replica_requests' collection with indexes")
+        
+        # user_integrations - stores encrypted API keys per user
+        if "user_integrations" not in collections:
+            await self.database.create_collection("user_integrations")
+            await self.database.user_integrations.create_index([("user_id", 1), ("provider", 1)], unique=True)
+            await self.database.user_integrations.create_index("user_id")
+            await self.database.user_integrations.create_index("provider")
+            await self.database.user_integrations.create_index("is_active")
+            print("✅ Created 'user_integrations' collection with indexes")
     
     def _load_json_data(self, filename: str) -> Dict[str, Any]:
         """Load data from JSON file"""
@@ -769,6 +778,186 @@ class DatabaseService:
         except Exception as e:
             print(f"❌ Error updating replica request status: {e}")
             return False
+    
+    # ============================================================================
+    # User Integrations (API Keys) Management
+    # ============================================================================
+    
+    async def set_user_api_key(
+        self,
+        user_id: str,
+        provider: str,
+        api_key: str,
+        is_active: bool = True
+    ) -> bool:
+        """
+        Store encrypted API key for a user
+        
+        Args:
+            user_id: User identifier
+            provider: Provider name (e.g., "openai", "tavus", "cartesia")
+            api_key: API key to encrypt and store
+            is_active: Whether the key is active
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        if self.database is None:
+            print("⚠️ Database not connected - cannot store API key")
+            return False
+        
+        try:
+            from services.encryption_service import encryption_service
+            
+            # Encrypt the API key
+            encrypted_key = encryption_service.encrypt(api_key)
+            
+            # Store in database
+            await self.database.user_integrations.update_one(
+                {
+                    "user_id": user_id,
+                    "provider": provider
+                },
+                {
+                    "$set": {
+                        "api_key_encrypted": encrypted_key,
+                        "is_active": is_active,
+                        "updated_at": datetime.now()
+                    },
+                    "$setOnInsert": {
+                        "user_id": user_id,
+                        "provider": provider,
+                        "created_at": datetime.now()
+                    }
+                },
+                upsert=True
+            )
+            
+            print(f"✅ Stored API key for user {user_id}, provider {provider}")
+            return True
+        except Exception as e:
+            print(f"❌ Error storing API key: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    async def get_user_api_key(
+        self,
+        user_id: str,
+        provider: str
+    ) -> Optional[str]:
+        """
+        Retrieve and decrypt API key for a user
+        
+        Args:
+            user_id: User identifier
+            provider: Provider name (e.g., "openai", "tavus", "cartesia")
+        
+        Returns:
+            Decrypted API key or None if not found/inactive
+        """
+        if self.database is None:
+            return None
+        
+        try:
+            from services.encryption_service import encryption_service
+            
+            # Find the integration
+            integration = await self.database.user_integrations.find_one(
+                {
+                    "user_id": user_id,
+                    "provider": provider,
+                    "is_active": True
+                }
+            )
+            
+            if not integration:
+                return None
+            
+            # Decrypt the API key
+            encrypted_key = integration.get("api_key_encrypted")
+            if not encrypted_key:
+                return None
+            
+            decrypted_key = encryption_service.decrypt(encrypted_key)
+            return decrypted_key
+        except Exception as e:
+            print(f"❌ Error retrieving API key: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    async def delete_user_api_key(
+        self,
+        user_id: str,
+        provider: str
+    ) -> bool:
+        """
+        Delete (deactivate) API key for a user
+        
+        Args:
+            user_id: User identifier
+            provider: Provider name
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        if self.database is None:
+            return False
+        
+        try:
+            result = await self.database.user_integrations.update_one(
+                {
+                    "user_id": user_id,
+                    "provider": provider
+                },
+                {
+                    "$set": {
+                        "is_active": False,
+                        "deleted_at": datetime.now()
+                    }
+                }
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"❌ Error deleting API key: {e}")
+            return False
+    
+    async def get_user_integrations(
+        self,
+        user_id: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all active integrations for a user
+        
+        Args:
+            user_id: User identifier
+        
+        Returns:
+            List of integration dictionaries (without decrypted keys)
+        """
+        if self.database is None:
+            return []
+        
+        try:
+            integrations = await self.database.user_integrations.find(
+                {
+                    "user_id": user_id,
+                    "is_active": True
+                }
+            ).to_list(length=100)
+            
+            # Remove encrypted keys and MongoDB _id from response
+            result = []
+            for integration in integrations:
+                integration.pop('_id', None)
+                integration.pop('api_key_encrypted', None)  # Don't expose encrypted keys
+                result.append(integration)
+            
+            return result
+        except Exception as e:
+            print(f"❌ Error retrieving integrations: {e}")
+            return []
 
 # Global database instance
 db_service = DatabaseService()

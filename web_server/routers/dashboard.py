@@ -10,7 +10,7 @@ from typing import Optional
 from datetime import datetime, timedelta, timezone
 import pytz
 
-from dependencies import DbServiceDep, BotManagerDep, CurrentUserDep
+from dependencies import DbServiceDep, BotManagerDep, CurrentUserDep, UserApiKeysDep
 from services.daily_service import daily_service
 
 router = APIRouter()
@@ -701,6 +701,7 @@ async def create_interview(
     db: DbServiceDep,
     bot_manager: BotManagerDep,
     current_user: CurrentUserDep,
+    api_keys: UserApiKeysDep,
     candidate_name: str = Form(...),
     candidate_email: str = Form(...),
     position: str = Form(...),
@@ -802,14 +803,17 @@ async def create_interview(
     # Generate unique interview ID
     interview_id = f"interview_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
     
+    # Get user API keys (with env fallback)
+    openai_api_key = api_keys.get("openai")
+    
     # Parse JD and Resume using GPT
     print(f"🤖 Parsing job description and resume with GPT...")
     jd_parser = JDParser()
     resume_parser = ResumeParser()
     
     # Parse in parallel for speed
-    parsed_jd = await jd_parser.parse_job_description(job_description, position)
-    parsed_resume = await resume_parser.parse_resume(candidate_resume)
+    parsed_jd = await jd_parser.parse_job_description(job_description, position, api_key=openai_api_key)
+    parsed_resume = await resume_parser.parse_resume(candidate_resume, api_key=openai_api_key)
     
     print(f"✅ JD parsed: {len(parsed_jd.get('skills_required', []))} skills required")
     print(f"✅ Resume parsed: {len(parsed_resume.get('skills', []))} skills found, {parsed_resume.get('experience_years', 0)} years exp")

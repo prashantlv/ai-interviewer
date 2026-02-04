@@ -13,24 +13,42 @@ from loguru import logger
 class JDParser:
     def __init__(self):
         """Initialize JD Parser with OpenAI client"""
-        api_key = os.getenv("OPENAI_API_KEY")
-        if api_key:
-            self.openai_client = openai.OpenAI(api_key=api_key)
-        else:
-            self.openai_client = None
+        # Default API key from environment (for backward compatibility)
+        self.default_api_key = os.getenv("OPENAI_API_KEY")
+        if not self.default_api_key:
             logger.warning("⚠️ OPENAI_API_KEY not set. JD parser will use fallback mode.")
     
-    def health_check(self) -> str:
-        """Check if parser is operational"""
-        return "operational" if self.openai_client else "operational_fallback_mode"
+    def _get_openai_client(self, api_key: Optional[str] = None):
+        """Get OpenAI client with provided API key or default
+        
+        Args:
+            api_key: Optional API key. If not provided, uses default from env.
+        
+        Returns:
+            OpenAI client instance or None if no key available
+        """
+        key = api_key or self.default_api_key
+        if not key:
+            return None
+        return openai.OpenAI(api_key=key)
     
-    async def parse_job_description(self, jd_text: str, position: str = None) -> Dict[str, Any]:
+    def health_check(self, api_key: Optional[str] = None) -> str:
+        """Check if parser is operational
+        
+        Args:
+            api_key: Optional API key. If not provided, uses default from env.
+        """
+        key = api_key or self.default_api_key
+        return "operational" if key else "operational_fallback_mode"
+    
+    async def parse_job_description(self, jd_text: str, position: str = None, api_key: Optional[str] = None) -> Dict[str, Any]:
         """
         Parse job description text into structured data
         
         Args:
             jd_text: Raw job description text
             position: Job title (optional, used as fallback)
+            api_key: Optional OpenAI API key. If not provided, uses default from env.
             
         Returns:
             Structured JD data with skills, requirements, responsibilities, etc.
@@ -40,9 +58,10 @@ class JDParser:
             return self._get_empty_jd_structure(position)
         
         # Try GPT-based parsing first
-        if self.openai_client:
+        client = self._get_openai_client(api_key)
+        if client:
             try:
-                parsed_data = await self._parse_with_gpt(jd_text, position)
+                parsed_data = await self._parse_with_gpt(jd_text, position, api_key=api_key)
                 if parsed_data:
                     logger.info(f"✅ JD parsed successfully with GPT (found {len(parsed_data.get('skills_required', []))} required skills)")
                     return parsed_data
@@ -53,7 +72,7 @@ class JDParser:
         logger.info("📝 Using fallback regex-based parsing for JD")
         return self._parse_with_regex(jd_text, position)
     
-    async def _parse_with_gpt(self, jd_text: str, position: str = None) -> Optional[Dict[str, Any]]:
+    async def _parse_with_gpt(self, jd_text: str, position: str = None, api_key: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Parse JD using GPT-4o-mini"""
         
         prompt = f"""
@@ -88,7 +107,11 @@ Rules:
 """
         
         try:
-            response = self.openai_client.chat.completions.create(
+            client = self._get_openai_client(api_key)
+            if not client:
+                return None
+            
+            response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
                     {

@@ -214,6 +214,67 @@ AdminUserDep = Annotated[Dict[str, Any], Depends(get_admin_user)]
 
 
 # =============================================================================
+# User API Keys Dependency
+# =============================================================================
+
+async def get_user_api_keys(
+    current_user: CurrentUserDep,
+    db: DbServiceDep
+) -> Dict[str, Optional[str]]:
+    """
+    Dependency to get user's API keys from database
+    
+    Fetches encrypted API keys from database and decrypts them.
+    Falls back to environment variables if user hasn't configured their own keys.
+    
+    Returns:
+        Dict with provider names as keys and API keys as values (or None if not set)
+        Example: {
+            "openai": "sk-...",
+            "tavus": "tv_...",
+            "cartesia": "cs_...",
+            "daily": None
+        }
+    """
+    import os
+    
+    user_id = current_user.get("userId")
+    if not user_id:
+        # If no user_id, return all None (will use env vars as fallback)
+        return {
+            "openai": None,
+            "tavus": None,
+            "cartesia": None,
+            "daily": None
+        }
+    
+    # Fetch user's API keys from database
+    api_keys = {
+        "openai": await db.get_user_api_key(user_id, "openai"),
+        "tavus": await db.get_user_api_key(user_id, "tavus"),
+        "cartesia": await db.get_user_api_key(user_id, "cartesia"),
+        "daily": await db.get_user_api_key(user_id, "daily")
+    }
+    
+    # Fallback to environment variables if user hasn't configured their own keys
+    # This ensures backward compatibility
+    if not api_keys["openai"]:
+        api_keys["openai"] = os.getenv("OPENAI_API_KEY")
+    if not api_keys["tavus"]:
+        api_keys["tavus"] = os.getenv("TAVUS_API_KEY")
+    if not api_keys["cartesia"]:
+        api_keys["cartesia"] = os.getenv("CARTESIA_API_KEY")
+    if not api_keys["daily"]:
+        api_keys["daily"] = os.getenv("DAILY_API_KEY")
+    
+    return api_keys
+
+# Type alias for user API keys dependency
+UserApiKeysDep = Annotated[Dict[str, Optional[str]], Depends(get_user_api_keys)]
+"""User API keys dependency - injects user's API keys (with env fallback)"""
+
+
+# =============================================================================
 # Usage Example
 # =============================================================================
 """

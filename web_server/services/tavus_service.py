@@ -15,16 +15,25 @@ class TavusService:
     """Service for interacting with Tavus API for replica management"""
     
     def __init__(self):
-        self.api_key = os.getenv("TAVUS_API_KEY")
+        # Default API key from environment (for backward compatibility)
+        self.default_api_key = os.getenv("TAVUS_API_KEY")
         self.api_url = "https://tavusapi.com/v2"
         
-        if not self.api_key:
-            logger.warning("⚠️ TAVUS_API_KEY not set - replica operations will fail")
+        if not self.default_api_key:
+            logger.warning("⚠️ TAVUS_API_KEY not set - replica operations will fail without per-user keys")
     
-    def _get_headers(self) -> Dict[str, str]:
-        """Get standard headers for Tavus API requests"""
+    def _get_headers(self, api_key: Optional[str] = None) -> Dict[str, str]:
+        """Get standard headers for Tavus API requests
+        
+        Args:
+            api_key: Optional API key to use. If not provided, uses default from env.
+        """
+        key = api_key or self.default_api_key
+        if not key:
+            raise ValueError("Tavus API key not provided and TAVUS_API_KEY env var not set")
+        
         return {
-            "x-api-key": self.api_key,
+            "x-api-key": key,
             "Content-Type": "application/json"
         }
     
@@ -34,7 +43,8 @@ class TavusService:
         replica_name: str,
         consent_video_url: Optional[str] = None,
         callback_url: Optional[str] = None,
-        model_name: str = "phoenix-3"
+        model_name: str = "phoenix-3",
+        api_key: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Create a new Tavus replica
@@ -45,14 +55,17 @@ class TavusService:
             consent_video_url: Public URL to consent video (required for personal replicas)
             callback_url: Webhook URL for training completion
             model_name: Phoenix model version (default: phoenix-3)
+            api_key: Optional API key. If not provided, uses default from env.
         
         Returns:
             Dict with replica_id and status, or None on error
         
         API Doc: https://docs.tavus.io/api-reference/phoenix-replica-model/create-replica
         """
-        if not self.api_key:
-            logger.error("❌ Cannot create replica: TAVUS_API_KEY not configured")
+        try:
+            headers = self._get_headers(api_key)
+        except ValueError as e:
+            logger.error(f"❌ Cannot create replica: {e}")
             return None
         
         try:
@@ -73,7 +86,7 @@ class TavusService:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     f"{self.api_url}/replicas",
-                    headers=self._get_headers(),
+                    headers=headers,
                     json=payload
                 )
                 
@@ -92,7 +105,8 @@ class TavusService:
     async def get_replica(
         self,
         replica_id: str,
-        verbose: bool = True
+        verbose: bool = True,
+        api_key: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Get a single replica by ID
@@ -100,14 +114,17 @@ class TavusService:
         Args:
             replica_id: Unique identifier for the replica
             verbose: Include additional data like replica_type
+            api_key: Optional API key. If not provided, uses default from env.
         
         Returns:
             Dict with replica details, or None on error
         
         API Doc: https://docs.tavus.io/api-reference/phoenix-replica-model/get-replica
         """
-        if not self.api_key:
-            logger.error("❌ Cannot get replica: TAVUS_API_KEY not configured")
+        try:
+            headers = self._get_headers(api_key)
+        except ValueError as e:
+            logger.error(f"❌ Cannot get replica: {e}")
             return None
         
         try:
@@ -116,7 +133,7 @@ class TavusService:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(
                     f"{self.api_url}/replicas/{replica_id}",
-                    headers=self._get_headers(),
+                    headers=headers,
                     params=params
                 )
                 
@@ -141,7 +158,8 @@ class TavusService:
         page: Optional[int] = None,
         verbose: bool = True,
         replica_type: Optional[str] = None,
-        replica_ids: Optional[str] = None
+        replica_ids: Optional[str] = None,
+        api_key: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
         """
         List all replicas
@@ -152,14 +170,17 @@ class TavusService:
             verbose: Include additional data like replica_type
             replica_type: Filter by type ('user' or 'system')
             replica_ids: Comma-separated list of replica IDs to filter
+            api_key: Optional API key. If not provided, uses default from env.
         
         Returns:
             Dict with 'data' (list of replicas) and 'total_count', or None on error
         
         API Doc: https://docs.tavus.io/api-reference/phoenix-replica-model/get-replicas
         """
-        if not self.api_key:
-            logger.error("❌ Cannot list replicas: TAVUS_API_KEY not configured")
+        try:
+            headers = self._get_headers(api_key)
+        except ValueError as e:
+            logger.error(f"❌ Cannot list replicas: {e}")
             return None
         
         try:
@@ -181,7 +202,7 @@ class TavusService:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(
                     f"{self.api_url}/replicas",
-                    headers=self._get_headers(),
+                    headers=headers,
                     params=params
                 )
                 
@@ -207,7 +228,8 @@ class TavusService:
     async def rename_replica(
         self,
         replica_id: str,
-        new_name: str
+        new_name: str,
+        api_key: Optional[str] = None
     ) -> bool:
         """
         Rename a replica
@@ -215,14 +237,17 @@ class TavusService:
         Args:
             replica_id: Unique identifier for the replica
             new_name: New name for the replica
+            api_key: Optional API key. If not provided, uses default from env.
         
         Returns:
             True if successful, False otherwise
         
         API Doc: https://docs.tavus.io/api-reference/phoenix-replica-model/patch-replica-name
         """
-        if not self.api_key:
-            logger.error("❌ Cannot rename replica: TAVUS_API_KEY not configured")
+        try:
+            headers = self._get_headers(api_key)
+        except ValueError as e:
+            logger.error(f"❌ Cannot rename replica: {e}")
             return False
         
         try:
@@ -235,7 +260,7 @@ class TavusService:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.patch(
                     f"{self.api_url}/replicas/{replica_id}",
-                    headers=self._get_headers(),
+                    headers=headers,
                     json=payload
                 )
                 
@@ -253,7 +278,8 @@ class TavusService:
     async def delete_replica(
         self,
         replica_id: str,
-        hard_delete: bool = False
+        hard_delete: bool = False,
+        api_key: Optional[str] = None
     ) -> bool:
         """
         Delete a replica
@@ -262,14 +288,17 @@ class TavusService:
             replica_id: Unique identifier for the replica
             hard_delete: If True, permanently delete replica and training footage.
                         CAUTION: This is irreversible!
+            api_key: Optional API key. If not provided, uses default from env.
         
         Returns:
             True if successful, False otherwise
         
         API Doc: https://docs.tavus.io/api-reference/phoenix-replica-model/delete-replica
         """
-        if not self.api_key:
-            logger.error("❌ Cannot delete replica: TAVUS_API_KEY not configured")
+        try:
+            headers = self._get_headers(api_key)
+        except ValueError as e:
+            logger.error(f"❌ Cannot delete replica: {e}")
             return False
         
         try:
@@ -283,7 +312,7 @@ class TavusService:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.delete(
                     f"{self.api_url}/replicas/{replica_id}",
-                    headers=self._get_headers(),
+                    headers=headers,
                     params=params
                 )
                 
@@ -298,21 +327,25 @@ class TavusService:
             logger.error(f"❌ Error deleting replica: {str(e)}")
             return False
     
-    async def health_check(self) -> Dict[str, Any]:
+    async def health_check(self, api_key: Optional[str] = None) -> Dict[str, Any]:
         """
         Check Tavus API health by attempting to list replicas
+        
+        Args:
+            api_key: Optional API key. If not provided, uses default from env.
         
         Returns:
             Dict with health status information
         """
-        if not self.api_key:
+        key = api_key or self.default_api_key
+        if not key:
             return {
                 "status": "unhealthy",
                 "error": "TAVUS_API_KEY not configured"
             }
         
         try:
-            result = await self.list_replicas(limit=1)
+            result = await self.list_replicas(limit=1, api_key=key)
             if result is not None:
                 return {
                     "status": "healthy",

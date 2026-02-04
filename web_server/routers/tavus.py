@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from datetime import datetime
 from services.tavus_service import tavus_service
 from services.voice_cloning_service import voice_cloning_service
-from dependencies import DbServiceDep, CurrentUserDep
+from dependencies import DbServiceDep, CurrentUserDep, UserApiKeysDep
 from loguru import logger
 
 router = APIRouter()
@@ -42,7 +42,14 @@ class RenameReplicaRequest(BaseModel):
 # ============================================================================
 
 @router.get("/dashboard/replicas", response_class=HTMLResponse)
-async def replicas_page(request: Request, page: int = 1, limit: int = 20, replica_type: str = "stock"):
+async def replicas_page(
+    request: Request,
+    current_user: CurrentUserDep,
+    api_keys: UserApiKeysDep,
+    page: int = 1,
+    limit: int = 20,
+    replica_type: str = "stock"
+):
     """
     Replica Management dashboard page
     
@@ -65,7 +72,8 @@ async def replicas_page(request: Request, page: int = 1, limit: int = 20, replic
             verbose=True, 
             limit=limit, 
             page=page,
-            replica_type=api_replica_type
+            replica_type=api_replica_type,
+            api_key=api_keys.get("tavus")
         )
         
         replicas = []
@@ -137,6 +145,7 @@ async def replicas_page(request: Request, page: int = 1, limit: int = 20, replic
 async def create_replica(
     request: CreateReplicaRequest,
     current_user: CurrentUserDep,
+    api_keys: UserApiKeysDep,
     db: DbServiceDep
 ):
     """
@@ -218,7 +227,7 @@ async def get_replica(replica_id: str, verbose: bool = True):
         - replica_type (if verbose=true)
     """
     try:
-        result = await tavus_service.get_replica(replica_id, verbose=verbose)
+        result = await tavus_service.get_replica(replica_id, verbose=verbose, api_key=api_keys.get("tavus"))
         
         if result:
             return JSONResponse(
@@ -242,6 +251,8 @@ async def get_replica(replica_id: str, verbose: bool = True):
 
 @router.get("/api/v1/tavus/replicas")
 async def list_replicas(
+    current_user: CurrentUserDep,
+    api_keys: UserApiKeysDep,
     limit: Optional[int] = None,
     page: Optional[int] = None,
     verbose: bool = True,
@@ -268,7 +279,8 @@ async def list_replicas(
             page=page,
             verbose=verbose,
             replica_type=replica_type,
-            replica_ids=replica_ids
+            replica_ids=replica_ids,
+            api_key=api_keys.get("tavus")
         )
         
         if result:
@@ -291,7 +303,12 @@ async def list_replicas(
 
 
 @router.patch("/api/v1/tavus/replicas/{replica_id}")
-async def rename_replica(replica_id: str, request: RenameReplicaRequest):
+async def rename_replica(
+    replica_id: str, 
+    request: RenameReplicaRequest,
+    current_user: CurrentUserDep,
+    api_keys: UserApiKeysDep
+):
     """
     Rename a Tavus replica
     
@@ -307,7 +324,8 @@ async def rename_replica(replica_id: str, request: RenameReplicaRequest):
     try:
         success = await tavus_service.rename_replica(
             replica_id=replica_id,
-            new_name=request.replica_name
+            new_name=request.replica_name,
+            api_key=api_keys.get("tavus")
         )
         
         if success:
@@ -329,7 +347,12 @@ async def rename_replica(replica_id: str, request: RenameReplicaRequest):
 
 
 @router.delete("/api/v1/tavus/replicas/{replica_id}")
-async def delete_replica(replica_id: str, hard: bool = False):
+async def delete_replica(
+    replica_id: str,
+    current_user: CurrentUserDep,
+    api_keys: UserApiKeysDep,
+    hard: bool = False
+):
     """
     Delete a Tavus replica
     
@@ -346,7 +369,8 @@ async def delete_replica(replica_id: str, hard: bool = False):
     try:
         success = await tavus_service.delete_replica(
             replica_id=replica_id,
-            hard_delete=hard
+            hard_delete=hard,
+            api_key=api_keys.get("tavus")
         )
         
         if success:
@@ -368,7 +392,10 @@ async def delete_replica(replica_id: str, hard: bool = False):
 
 
 @router.get("/api/v1/tavus/health")
-async def tavus_health_check():
+async def tavus_health_check(
+    current_user: CurrentUserDep,
+    api_keys: UserApiKeysDep
+):
     """
     Check Tavus API health
     
@@ -379,7 +406,7 @@ async def tavus_health_check():
         - error: Error message (if unhealthy)
     """
     try:
-        result = await tavus_service.health_check()
+        result = await tavus_service.health_check(api_key=api_keys.get("tavus"))
         return JSONResponse(
             status_code=200 if result.get('status') == 'healthy' else 500,
             content=result
@@ -485,7 +512,12 @@ async def get_replica_mapping(replica_id: str, db: DbServiceDep):
 
 
 @router.post("/api/v1/tavus/replica-mappings")
-async def create_replica_mapping(request: CreateReplicaMappingRequest, db: DbServiceDep):
+async def create_replica_mapping(
+    request: CreateReplicaMappingRequest, 
+    current_user: CurrentUserDep,
+    api_keys: UserApiKeysDep,
+    db: DbServiceDep
+):
     """
     Create or update a replica-voice mapping
     
@@ -495,7 +527,7 @@ async def create_replica_mapping(request: CreateReplicaMappingRequest, db: DbSer
     """
     try:
         # Validate replica exists in Tavus
-        replica = await tavus_service.get_replica(request.replica_id, verbose=False)
+        replica = await tavus_service.get_replica(request.replica_id, verbose=False, api_key=api_keys.get("tavus"))
         if not replica:
             raise HTTPException(
                 status_code=400,
@@ -503,10 +535,10 @@ async def create_replica_mapping(request: CreateReplicaMappingRequest, db: DbSer
             )
         
         # Validate voice exists in Cartesia
-        voice = await voice_cloning_service.get_voice(request.voice_id)
+        voice = await voice_cloning_service.get_voice(request.voice_id, api_key=api_keys.get("cartesia"))
         if not voice:
             # Try to list all voices to see if it's a pre-built voice
-            all_voices = await voice_cloning_service.list_voices()
+            all_voices = await voice_cloning_service.list_voices(api_key=api_keys.get("cartesia"))
             voice_found = any(v.get("id") == request.voice_id for v in all_voices)
             if not voice_found:
                 raise HTTPException(
@@ -541,14 +573,19 @@ async def create_replica_mapping(request: CreateReplicaMappingRequest, db: DbSer
 
 
 @router.patch("/api/v1/tavus/replica-mappings/{replica_id}/set-default")
-async def set_default_replica_mapping(replica_id: str, db: DbServiceDep):
+async def set_default_replica_mapping(
+    replica_id: str,
+    current_user: CurrentUserDep,
+    api_keys: UserApiKeysDep,
+    db: DbServiceDep
+):
     """Set a replica as the default (unset others)
     
     If no mapping exists for this replica, creates one with auto-cloned voice.
     """
     try:
         # Verify replica exists in Tavus
-        replica = await tavus_service.get_replica(replica_id, verbose=False)
+        replica = await tavus_service.get_replica(replica_id, verbose=False, api_key=api_keys.get("tavus"))
         if not replica:
             raise HTTPException(
                 status_code=404,
@@ -605,7 +642,12 @@ async def set_default_replica_mapping(replica_id: str, db: DbServiceDep):
 
 
 @router.post("/api/v1/tavus/replica-mappings/{replica_id}/clone-voice")
-async def clone_voice_for_replica(replica_id: str, db: DbServiceDep):
+async def clone_voice_for_replica(
+    replica_id: str,
+    current_user: CurrentUserDep,
+    api_keys: UserApiKeysDep,
+    db: DbServiceDep
+):
     """
     Manually clone voice from replica's thumbnail video.
     
@@ -619,7 +661,7 @@ async def clone_voice_for_replica(replica_id: str, db: DbServiceDep):
         from services.voice_cloning_service import VoiceCloningService
         
         # Verify replica exists
-        replica = await tavus_service.get_replica(replica_id, verbose=True)
+        replica = await tavus_service.get_replica(replica_id, verbose=True, api_key=api_keys.get("tavus"))
         if not replica:
             raise HTTPException(status_code=404, detail=f"Replica not found: {replica_id}")
         
@@ -662,8 +704,10 @@ async def clone_voice_for_replica(replica_id: str, db: DbServiceDep):
             # Clone voice using Cartesia
             voice_service = VoiceCloningService()
             voice_name = f"{replica_name} Voice"
+            cartesia_key = api_keys.get("cartesia")
             
             clone_result = await voice_service.clone_voice(
+                api_key=cartesia_key,
                 audio_data=audio_data,
                 voice_name=voice_name,
                 language="en",

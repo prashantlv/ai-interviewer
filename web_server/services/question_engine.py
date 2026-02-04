@@ -11,12 +11,8 @@ from loguru import logger
 
 class QuestionEngine:
     def __init__(self):
-        # Initialize OpenAI client only if API key is available
-        api_key = os.getenv("OPENAI_API_KEY")
-        if api_key:
-            self.openai_client = openai.OpenAI(api_key=api_key)
-        else:
-            self.openai_client = None
+        # Default API key from environment (for backward compatibility)
+        self.default_api_key = os.getenv("OPENAI_API_KEY")
         
         self.default_config = {
             "difficulty_level": "medium",  # easy, medium, hard
@@ -30,17 +26,44 @@ class QuestionEngine:
             "strictness": 0.7,  # 0.1 to 1.0
         }
     
-    def health_check(self) -> str:
-        """Check if question engine is working"""
-        return "operational" if self.openai_client else "operational_fallback_mode"
+    def _get_openai_client(self, api_key: Optional[str] = None):
+        """Get OpenAI client with provided API key or default
+        
+        Args:
+            api_key: Optional API key. If not provided, uses default from env.
+        
+        Returns:
+            OpenAI client instance or None if no key available
+        """
+        key = api_key or self.default_api_key
+        if not key:
+            return None
+        return openai.OpenAI(api_key=key)
+    
+    def health_check(self, api_key: Optional[str] = None) -> str:
+        """Check if question engine is working
+        
+        Args:
+            api_key: Optional API key. If not provided, uses default from env.
+        """
+        key = api_key or self.default_api_key
+        return "operational" if key else "operational_fallback_mode"
     
     async def generate_questions(
         self,
         job_description: Dict[str, Any],
         resume_data: Dict[str, Any],
-        interview_config: Dict[str, Any] = None
+        interview_config: Dict[str, Any] = None,
+        api_key: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Generate interview questions based on JD, resume, and interview type"""
+        """Generate interview questions based on JD, resume, and interview type
+        
+        Args:
+            job_description: Job description data
+            resume_data: Resume data
+            interview_config: Interview configuration
+            api_key: Optional OpenAI API key. If not provided, uses default from env.
+        """
         
         config = {**self.default_config, **(interview_config or {})}
         interview_type = config.get("interview_type", "technical").lower()
@@ -60,7 +83,8 @@ class QuestionEngine:
             tech_questions = await self._generate_technical_questions(
                 skill_analysis, 
                 tech_allocation,
-                config["difficulty_level"]
+                config["difficulty_level"],
+                api_key=api_key
             )
             questions.extend(tech_questions)
             logger.info(f"📝 Generated {len(tech_questions)} technical questions (allocation: {tech_allocation}%)")
@@ -71,7 +95,8 @@ class QuestionEngine:
             exp_questions = await self._generate_experience_questions(
                 resume_data,
                 job_description,
-                exp_allocation
+                exp_allocation,
+                api_key=api_key
             )
             questions.extend(exp_questions)
             logger.info(f"📝 Generated {len(exp_questions)} experience questions (allocation: {exp_allocation}%)")
@@ -103,7 +128,8 @@ class QuestionEngine:
             behavioral_questions = await self._generate_behavioral_questions(
                 job_description,
                 resume_data,
-                behavioral_allocation
+                behavioral_allocation,
+                api_key=api_key
             )
             questions.extend(behavioral_questions)
             logger.info(f"📝 Generated {len(behavioral_questions)} behavioral questions (allocation: {behavioral_allocation}%)")
@@ -130,9 +156,17 @@ class QuestionEngine:
         self, 
         skill_analysis: Dict[str, Any], 
         allocation: int,
-        difficulty: str
+        difficulty: str,
+        api_key: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Generate technical skill questions"""
+        """Generate technical skill questions
+        
+        Args:
+            skill_analysis: Skill analysis data
+            allocation: Question allocation percentage
+            difficulty: Difficulty level
+            api_key: Optional OpenAI API key. If not provided, uses default from env.
+        """
         
         question_count = max(1, allocation // 12)  # Rough allocation
         
@@ -154,7 +188,7 @@ class QuestionEngine:
         """
         
         try:
-            response = await self._call_openai(prompt)
+            response = await self._call_openai(prompt, api_key=api_key)
             if response.strip():  # Only parse if we got a response
                 questions = json.loads(response)
                 return questions[:question_count]
@@ -172,9 +206,17 @@ class QuestionEngine:
         self,
         resume_data: Dict[str, Any],
         job_description: Dict[str, Any],
-        allocation: int
+        allocation: int,
+        api_key: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Generate experience-based questions"""
+        """Generate experience-based questions
+        
+        Args:
+            resume_data: Resume data
+            job_description: Job description data
+            allocation: Question allocation percentage
+            api_key: Optional OpenAI API key. If not provided, uses default from env.
+        """
         
         question_count = max(1, allocation // 15)
         
@@ -197,7 +239,7 @@ class QuestionEngine:
         """
         
         try:
-            response = await self._call_openai(prompt)
+            response = await self._call_openai(prompt, api_key=api_key)
             if response.strip():  # Only parse if we got a response
                 questions = json.loads(response)
                 return questions[:question_count]
@@ -293,9 +335,17 @@ class QuestionEngine:
         self,
         job_description: Dict[str, Any],
         resume_data: Dict[str, Any],
-        allocation: int
+        allocation: int,
+        api_key: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Generate behavioral/situational questions using STAR method"""
+        """Generate behavioral/situational questions using STAR method
+        
+        Args:
+            job_description: Job description data
+            resume_data: Resume data
+            allocation: Question allocation percentage
+            api_key: Optional OpenAI API key. If not provided, uses default from env.
+        """
         
         question_count = max(1, allocation // 12)
         role = job_description.get("title", "the position")
@@ -321,7 +371,7 @@ class QuestionEngine:
         """
         
         try:
-            response = await self._call_openai(prompt)
+            response = await self._call_openai(prompt, api_key=api_key)
             if response.strip():
                 questions = json.loads(response)
                 return questions[:question_count]
@@ -399,14 +449,23 @@ class QuestionEngine:
         sorted_questions = sorted(questions, key=get_priority)
         return sorted_questions[:max_count]
     
-    async def _call_openai(self, prompt: str) -> str:
-        """Call OpenAI API for question generation"""
-        if not self.openai_client:
+    async def _call_openai(self, prompt: str, api_key: Optional[str] = None) -> str:
+        """Call OpenAI API for question generation
+        
+        Args:
+            prompt: Prompt to send to OpenAI
+            api_key: Optional OpenAI API key. If not provided, uses default from env.
+        
+        Returns:
+            Response text or empty string if API call fails
+        """
+        client = self._get_openai_client(api_key)
+        if not client:
             # Return empty string to trigger fallback questions
             return ""
         
         try:
-            response = self.openai_client.chat.completions.create(
+            response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": "You are an expert interview question generator. Generate relevant, insightful questions that help evaluate candidates effectively."},

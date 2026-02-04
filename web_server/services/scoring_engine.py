@@ -4,14 +4,15 @@ Scoring Engine - Multi-attribute real-time evaluation system
 
 import re
 import json
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 import openai
 import os
 
 class ScoringEngine:
     def __init__(self):
-        self.openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        # Default API key from environment (for backward compatibility)
+        self.default_api_key = os.getenv("OPENAI_API_KEY")
         
         # Default scoring weights and thresholds
         self.default_weights = {
@@ -29,18 +30,44 @@ class ScoringEngine:
             "poor": 40
         }
     
-    def health_check(self) -> str:
-        """Check if scoring engine is working"""
-        return "operational" if os.getenv("OPENAI_API_KEY") else "missing_api_key"
+    def _get_openai_client(self, api_key: Optional[str] = None):
+        """Get OpenAI client with provided API key or default
+        
+        Args:
+            api_key: Optional API key. If not provided, uses default from env.
+        
+        Returns:
+            OpenAI client instance or None if no key available
+        """
+        key = api_key or self.default_api_key
+        if not key:
+            return None
+        return openai.OpenAI(api_key=key)
+    
+    def health_check(self, api_key: Optional[str] = None) -> str:
+        """Check if scoring engine is working
+        
+        Args:
+            api_key: Optional API key. If not provided, uses default from env.
+        """
+        key = api_key or self.default_api_key
+        return "operational" if key else "missing_api_key"
     
     async def evaluate_response(
         self,
         question: Dict[str, Any],
         candidate_response: str,
-        context: Dict[str, Any] = None
+        context: Dict[str, Any] = None,
+        api_key: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Evaluate a single candidate response"""
+        """Evaluate a single candidate response
         
+        Args:
+            question: Question dictionary
+            candidate_response: Candidate's response text
+            context: Optional context with job_description, resume_data, scoring_config
+            api_key: Optional OpenAI API key. If not provided, uses default from env.
+        """
         # Extract scoring context
         job_description = context.get("job_description", {}) if context else {}
         resume_data = context.get("resume_data", {}) if context else {}
@@ -48,7 +75,7 @@ class ScoringEngine:
         
         # Generate detailed evaluation
         evaluation = await self._comprehensive_evaluation(
-            question, candidate_response, job_description, resume_data, scoring_config
+            question, candidate_response, job_description, resume_data, scoring_config, api_key=api_key
         )
         
         # Calculate weighted overall score
@@ -71,10 +98,19 @@ class ScoringEngine:
         response: str,
         job_description: Dict[str, Any],
         resume_data: Dict[str, Any],
-        scoring_config: Dict[str, float]
+        scoring_config: Dict[str, float],
+        api_key: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Perform comprehensive AI-powered evaluation"""
+        """Perform comprehensive AI-powered evaluation
         
+        Args:
+            question: Question dictionary
+            response: Candidate response
+            job_description: Job description data
+            resume_data: Resume data
+            scoring_config: Scoring weights configuration
+            api_key: Optional OpenAI API key. If not provided, uses default from env.
+        """
         evaluation_prompt = f"""
         Evaluate this interview response across multiple dimensions:
         
@@ -120,7 +156,7 @@ class ScoringEngine:
         """
         
         try:
-            response_text = await self._call_openai_evaluation(evaluation_prompt)
+            response_text = await self._call_openai_evaluation(evaluation_prompt, api_key=api_key)
             evaluation = json.loads(response_text)
             return evaluation
         except Exception as e:
@@ -150,9 +186,24 @@ class ScoringEngine:
         else:
             return "poor"
     
-    async def _call_openai_evaluation(self, prompt: str) -> str:
-        """Call OpenAI for detailed evaluation"""
-        response = self.openai_client.chat.completions.create(
+    async def _call_openai_evaluation(self, prompt: str, api_key: Optional[str] = None) -> str:
+        """Call OpenAI for detailed evaluation
+        
+        Args:
+            prompt: Evaluation prompt
+            api_key: Optional OpenAI API key. If not provided, uses default from env.
+        
+        Returns:
+            Response text
+        
+        Raises:
+            Exception if API call fails
+        """
+        client = self._get_openai_client(api_key)
+        if not client:
+            raise ValueError("OpenAI API key not available")
+        
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {

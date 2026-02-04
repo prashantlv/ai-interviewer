@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from dependencies import DbServiceDep
+from dependencies import DbServiceDep, CurrentUserDep, UserApiKeysDep
 from services.voice_cloning_service import voice_cloning_service
 from loguru import logger
 
@@ -32,13 +32,15 @@ class VoiceListResponse(BaseModel):
 
 @router.post("/clone", response_model=VoiceResponse)
 async def clone_voice(
+    current_user: CurrentUserDep,
+    api_keys: UserApiKeysDep,
+    db: DbServiceDep,
     audio_file: UploadFile = File(..., description="Audio file (WAV/MP3, 3-5 seconds recommended)"),
     voice_name: str = Form(..., description="Name for the cloned voice"),
     language: str = Form("en", description="Language code (en, es, fr, etc.)"),
     mode: str = Form("similarity", description="similarity or stability"),
     enhance: bool = Form(False, description="Clean and denoise audio"),
-    owner_id: Optional[str] = Form(None, description="Owner/user ID"),
-    db: DbServiceDep = None
+    owner_id: Optional[str] = Form(None, description="Owner/user ID")
 ):
     """
     Clone a voice from an audio file
@@ -73,12 +75,14 @@ async def clone_voice(
         logger.info(f"🎤 Cloning voice from file: {audio_file.filename} ({len(audio_data)} bytes)")
         
         # Clone voice using Cartesia
+        cartesia_key = api_keys.get("cartesia")
         result = await voice_cloning_service.clone_voice(
             audio_data=audio_data,
             voice_name=voice_name,
             language=language,
             mode=mode,
-            enhance=enhance
+            enhance=enhance,
+            api_key=cartesia_key
         )
         
         # Store in database
@@ -203,7 +207,10 @@ async def delete_voice(voice_id: str, db: DbServiceDep = None):
 
 
 @router.get("/cartesia/voices", response_model=Dict[str, Any])
-async def get_cartesia_voices():
+async def get_cartesia_voices(
+    current_user: CurrentUserDep,
+    api_keys: UserApiKeysDep
+):
     """
     Get all voices from Cartesia (including pre-built voices)
     
@@ -212,7 +219,8 @@ async def get_cartesia_voices():
     - Your cloned voices
     """
     try:
-        voices = await voice_cloning_service.list_voices()
+        cartesia_key = api_keys.get("cartesia")
+        voices = await voice_cloning_service.list_voices(api_key=cartesia_key)
         return {
             "voices": voices,
             "total": len(voices)
