@@ -284,31 +284,73 @@ let candidatesData = [];
 
 // Load jobs on page load
 async function loadJobs() {
+    const jobSelect = document.getElementById('h2i_job');
+    
     try {
         const response = await fetch('/api/v1/interviews/h2i/jobs');
-        const data = await response.json();
         
-        if (data.success && data.jobs.length > 0) {
-            // Filter jobs to only include those with jd_hash_id
-            jobsData = data.jobs.filter(job => job.jd_hash_id);
-            const jobSelect = document.getElementById('h2i_job');
+        // Check if response is OK
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ Failed to load jobs:', response.status, errorText);
+            jobSelect.innerHTML = '<option value="">-- Error loading jobs (check console) --</option>';
             
-            // Clear existing options except first
-            jobSelect.innerHTML = '<option value="">-- Load from database --</option>';
-            
-            // Add job options (only jobs with jd_hash_id)
-            jobsData.forEach(job => {
-                const option = document.createElement('option');
-                option.value = job.jd_hash_id;  // Only use jd_hash_id
-                option.textContent = `${job.job_title || job.position || 'Untitled'} - ${job.min_work_exp ? job.min_work_exp + '-' + job.max_work_exp + ' years' : ''}`;
-                option.dataset.job = JSON.stringify(job);
-                jobSelect.appendChild(option);
-            });
-            
-            console.log(`✅ Loaded ${jobsData.length} jobs with jd_hash_id (filtered from ${data.jobs.length} total)`);
+            // Show user-friendly error message
+            const errorMsg = document.createElement('div');
+            errorMsg.className = 'alert alert-warning mt-2';
+            errorMsg.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Failed to load jobs from Hire2Inspire. Status: ${response.status}. Please check browser console for details.`;
+            jobSelect.parentElement.appendChild(errorMsg);
+            return;
         }
+        
+        const data = await response.json();
+        console.log('📊 Jobs API response:', data);
+        
+        // Check if response has success flag
+        if (!data.success) {
+            console.error('❌ API returned success=false:', data);
+            jobSelect.innerHTML = '<option value="">-- Error: ' + (data.detail || 'Failed to load jobs') + ' --</option>';
+            return;
+        }
+        
+        // Check if jobs array exists
+        if (!data.jobs || !Array.isArray(data.jobs)) {
+            console.error('❌ Invalid jobs data format:', data);
+            jobSelect.innerHTML = '<option value="">-- No jobs data available --</option>';
+            return;
+        }
+        
+        // Filter jobs to only include those with jd_hash_id
+        jobsData = data.jobs.filter(job => job.jd_hash_id);
+        
+        // Clear existing options except first
+        jobSelect.innerHTML = '<option value="">-- Load from database --</option>';
+        
+        if (jobsData.length === 0) {
+            jobSelect.innerHTML = '<option value="">-- No jobs with job description found --</option>';
+            console.warn('⚠️ No jobs with jd_hash_id found (filtered from', data.jobs.length, 'total jobs)');
+            return;
+        }
+        
+        // Add job options (only jobs with jd_hash_id)
+        jobsData.forEach(job => {
+            const option = document.createElement('option');
+            option.value = job.jd_hash_id;  // Only use jd_hash_id
+            option.textContent = `${job.job_title || job.position || 'Untitled'} - ${job.min_work_exp ? job.min_work_exp + '-' + job.max_work_exp + ' years' : ''}`;
+            option.dataset.job = JSON.stringify(job);
+            jobSelect.appendChild(option);
+        });
+        
+        console.log(`✅ Loaded ${jobsData.length} jobs with jd_hash_id (filtered from ${data.jobs.length} total)`);
     } catch (error) {
         console.error('❌ Failed to load jobs:', error);
+        jobSelect.innerHTML = '<option value="">-- Error loading jobs (check console) --</option>';
+        
+        // Show user-friendly error message
+        const errorMsg = document.createElement('div');
+        errorMsg.className = 'alert alert-danger mt-2';
+        errorMsg.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Error loading jobs: ${error.message}. Please check browser console for details.`;
+        jobSelect.parentElement.appendChild(errorMsg);
     }
 }
 

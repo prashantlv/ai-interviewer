@@ -19,7 +19,7 @@ class Hire2InspireService:
     """Service to interact with Hire2Inspire API"""
     
     def __init__(self):
-        self.base_url = "https://api.hireinspire.com/api"
+        self.base_url = "https://pro.hireinspire.com/api"
         # Credentials are now fetched from database per-user (no hardcoded defaults)
         self.email: Optional[str] = None
         self.password: Optional[str] = None
@@ -227,28 +227,43 @@ class Hire2InspireService:
         try:
             token = await self._ensure_token(token, user_id=user_id)
             
+            api_url = f"{self.base_url}/shortlist_candidate/get_jd_data_py"
+            logger.info(f"🔍 Calling Hire2Inspire API: {api_url}")
+            logger.info(f"🔑 Using token: {token[:20] + '...' if token else 'None'}")
+            
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(
-                    f"{self.base_url}/shortlist_candidate/get_jd_data_py",
+                    api_url,
                     headers={
                         "Authorization": f"Bearer {token}",
                         "Accept": "application/json"
                     }
                 )
+                
+                logger.info(f"📡 Response status: {response.status_code}")
                 response.raise_for_status()
                 data = response.json()
+                
+                logger.info(f"📦 Response data keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+                logger.info(f"📦 Full response: {json.dumps(data, indent=2)[:500]}")  # Log first 500 chars
                 
                 # Extract jobs from response
                 if "data" in data:
                     jobs = data["data"]
-                    logger.info(f"✅ Fetched {len(jobs)} jobs from Hire2Inspire")
+                    logger.info(f"✅ Fetched {len(jobs)} jobs from Hire2Inspire API: {api_url}")
+                    if len(jobs) > 0:
+                        logger.info(f"📋 First job sample: {json.dumps(jobs[0], indent=2)[:200]}")
                     return jobs
                 else:
-                    logger.warning("⚠️ No jobs data in response")
+                    logger.warning(f"⚠️ No 'data' key in response. Response structure: {list(data.keys()) if isinstance(data, dict) else type(data)}")
+                    logger.warning(f"⚠️ Full response: {json.dumps(data, indent=2)[:500]}")
                     return []
                     
+        except httpx.HTTPStatusError as e:
+            logger.error(f"❌ HTTP error fetching jobs: {e.response.status_code} - {e.response.text[:200]}")
+            return []
         except Exception as e:
-            logger.error(f"❌ Failed to fetch jobs: {e}")
+            logger.error(f"❌ Failed to fetch jobs: {e}", exc_info=True)
             return []
     
     async def get_shortlisted_candidates(

@@ -44,7 +44,7 @@ services:
     ports:
       - "8009:8009"
     env_file:
-      - ./.env
+      - ./web_server/.env
       - ./server/.env
     environment:
       - MONGODB_URL=${MONGODB_URL}
@@ -75,7 +75,7 @@ services:
       dockerfile: Dockerfile.worker
     # container_name removed - using replicas so Docker auto-generates unique names
     env_file:
-      - ./.env
+      - ./web_server/.env
       - ./server/.env
     environment:
       - MONGODB_URL=${MONGODB_URL}

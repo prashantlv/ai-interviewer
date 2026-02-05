@@ -309,26 +309,35 @@ async def get_h2i_jobs(request: Request):
             logger.warning("⚠️ No access token found in cookies - will use env var or login")
         
         # Get user_id from current user for Hire2Inspire credentials
-        from dependencies import get_current_user
+        user_id = None
         try:
+            from dependencies import get_current_user
             current_user = await get_current_user(request, None)
-            user_id = current_user.get("userId")
-        except:
-            user_id = None
+            user_id = current_user.get("userId") if current_user else None
+            if user_id:
+                logger.info(f"✅ Found user_id: {user_id}")
+            else:
+                logger.warning("⚠️ No user_id found from current_user")
+        except Exception as auth_error:
+            logger.warning(f"⚠️ Could not get current_user (non-critical): {auth_error}")
+            # Continue without user_id - Hire2Inspire service will use env vars or login
         
+        logger.info(f"🔍 Calling hire2inspire_service.get_all_jobs(token={'***' if access_token else None}, user_id={user_id})")
         jobs = await hire2inspire_service.get_all_jobs(token=access_token, user_id=user_id)
         
         # Log the result for debugging
         logger.info(f"📊 Returning {len(jobs)} jobs to frontend")
         
+        # Always return success, even if jobs list is empty (empty list is valid)
         return {
             "success": True,
-            "count": len(jobs),
-            "jobs": jobs
+            "count": len(jobs) if jobs else 0,
+            "jobs": jobs if jobs else []
         }
     except Exception as e:
         logger.error(f"❌ Error fetching jobs: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        # Raise HTTPException so frontend can catch it with response.ok check
+        raise HTTPException(status_code=500, detail=f"Failed to fetch jobs from Hire2Inspire: {str(e)}")
 
 
 @router.get("/h2i/candidates/{job_hash_id}")
