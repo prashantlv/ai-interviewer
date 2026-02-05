@@ -47,8 +47,8 @@ services:
       - ./.env
       - ./server/.env
     environment:
-      - MONGODB_URL=${MONGODB_URL:-mongodb+srv://root:XejrWinDai6SUHJc@cluster0.1rbkzbp.mongodb.net/hire2inspire_dev_db?retryWrites=true&w=majority}
-      - DATABASE_NAME=${DATABASE_NAME:-hire2inspire_dev_db}
+      - MONGODB_URL=${MONGODB_URL}
+      - DATABASE_NAME=${DATABASE_NAME:-ai_interviewer}
       - REDIS_URL=redis://redis:6379/0
       - DAILY_DOMAIN=${DAILY_DOMAIN:-human2intelligence.daily.co}
       - VIDEO_SERVICE=${VIDEO_SERVICE:-tavus}
@@ -78,8 +78,8 @@ services:
       - ./.env
       - ./server/.env
     environment:
-      - MONGODB_URL=${MONGODB_URL:-mongodb+srv://root:XejrWinDai6SUHJc@cluster0.1rbkzbp.mongodb.net/hire2inspire_dev_db?retryWrites=true&w=majority}
-      - DATABASE_NAME=${DATABASE_NAME:-hire2inspire_dev_db}
+      - MONGODB_URL=${MONGODB_URL}
+      - DATABASE_NAME=${DATABASE_NAME:-ai_interviewer}
       - REDIS_URL=redis://redis:6379/0
       - WEB_SERVER_URL=http://web-server:8009
       - DAILY_DOMAIN=${DAILY_DOMAIN:-human2intelligence.daily.co}

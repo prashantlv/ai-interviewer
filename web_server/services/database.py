@@ -14,9 +14,17 @@ class DatabaseService:
         self.client: Optional[AsyncIOMotorClient] = None
         self.database = None
         
-        # MongoDB connection settings (will be updated with real schema)
-        self.mongodb_url = os.getenv("MONGODB_URL", "mongodb+srv://root:XejrWinDai6SUHJc@cluster0.1rbkzbp.mongodb.net/hire2inspire_dev_db?retryWrites=true&w=majority")
+        # MongoDB connection settings
+        # ⚠️ SECURITY: Never hardcode credentials! Always use environment variables.
+        self.mongodb_url = os.getenv("MONGODB_URL")
         self.database_name = os.getenv("DATABASE_NAME", "ai_interviewer")
+        
+        if not self.mongodb_url:
+            raise ValueError(
+                "MONGODB_URL environment variable is required. "
+                "Please set it in your .env file or environment. "
+                "Example: mongodb+srv://user:pass@cluster.mongodb.net/dbname?retryWrites=true&w=majority"
+            )
         
         # Connection pool settings
         self.max_pool_size = int(os.getenv("MONGODB_MAX_POOL_SIZE", "100"))
