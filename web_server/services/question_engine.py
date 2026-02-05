@@ -11,8 +11,8 @@ from loguru import logger
 
 class QuestionEngine:
     def __init__(self):
-        # Default API key from environment (for backward compatibility)
-        self.default_api_key = os.getenv("OPENAI_API_KEY")
+        # No default API key - must be provided per-request from user's database
+        self.default_api_key = None  # Removed env fallback for security
         
         self.default_config = {
             "difficulty_level": "medium",  # easy, medium, hard

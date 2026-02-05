@@ -1391,8 +1391,9 @@ async def system_health_page(
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     environment = "Development"
     debug_mode = "Enabled"
-    has_openai_key = bool(os.getenv("OPENAI_API_KEY"))
-    has_daily_room = bool(os.getenv("DAILY_ROOM_URL"))
+    # Check if user has API keys configured (no env fallback)
+    has_openai_key = False  # Will be checked per-user if needed
+    has_daily_room = bool(os.getenv("DAILY_ROOM_URL"))  # Infrastructure config, not user-specific
     
     return templates.TemplateResponse("system_health.html", {
         "request": request,

@@ -13,8 +13,8 @@ class VoiceCloningService:
     """Service for cloning voices using Cartesia Instant Voice Cloning API"""
     
     def __init__(self):
-        # Default API key from environment (for backward compatibility)
-        self.default_api_key = os.getenv("CARTESIA_API_KEY")
+        # No default API key - must be provided per-request from user's database
+        self.default_api_key = None  # Removed env fallback for security
         self.api_url = "https://api.cartesia.ai/voices/clone"
         self.api_version = "2024-06-10"
         

@@ -718,9 +718,21 @@ async def get_interview_config(interview_id: str, scoring_level: Optional[str] =
             "question_count": 8
         }
         
-        # Get OpenAI API key (use env fallback for bot endpoints)
-        # Note: This endpoint is called by bots, not users, so we use env fallback
-        openai_api_key = os.getenv("OPENAI_API_KEY")
+        # Get OpenAI API key from user's database (per-user isolation)
+        # Extract user_id from interview if available
+        user_id = None
+        if interview:
+            user_id = interview.get("user_id") or interview.get("userId")
+        
+        openai_api_key = None
+        if user_id:
+            openai_api_key = await db_service.get_user_api_key(user_id, "openai")
+        
+        if not openai_api_key:
+            raise HTTPException(
+                status_code=400,
+                detail="OpenAI API key not configured for this user. Please configure your API key via Settings > Integrations."
+            )
         
         # Generate questions based on JD and resume
         questions = await question_engine.generate_questions(
@@ -756,12 +768,34 @@ async def get_interview_config(interview_id: str, scoring_level: Optional[str] =
                     replica_id = tavus_config.get("default_replica_id")
                     print(f"✅ Using user's default replica from config: {replica_id}")
         
+        # Fetch user's API keys from database (same way web_server routes do it)
+        api_keys = {}
+        cartesia_config = {}
+        if user_id:
+            api_keys = {
+                "openai": await db_service.get_user_api_key(user_id, "openai"),
+                "tavus": await db_service.get_user_api_key(user_id, "tavus"),
+                "cartesia": await db_service.get_user_api_key(user_id, "cartesia"),
+                "daily": await db_service.get_user_api_key(user_id, "daily"),
+                "google": await db_service.get_user_api_key(user_id, "google"),
+                "simli": await db_service.get_user_api_key(user_id, "simli"),
+                "heygen": await db_service.get_user_api_key(user_id, "heygen"),
+            }
+            # Also get Cartesia config (voice_id, model, language)
+            cartesia_config = await db_service.get_user_integration_config(user_id, "cartesia") or {}
+        
         return {
             "interview_id": interview_id,
             "questions": questions,
             "scoring_config": scoring_config,  # Full DB-based scoring config
             "replica_id": replica_id,  # Optional: allows per-interview replica selection
             "user_id": user_id,  # Include user_id so bot can use it for replica-config
+            "api_keys": api_keys,  # Include API keys (same pattern as web_server routes)
+            "cartesia_config": {  # Include Cartesia config for TTS
+                "voice_id": cartesia_config.get("default_voice_id"),
+                "model": cartesia_config.get("model", "sonic-english"),
+                "language": cartesia_config.get("language", "en")
+            },
             "candidate_info": {
                 "name": candidate_resume.get("personal_info", {}).get("name", "Unknown"),
                 "email": candidate_resume.get("personal_info", {}).get("email", "N/A"),

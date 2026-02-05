@@ -271,12 +271,11 @@ async def get_integrations_status(
                 None
             )
             
-            env_key = os.getenv(f"{provider.upper()}_API_KEY")
-            
+            # No env fallback - keys must be in database
             status[provider] = {
                 "has_user_key": integration is not None,
                 "is_active": integration.get("is_active", False) if integration else False,
-                "has_env_fallback": bool(env_key),
+                "has_env_fallback": False,  # Env fallback disabled for security
                 "using": "user_key" if integration and integration.get("is_active") else ("env_var" if env_key else "none"),
                 "config": integration.get("config", {}) if integration else {}
             }

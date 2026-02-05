@@ -13,10 +13,8 @@ from loguru import logger
 class ResumeParser:
     def __init__(self):
         """Initialize Resume Parser with OpenAI client"""
-        # Default API key from environment (for backward compatibility)
-        self.default_api_key = os.getenv("OPENAI_API_KEY")
-        if not self.default_api_key:
-            logger.warning("⚠️ OPENAI_API_KEY not set. Resume parser will use fallback mode.")
+        # No default API key - must be provided per-request from user's database
+        self.default_api_key = None  # Removed env fallback for security
     
     def _get_openai_client(self, api_key: Optional[str] = None):
         """Get OpenAI client with provided API key or default

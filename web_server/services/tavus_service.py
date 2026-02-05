@@ -15,12 +15,9 @@ class TavusService:
     """Service for interacting with Tavus API for replica management"""
     
     def __init__(self):
-        # Default API key from environment (for backward compatibility)
-        self.default_api_key = os.getenv("TAVUS_API_KEY")
+        # No default API key - must be provided per-request from user's database
+        self.default_api_key = None  # Removed env fallback for security
         self.api_url = "https://tavusapi.com/v2"
-        
-        if not self.default_api_key:
-            logger.warning("⚠️ TAVUS_API_KEY not set - replica operations will fail without per-user keys")
     
     def _get_headers(self, api_key: Optional[str] = None) -> Dict[str, str]:
         """Get standard headers for Tavus API requests

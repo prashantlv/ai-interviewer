@@ -20,13 +20,47 @@ class Hire2InspireService:
     
     def __init__(self):
         self.base_url = "https://api.hireinspire.com/api"
-        self.email = os.getenv("H2I_EMAIL", "hire2inspireh2i@gmail.com")
-        self.password = os.getenv("H2I_PASSWORD", "Sant@1506")
+        # Credentials are now fetched from database per-user (no hardcoded defaults)
+        self.email: Optional[str] = None
+        self.password: Optional[str] = None
         # Token is always obtained from cookies (via request) or login
         self.token: Optional[str] = None
         self.token_expiry: Optional[datetime] = None
+    
+    async def _get_user_credentials(self, user_id: Optional[str] = None) -> tuple[Optional[str], Optional[str]]:
+        """Get Hire2Inspire credentials from database for a user"""
+        if not user_id:
+            return None, None
         
-    async def _ensure_token(self, token: Optional[str] = None) -> str:
+        try:
+            from services.database import DatabaseService
+            # Create a temporary database service instance and connect
+            db = DatabaseService()
+            if db.database is None:
+                connected = await db.connect()
+                if not connected:
+                    logger.error("❌ Failed to connect to database to fetch Hire2Inspire credentials")
+                    return None, None
+            
+            # Get hire2inspire integration config
+            config = await db.get_user_integration_config(user_id, "hire2inspire")
+            if config:
+                email = config.get("email")
+                password_encrypted = config.get("password_encrypted")
+                if email and password_encrypted:
+                    # Decrypt password
+                    from services.encryption_service import encryption_service
+                    password = encryption_service.decrypt(password_encrypted)
+                    return email, password
+            
+            return None, None
+        except Exception as e:
+            logger.error(f"❌ Error fetching Hire2Inspire credentials from DB: {e}")
+            import traceback
+            traceback.print_exc()
+            return None, None
+    
+    async def _ensure_token(self, token: Optional[str] = None, user_id: Optional[str] = None) -> str:
         """Ensure we have a valid token, refresh if needed
         
         Args:
@@ -49,9 +83,9 @@ class Hire2InspireService:
         else:
             logger.info("🔑 No token found, attempting to login...")
             
-        # Login to get new token
+        # Login to get new token (requires user_id to fetch credentials from DB)
         try:
-            await self._login()
+            await self._login(user_id=user_id)
             return self.token
         except Exception as e:
             logger.error(f"❌ Login failed: {e}")
@@ -61,8 +95,22 @@ class Hire2InspireService:
                 return self.token
             raise
     
-    async def _login(self):
-        """Login to Hire2Inspire and get access token"""
+    async def _login(self, user_id: Optional[str] = None):
+        """Login to Hire2Inspire and get access token
+        
+        Args:
+            user_id: Optional user ID to fetch credentials from database. If not provided, will fail.
+        """
+        # Fetch credentials from database if user_id provided
+        if user_id:
+            email, password = await self._get_user_credentials(user_id)
+            if not email or not password:
+                raise ValueError(f"Hire2Inspire credentials not found in database for user {user_id}")
+            self.email = email
+            self.password = password
+        elif not self.email or not self.password:
+            raise ValueError("Hire2Inspire credentials not configured. Please set up Hire2Inspire integration in database.")
+        
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
@@ -169,14 +217,15 @@ class Hire2InspireService:
         except Exception as e:
             logger.warning(f"⚠️ Logout failed: {e}")
     
-    async def get_all_jobs(self, token: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_all_jobs(self, token: Optional[str] = None, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get all job descriptions for the agency
         
         Args:
             token: Optional access token from cookies. If provided, uses this token.
+            user_id: User ID to fetch credentials from database if login is needed.
         """
         try:
-            token = await self._ensure_token(token)
+            token = await self._ensure_token(token, user_id=user_id)
             
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(
@@ -207,7 +256,8 @@ class Hire2InspireService:
         job_hash_id: str,
         page: int = 1,
         limit: int = 100,
-        token: Optional[str] = None
+        token: Optional[str] = None,
+        user_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Get shortlisted candidates for a specific job
         
@@ -216,9 +266,10 @@ class Hire2InspireService:
             page: Page number for pagination
             limit: Number of items per page
             token: Optional access token from cookies. If provided, uses this token.
+            user_id: User ID to fetch credentials from database if login is needed.
         """
         try:
-            token = await self._ensure_token(token)
+            token = await self._ensure_token(token, user_id=user_id)
             
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(
@@ -254,15 +305,16 @@ class Hire2InspireService:
             logger.error(f"❌ Failed to fetch candidates: {e}")
             return []
     
-    async def get_job_details(self, job_hash_id: str, token: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    async def get_job_details(self, job_hash_id: str, token: Optional[str] = None, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Get details of a specific job by hash_id
         
         Args:
             job_hash_id: The job hash ID
             token: Optional access token from cookies. If provided, uses this token.
+            user_id: User ID to fetch credentials from database if login is needed.
         """
         try:
-            jobs = await self.get_all_jobs(token=token)
+            jobs = await self.get_all_jobs(token=token, user_id=user_id)
             for job in jobs:
                 if job.get("hash_id") == job_hash_id:
                     return job
@@ -275,7 +327,8 @@ class Hire2InspireService:
         self, 
         job_hash_id: str, 
         candidate_id: str,
-        token: Optional[str] = None
+        token: Optional[str] = None,
+        user_id: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
         """Get details of a specific candidate
         
@@ -283,9 +336,10 @@ class Hire2InspireService:
             job_hash_id: The job hash ID
             candidate_id: The candidate ID
             token: Optional access token from cookies. If provided, uses this token.
+            user_id: User ID to fetch credentials from database if login is needed.
         """
         try:
-            candidates = await self.get_shortlisted_candidates(job_hash_id, token=token)
+            candidates = await self.get_shortlisted_candidates(job_hash_id, token=token, user_id=user_id)
             for candidate in candidates:
                 if candidate.get("_id") == candidate_id or candidate.get("hash_id") == candidate_id:
                     return candidate
@@ -294,19 +348,20 @@ class Hire2InspireService:
             logger.error(f"❌ Failed to get candidate details: {e}")
             return None
     
-    async def get_agency_list(self, user_type: str = "agencies", token: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_agency_list(self, user_type: str = "agencies", token: Optional[str] = None, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Get list of agencies or employers from Hire2Inspire API
         
         Args:
             user_type: Either "agencies" or "employers" (default: "agencies")
+            user_id: User ID to fetch credentials from database if login is needed.
             token: Optional access token from cookies. If provided, uses this token.
         
         Returns:
             List of agency/employer dictionaries
         """
         try:
-            token = await self._ensure_token(token)
+            token = await self._ensure_token(token, user_id=user_id)
             
             if not token:
                 logger.error("❌ No token available for API call")
@@ -373,12 +428,13 @@ class Hire2InspireService:
             logger.error(f"❌ Failed to fetch agencies: {e}", exc_info=True)
             return []
     
-    async def get_agency_details(self, agency_id: str, token: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    async def get_agency_details(self, agency_id: str, token: Optional[str] = None, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Get details of a specific agency by ID
         
         Args:
             agency_id: The agency ID to fetch
             token: Optional access token from cookies. If provided, uses this for authenticated requests.
+            user_id: User ID to fetch credentials from database if login is needed.
         """
         try:
             headers = {

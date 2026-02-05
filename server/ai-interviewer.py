@@ -866,61 +866,80 @@ async def run_bot(
     else:
         logger.warning("⚠️ Using fallback interview configuration")
     
+    # Extract API keys from interview config (included in response, same pattern as web_server)
+    interview_user_id = interview_config.get("user_id") if interview_config else None
+    api_keys = interview_config.get("api_keys", {}) if interview_config else {}
+    cartesia_config = interview_config.get("cartesia_config", {}) if interview_config else {}
+    
+    if not interview_user_id:
+        logger.error("❌ No user_id found in interview config - bot cannot proceed without user context")
+        sys.exit(1)
+    
+    if not api_keys:
+        logger.error(f"❌ No API keys found in interview config for user {interview_user_id[:8]}... - bot cannot proceed without API keys")
+        sys.exit(1)
+    
+    logger.info(f"✅ Retrieved API keys for user {interview_user_id[:8]}... from interview config")
+    
     # Fetch replica-voice configuration from web server
     # Check if interview config specifies a replica_id, otherwise use default
     interview_replica_id = interview_config.get("replica_id") if interview_config else None
-    interview_user_id = interview_config.get("user_id") if interview_config else None
     replica_config = await fetch_replica_config(session, replica_id=interview_replica_id, user_id=interview_user_id)
     
-    # Extract replica_id and voice_id (fallback to env vars if not in database)
+    # Extract replica_id and voice_id from database config
     if replica_config:
         replica_id = replica_config.get("replica_id")
         voice_id = replica_config.get("voice_id")
         config_source = replica_config.get("source", "database")
         logger.info(f"📋 Using replica config from {config_source}: replica={replica_id}, voice={voice_id}")
     else:
-        # Fallback to environment variables
-        replica_id = os.getenv("TAVUS_REPLICA_ID")
-        voice_id = os.getenv("CARTESIA_VOICE_ID", "a0e99841-438c-4a64-b679-ae501e7d6091")
-        logger.info(f"📋 Using replica config from environment: replica={replica_id}, voice={voice_id}")
+        # Use voice_id from cartesia_config if available
+        voice_id = cartesia_config.get("voice_id", "a0e99841-438c-4a64-b679-ae501e7d6091")
+        replica_id = None
+        logger.warning(f"⚠️ No replica config found, using voice_id from user config: {voice_id}")
 
     # Initialize AI services based on configuration
     if BOT_IMPLEMENTATION == "openai":
         # OpenAI with separate STT/TTS for cost control
-        if not os.getenv("OPENAI_API_KEY"):
-            logger.error("OPENAI_API_KEY is required for OpenAI implementation")
+        openai_key = api_keys.get("openai")
+        if not openai_key:
+            logger.error("OPENAI_API_KEY is required for OpenAI implementation but not found in user's database")
             sys.exit(1)
 
         # Use OpenAI for STT and LLM
-        stt = OpenAISTTService(api_key=os.getenv("OPENAI_API_KEY"))
+        stt = OpenAISTTService(api_key=openai_key)
         
         # Initialize TTS based on TTS_SERVICE configuration
         if TTS_SERVICE == "cartesia":
-            if not os.getenv("CARTESIA_API_KEY"):
-                logger.error("CARTESIA_API_KEY is required when TTS_SERVICE=cartesia")
+            cartesia_key = api_keys.get("cartesia")
+            if not cartesia_key:
+                logger.error("CARTESIA_API_KEY is required when TTS_SERVICE=cartesia but not found in user's database")
                 sys.exit(1)
             
-            # Use voice_id from database config (or env var fallback)
+            # Use voice_id, model, and language from user's cartesia config
+            tts_voice_id = voice_id or cartesia_config.get("voice_id", "a0e99841-438c-4a64-b679-ae501e7d6091")
+            tts_model = cartesia_config.get("model", "sonic-english")
+            
             tts = CartesiaTTSService(
-                api_key=os.getenv("CARTESIA_API_KEY"),
-                voice_id=voice_id,  # From database or env var
-                model=os.getenv("CARTESIA_MODEL", "sonic-english"),
+                api_key=cartesia_key,
+                voice_id=tts_voice_id,
+                model=tts_model,
                 # IMPORTANT:
                 # Daily/WebRTC output runs at 48kHz. Using 16kHz here can cause audible
                 # "stuttering"/gaps (e.g. "He llo Jo hn") due to timing/packetization.
                 sample_rate=48000,
             )
-            logger.info(f"✅ Initialized Cartesia TTS (WebSocket) with voice: {voice_id}")
+            logger.info(f"✅ Initialized Cartesia TTS (WebSocket) with voice: {tts_voice_id}, model: {tts_model}")
         else:
             # Default to OpenAI TTS
             tts = OpenAITTSService(
-                api_key=os.getenv("OPENAI_API_KEY"),
+                api_key=openai_key,
                 voice="onyx",  # Options: alloy, echo, fable, onyx, nova, shimmer (onyx is deep male)
             )
             logger.info("✅ Initialized OpenAI TTS")
         
         llm = OpenAILLMService(
-            api_key=os.getenv("OPENAI_API_KEY"),
+            api_key=openai_key,
             model="gpt-4o-mini",  # Cost-optimized model
         )
 
@@ -935,12 +954,13 @@ async def run_bot(
 
     else:  # BOT_IMPLEMENTATION == "gemini"
         # Gemini setup (built-in STT/TTS)
-        if not os.getenv("GOOGLE_API_KEY"):
-            logger.error("GOOGLE_API_KEY is required for Gemini implementation")
+        google_key = api_keys.get("google")
+        if not google_key:
+            logger.error("GOOGLE_API_KEY is required for Gemini implementation but not found in user's database")
             sys.exit(1)
 
         llm = GeminiMultimodalLiveLLMService(
-            api_key=os.getenv("GOOGLE_API_KEY"),
+            api_key=google_key,
             voice_id="Puck",  # Available: Aoede, Charon, Fenrir, Kore, Puck
         )
 
@@ -970,31 +990,36 @@ async def run_bot(
     # Initialize video service based on configuration
     video_service = None
     if VIDEO_SERVICE == "tavus":
-        if not os.getenv("TAVUS_API_KEY"):
-            logger.error("TAVUS_API_KEY is required when VIDEO_SERVICE=tavus")
+        tavus_key = api_keys.get("tavus")
+        if not tavus_key:
+            logger.error("TAVUS_API_KEY is required when VIDEO_SERVICE=tavus but not found in user's database")
             sys.exit(1)
         if not replica_id:
-            logger.error("Replica ID is required when VIDEO_SERVICE=tavus (check database config or TAVUS_REPLICA_ID env var)")
+            logger.error("Replica ID is required when VIDEO_SERVICE=tavus (check database config)")
             sys.exit(1)
             
         video_service = TavusVideoService(
-            api_key=os.getenv("TAVUS_API_KEY"),
-            replica_id=replica_id,  # From database or env var
+            api_key=tavus_key,
+            replica_id=replica_id,  # From database config
             session=session,
         )
         logger.info(f"Initialized Tavus with replica: {replica_id}")
         
     elif VIDEO_SERVICE == "simli":
-        if not os.getenv("SIMLI_API_KEY"):
-            logger.error("SIMLI_API_KEY is required when VIDEO_SERVICE=simli")
+        simli_key = api_keys.get("simli")
+        # Note: SIMLI_FACE_ID is not stored in DB yet - would need to be added to user_integrations config
+        simli_face_id = os.getenv("SIMLI_FACE_ID")  # TODO: Move to DB config
+        
+        if not simli_key:
+            logger.error("SIMLI_API_KEY is required when VIDEO_SERVICE=simli but not found in user's database")
             sys.exit(1)
-        if not os.getenv("SIMLI_FACE_ID"):
+        if not simli_face_id:
             logger.error("SIMLI_FACE_ID is required when VIDEO_SERVICE=simli")
             sys.exit(1)
             
         simli_config = SimliConfig(
-            apiKey=os.getenv("SIMLI_API_KEY"),
-            faceId=os.getenv("SIMLI_FACE_ID"),
+            apiKey=simli_key,
+            faceId=simli_face_id,
             handleSilence=True,      # Keep video active during silence
             maxSessionLength=1200,   # 20 minute session limit
             maxIdleTime=60,          # 60 second idle timeout
@@ -1006,22 +1031,24 @@ async def run_bot(
             use_turn_server=False,   # Set to True if needed for restrictive networks
             latency_interval=0,      # Latency monitoring interval
         )
-        logger.info(f"Initialized Simli with face: {os.getenv('SIMLI_FACE_ID')}")
+        logger.info(f"Initialized Simli with face: {simli_face_id}")
         
     elif VIDEO_SERVICE == "heygen":
-        if not os.getenv("HEYGEN_API_KEY"):
-            logger.error("HEYGEN_API_KEY is required when VIDEO_SERVICE=heygen")
+        heygen_key = api_keys.get("heygen")
+        if not heygen_key:
+            logger.error("HEYGEN_API_KEY is required when VIDEO_SERVICE=heygen but not found in user's database")
             sys.exit(1)
             
         # Configure HeyGen with default or custom avatar
-        avatar_id = os.getenv("HEYGEN_AVATAR_ID", "Shawn_Therapist_public")  # Default public avatar
+        # Note: HEYGEN_AVATAR_ID is not stored in DB yet - would need to be added to user_integrations config
+        avatar_id = os.getenv("HEYGEN_AVATAR_ID", "Shawn_Therapist_public")  # TODO: Move to DB config
         
         session_request = NewSessionRequest(
             avatar_id=avatar_id
         )
         
         video_service = HeyGenVideoService(
-            api_key=os.getenv("HEYGEN_API_KEY"),
+            api_key=heygen_key,
             session=session,
             session_request=session_request,
         )
@@ -1306,8 +1333,13 @@ async def run_bot(
         # Initialize scoring engine with DB-based config
         logger.info("🤖 Starting AI-based scoring analysis...")
         scoring_config = interview_config.get("scoring_config") if interview_config else None
+        # Use OpenAI API key from fetched keys (api_keys is available in this scope from run_bot)
+        openai_key_for_scoring = api_keys.get("openai") if 'api_keys' in locals() else None
+        if not openai_key_for_scoring:
+            logger.error("OPENAI_API_KEY is required for scoring but not found")
+            return
         scoring_engine = ScoringEngine(
-            api_key=os.getenv("OPENAI_API_KEY"),
+            api_key=openai_key_for_scoring,
             scoring_config=scoring_config
         )
         

@@ -193,7 +193,11 @@ async def admin_dashboard(
         # Get agencies list
         agencies = []
         try:
-            agencies = await hire2inspire_service.get_agency_list(user_type="agencies", token=access_token)
+            # Get user_id from current user for Hire2Inspire credentials
+            current_user = request.state.current_user if hasattr(request.state, 'current_user') else None
+            user_id = current_user.get("userId") if current_user else None
+            
+            agencies = await hire2inspire_service.get_agency_list(user_type="agencies", token=access_token, user_id=user_id)
             logger.info(f"📊 Loaded {len(agencies)} agencies for admin dashboard")
             if len(agencies) == 0:
                 logger.warning("⚠️ No agencies returned from API - check logs for details")
@@ -204,7 +208,11 @@ async def admin_dashboard(
         # Get employers list
         employers = []
         try:
-            employers = await hire2inspire_service.get_agency_list(user_type="employers", token=access_token)
+            # Get user_id from current user for Hire2Inspire credentials
+            current_user = request.state.current_user if hasattr(request.state, 'current_user') else None
+            user_id = current_user.get("userId") if current_user else None
+            
+            employers = await hire2inspire_service.get_agency_list(user_type="employers", token=access_token, user_id=user_id)
             logger.info(f"📊 Loaded {len(employers)} employers for admin dashboard")
             if len(employers) == 0:
                 logger.warning("⚠️ No employers returned from API - check logs for details")
@@ -271,7 +279,11 @@ async def get_agency_details(
         if access_token:
             logger.info("✅ Using access token from sign-in cookie for agency details")
         
-        agency = await hire2inspire_service.get_agency_details(agency_id, token=access_token)
+        # Get user_id from current user for Hire2Inspire credentials
+        current_user = request.state.current_user if hasattr(request.state, 'current_user') else None
+        user_id = current_user.get("userId") if current_user else None
+        
+        agency = await hire2inspire_service.get_agency_details(agency_id, token=access_token, user_id=user_id)
         if agency:
             # Explicitly verify subscription is in the response before returning
             if isinstance(agency, dict):
@@ -316,7 +328,11 @@ async def get_agency_interview_insights(
             logger.info("✅ Using access token from sign-in cookie for agency details")
         
         # Get agency details to extract corporate_email for filtering
-        agency = await hire2inspire_service.get_agency_details(agency_id, token=access_token)
+        # Get user_id from current user for Hire2Inspire credentials
+        current_user = request.state.current_user if hasattr(request.state, 'current_user') else None
+        user_id = current_user.get("userId") if current_user else None
+        
+        agency = await hire2inspire_service.get_agency_details(agency_id, token=access_token, user_id=user_id)
         if not agency:
             raise HTTPException(status_code=404, detail="Agency not found")
         

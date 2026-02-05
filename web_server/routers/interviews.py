@@ -308,7 +308,15 @@ async def get_h2i_jobs(request: Request):
         else:
             logger.warning("⚠️ No access token found in cookies - will use env var or login")
         
-        jobs = await hire2inspire_service.get_all_jobs(token=access_token)
+        # Get user_id from current user for Hire2Inspire credentials
+        from dependencies import get_current_user
+        try:
+            current_user = await get_current_user(request, None)
+            user_id = current_user.get("userId")
+        except:
+            user_id = None
+        
+        jobs = await hire2inspire_service.get_all_jobs(token=access_token, user_id=user_id)
         
         # Log the result for debugging
         logger.info(f"📊 Returning {len(jobs)} jobs to frontend")
@@ -334,9 +342,18 @@ async def get_h2i_candidates(job_hash_id: str, request: Request):
         else:
             logger.warning("⚠️ No access token found in cookies - will use env var or login")
         
+        # Get user_id from current user for Hire2Inspire credentials
+        from dependencies import get_current_user
+        try:
+            current_user = await get_current_user(request, None)
+            user_id = current_user.get("userId")
+        except:
+            user_id = None
+        
         candidates = await hire2inspire_service.get_shortlisted_candidates(
             job_hash_id, 
-            token=access_token
+            token=access_token,
+            user_id=user_id
         )
         return {
             "success": True,

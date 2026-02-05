@@ -11,8 +11,8 @@ import os
 
 class ScoringEngine:
     def __init__(self):
-        # Default API key from environment (for backward compatibility)
-        self.default_api_key = os.getenv("OPENAI_API_KEY")
+        # No default API key - must be provided per-request from user's database
+        self.default_api_key = None  # Removed env fallback for security
         
         # Default scoring weights and thresholds
         self.default_weights = {
