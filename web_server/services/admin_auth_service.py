@@ -45,38 +45,39 @@ class AdminAuthService:
             print(f"❌ Error verifying password: {e}")
             return False
     
-    async def authenticate_admin(self, username: str, password: str, db_service_instance=None) -> Optional[Dict[str, Any]]:
-        """Authenticate admin user with username and password"""
+    async def authenticate_admin(self, email: str, password: str, db_service_instance=None) -> Optional[Dict[str, Any]]:
+        """Authenticate admin user with email and password from hire2inspire_dev_db.admins"""
         try:
             # Use provided db_service or fall back to global one
             db = db_service_instance or db_service
             
-            admin = await db.get_admin_user(username)
+            admin = await db.get_admin_user(email)
             if not admin:
-                print(f"❌ Admin user '{username}' not found in database")
+                print(f"❌ Admin user '{email}' not found in database")
                 return None
             
-            password_hash = admin.get("password_hash", "")
+            password_hash = admin.get("password", "")
             if not password_hash:
-                print(f"❌ Admin user '{username}' has no password_hash field")
+                print(f"❌ Admin user '{email}' has no password field")
                 return None
             
-            print(f"🔍 Verifying password for admin '{username}'...")
+            print(f"🔍 Verifying password for admin '{email}'...")
             is_valid = self.verify_password(password, password_hash)
             if not is_valid:
-                print(f"❌ Password verification failed for admin '{username}'")
+                print(f"❌ Password verification failed for admin '{email}'")
                 print(f"   Password hash in DB: {password_hash[:20]}...")
                 return None
             
-            print(f"✅ Password verified successfully for admin '{username}'")
+            print(f"✅ Password verified successfully for admin '{email}'")
             
-            # Update last login
-            await db.update_admin_last_login(username)
+            # Update last login (updates updatedAt field)
+            await db.update_admin_last_login(email)
             
             return {
-                "username": admin.get("username"),
-                "created_at": admin.get("created_at"),
-                "last_login": admin.get("last_login")
+                "email": admin.get("email"),
+                "name": admin.get("name"),
+                "created_at": admin.get("createdAt"),
+                "updated_at": admin.get("updatedAt")
             }
         except Exception as e:
             print(f"❌ Error authenticating admin: {e}")
@@ -84,14 +85,10 @@ class AdminAuthService:
             traceback.print_exc()
             return None
     
-    async def create_admin(self, username: str, password: str) -> bool:
-        """Create a new admin user"""
-        try:
-            password_hash = self.hash_password(password)
-            return await db_service.create_admin_user(username, password_hash)
-        except Exception as e:
-            print(f"❌ Error creating admin: {e}")
-            return False
+    async def create_admin(self, email: str, password: str) -> bool:
+        """Create a new admin user - DEPRECATED: Admins are managed in hire2inspire_dev_db"""
+        print("⚠️ create_admin is deprecated - admins are managed in hire2inspire_dev_db")
+        return False
 
 
 # Singleton instance

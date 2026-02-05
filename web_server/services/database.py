@@ -538,61 +538,50 @@ class DatabaseService:
             return False
 
     # ============================================================================
-    # Admin Users Methods
+    # Admin Users Methods (from hire2inspire_dev_db)
     # ============================================================================
     
-    async def get_admin_user(self, username: str) -> Optional[Dict[str, Any]]:
-        """Get admin user by username"""
-        if self.database is None:
+    def _get_admin_database(self):
+        """Get admin database connection (hire2inspire_dev_db)"""
+        if self.client is None:
+            return None
+        # Use same MongoDB connection but different database
+        return self.client["hire2inspire_dev_db"]
+    
+    async def get_admin_user(self, email: str) -> Optional[Dict[str, Any]]:
+        """Get admin user by email from hire2inspire_dev_db.admins collection"""
+        admin_db = self._get_admin_database()
+        if admin_db is None:
             return None
         
         try:
-            admin = await self.database.admin_users.find_one({
-                "username": username,
-                "is_active": True
+            admin = await admin_db.admins.find_one({
+                "email": email,
+                "type": "1"  # Active admin
             })
             if admin:
-                admin.pop('_id', None)
+                # Convert ObjectId to string for JSON serialization
+                admin["_id"] = str(admin["_id"])
             return admin
         except Exception as e:
             print(f"❌ Error getting admin user: {e}")
             return None
     
     async def create_admin_user(self, username: str, password_hash: str) -> bool:
-        """Create a new admin user"""
-        if self.database is None:
-            return False
-        
-        try:
-            # Check if admin already exists
-            existing = await self.database.admin_users.find_one({"username": username})
-            if existing:
-                print(f"⚠️ Admin user '{username}' already exists")
-                return False
-            
-            admin_data = {
-                "username": username,
-                "password_hash": password_hash,
-                "created_at": datetime.now(),
-                "last_login": None,
-                "is_active": True
-            }
-            await self.database.admin_users.insert_one(admin_data)
-            print(f"✅ Created admin user: {username}")
-            return True
-        except Exception as e:
-            print(f"❌ Error creating admin user: {e}")
-            return False
+        """Create admin user - DEPRECATED: Admins are managed in hire2inspire_dev_db"""
+        print("⚠️ create_admin_user is deprecated - admins are managed in hire2inspire_dev_db")
+        return False
     
-    async def update_admin_last_login(self, username: str) -> bool:
-        """Update admin user's last login timestamp"""
-        if self.database is None:
+    async def update_admin_last_login(self, email: str) -> bool:
+        """Update admin user's last login timestamp (updates updatedAt field)"""
+        admin_db = self._get_admin_database()
+        if admin_db is None:
             return False
         
         try:
-            result = await self.database.admin_users.update_one(
-                {"username": username},
-                {"$set": {"last_login": datetime.now()}}
+            result = await admin_db.admins.update_one(
+                {"email": email},
+                {"$set": {"updatedAt": datetime.now()}}
             )
             return result.modified_count > 0
         except Exception as e:

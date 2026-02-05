@@ -90,9 +90,9 @@ class RejectRequestModel(BaseModel):
 async def admin_login_page(request: Request):
     """Admin login page"""
     # Check if already logged in
-    admin_username = request.cookies.get("admin_session")
-    if admin_username:
-        admin = await db_service.get_admin_user(admin_username)
+    admin_email = request.cookies.get("admin_session")
+    if admin_email:
+        admin = await db_service.get_admin_user(admin_email)
         if admin:
             return RedirectResponse(url="/admin/dashboard", status_code=302)
     
@@ -104,33 +104,33 @@ async def admin_login_page(request: Request):
 @router.post("/admin/login")
 async def admin_login(
     request: Request,
-    username: str = Form(...),
+    email: str = Form(...),
     password: str = Form(...)
 ):
     """Admin login endpoint"""
     try:
-        logger.info(f"🔐 Admin login attempt for username: {username}")
+        logger.info(f"🔐 Admin login attempt for email: {email}")
         # Use db_service from app state (connected instance)
         db = request.app.state.db_service
         
         # Pass the connected db_service to authenticate_admin
-        admin = await admin_auth_service.authenticate_admin(username, password, db_service_instance=db)
+        admin = await admin_auth_service.authenticate_admin(email, password, db_service_instance=db)
         
         if not admin:
-            logger.warning(f"❌ Admin login failed for username: {username}")
+            logger.warning(f"❌ Admin login failed for email: {email}")
             return templates.TemplateResponse("admin_login.html", {
                 "request": request,
-                "error": "Invalid username or password"
+                "error": "Invalid email or password"
             })
         
-        logger.info(f"✅ Admin login successful for username: {username}")
+        logger.info(f"✅ Admin login successful for email: {email}")
         
         # Create response with redirect
         response = RedirectResponse(url="/admin/dashboard", status_code=302)
-        # Set admin session cookie
+        # Set admin session cookie (store email)
         response.set_cookie(
             key="admin_session",
-            value=username,
+            value=email,
             max_age=86400,  # 24 hours
             httponly=True,
             samesite="lax"
@@ -222,7 +222,9 @@ async def admin_dashboard(
         
         return templates.TemplateResponse("admin_dashboard.html", {
             "request": request,
-            "admin_username": admin.get("username"),
+            "admin_username": admin.get("email"),  # Keep admin_username for template compatibility
+            "admin_email": admin.get("email"),
+            "admin_name": admin.get("name"),
             "pending_requests": pending_requests,
             "approved_requests": approved_requests,
             "rejected_requests": rejected_requests,

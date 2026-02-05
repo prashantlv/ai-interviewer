@@ -177,10 +177,10 @@ async def get_admin_user(request: Request) -> Dict[str, Any]:
     """
     Dependency to get current authenticated admin from cookie
     
-    Checks admin_session cookie for admin login status
+    Checks admin_session cookie for admin login status (stores email)
     
     Returns:
-        Dict with username
+        Dict with email and name
         
     Raises:
         HTTPException: If admin not logged in
@@ -189,15 +189,15 @@ async def get_admin_user(request: Request) -> Dict[str, Any]:
     db = request.app.state.db_service
 
     
-    admin_username = request.cookies.get("admin_session")
-    if not admin_username:
+    admin_email = request.cookies.get("admin_session")
+    if not admin_email:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Admin authentication required. Please login at /admin/login"
         )
     
-    # Verify admin exists and is active
-    admin = await db.get_admin_user(admin_username)
+    # Verify admin exists and is active (from hire2inspire_dev_db.admins)
+    admin = await db.get_admin_user(admin_email)
     if not admin:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -205,7 +205,9 @@ async def get_admin_user(request: Request) -> Dict[str, Any]:
         )
     
     return {
-        "username": admin_username
+        "email": admin_email,
+        "username": admin_email,  # Keep for backward compatibility
+        "name": admin.get("name")
     }
 
 # Type alias for admin routes
