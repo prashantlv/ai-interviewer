@@ -407,8 +407,10 @@ async def interviews_page(
                     end_time_str = proctoring["end_time"]
                     
                     # Parse ISO format datetime strings
-                    start_time = datetime.fromisoformat(start_time_str.replace('Z', '+00:00'))
-                    end_time = datetime.fromisoformat(end_time_str.replace('Z', '+00:00'))
+                    # Import datetime locally to avoid UnboundLocalError (Python thinks datetime is local if assigned anywhere)
+                    from datetime import datetime as dt_parse
+                    start_time = dt_parse.fromisoformat(start_time_str.replace('Z', '+00:00'))
+                    end_time = dt_parse.fromisoformat(end_time_str.replace('Z', '+00:00'))
                     
                     duration_delta = end_time - start_time
                     total_seconds = int(duration_delta.total_seconds())
