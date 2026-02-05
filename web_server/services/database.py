@@ -195,7 +195,8 @@ class DatabaseService:
         transcript: str,
         evaluation: Dict[str, Any],
         status: str,
-        recording: Optional[Dict[str, Any]] = None
+        recording: Optional[Dict[str, Any]] = None,
+        user_id: Optional[str] = None
     ) -> bool:
         """Update interview with results"""
         if self.database is None:
@@ -212,6 +213,11 @@ class DatabaseService:
                 "evaluation": evaluation,
                 "status": status,
             }
+
+            # Store user_id if provided (for data isolation)
+            if user_id:
+                update_set["user_id"] = user_id
+                print(f"🔍 DEBUG: Storing interview {interview_id} with user_id: {user_id}")
 
             # Only overwrite recording if explicitly provided (otherwise preserve existing).
             if recording is not None:
@@ -266,15 +272,23 @@ class DatabaseService:
         self, 
         status: Optional[str] = None,
         limit: int = 50,
-        offset: int = 0
+        offset: int = 0,
+        user_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Get list of interviews with optional filtering"""
+        """Get list of interviews with optional filtering by status and user_id"""
         if self.database is not None:
             try:
                 # Query the interview_results collection for real data
                 query = {}
                 if status:
                     query["status"] = status
+                
+                # CRITICAL: Filter by user_id for data isolation
+                if user_id:
+                    query["user_id"] = user_id
+                    print(f"🔍 DEBUG: Filtering interviews by user_id: {user_id}")
+                else:
+                    print(f"⚠️ WARNING: get_interviews called without user_id - returning ALL interviews (no isolation)")
                 
                 # Sort by date (most recent first) BEFORE pagination
                 # Use completed_at if available, otherwise created_at

@@ -490,12 +490,26 @@ async def get_dashboard_interviews(
 ):
     """API endpoint for dashboard to get interview data"""
     try:
+        from dependencies import get_current_user
+        from fastapi import HTTPException
+        
+        # Get current user for data isolation
+        try:
+            current_user = await get_current_user(request, None)
+            user_id = current_user.get("userId")
+            if not user_id:
+                print("⚠️ WARNING: No userId found - cannot filter interviews per user")
+        except HTTPException:
+            # If auth fails, user_id will be None and we'll log a warning
+            user_id = None
+            print("⚠️ WARNING: Authentication failed - cannot filter interviews per user")
+        
         # Get db_service from app state
         db = request.app.state.db_service
         per_page = 20
         offset = (page - 1) * per_page
         
-        interviews = await db.get_interviews(status=status, limit=per_page, offset=offset)
+        interviews = await db.get_interviews(status=status, limit=per_page, offset=offset, user_id=user_id)
         
         # Transform data for template
         interview_list = []

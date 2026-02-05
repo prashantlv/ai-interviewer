@@ -83,9 +83,14 @@ async def dashboard_home(
         
         # Use dependency-injected db service
         if db and db.database is not None:
-            # Get ALL interviews for dashboard stats (use large limit)
+            # Get user_id for data isolation
+            user_id = current_user.get("userId")
+            if not user_id:
+                logger.warning("⚠️ No userId found - cannot filter interviews per user")
+            
+            # Get interviews filtered by user_id for dashboard stats (use large limit)
             # Note: get_interviews now returns full documents including proctoring
-            interviews = await db.get_interviews(limit=1000, offset=0)
+            interviews = await db.get_interviews(limit=1000, offset=0, user_id=user_id)
         else:
             print("⚠️ Database service not available")
             interviews = []
@@ -259,10 +264,15 @@ async def interviews_page(
     original_interviews = []  # Store original for positions dropdown
     try:
         if db and db.database is not None:
-            # Get ALL interviews (use large limit to get everything)
+            # Get user_id for data isolation
+            user_id = current_user.get("userId")
+            if not user_id:
+                logger.warning("⚠️ No userId found - cannot filter interviews per user")
+            
+            # Get interviews filtered by user_id (use large limit to get everything)
             # The database query is already sorted, so we get them in order
-            all_interviews = await db.get_interviews(limit=1000, offset=0)
-            print(f"🔍 DEBUG: Retrieved {len(all_interviews)} interviews from database")
+            all_interviews = await db.get_interviews(limit=1000, offset=0, user_id=user_id)
+            print(f"🔍 DEBUG: Retrieved {len(all_interviews)} interviews from database for user_id: {user_id}")
         else:
             print("⚠️ Database service not available for interviews page")
             all_interviews = []
@@ -894,6 +904,11 @@ async def create_interview(
         print(f"   Scoring Level: {scoring_level}")
         print(f"   db_service status: {db is not None}")
         
+        # Extract user_id for data isolation
+        user_id = current_user.get("userId")
+        if not user_id:
+            logger.warning("⚠️ No userId found in current_user - interview will not be isolated per user")
+        
         # Store in database - create proper interview result entry
         success = await db.update_interview_result(
             interview_id=interview_id,
@@ -930,7 +945,8 @@ async def create_interview(
                 # NEW: Store scheduled_date for future interviews (with timezone info)
                 "scheduled_date": scheduled_datetime.isoformat() if scheduled_datetime else None
             },
-            status="scheduled"
+            status="scheduled",
+            user_id=user_id
         )
         
         print(f"🔍 DEBUG: Save result: {success}")
@@ -1094,10 +1110,15 @@ async def analytics_page(
     if not date_from:
         date_from = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
     
-    # Get all interviews from database directly
+    # Get all interviews from database directly (filtered by user_id)
     try:
         if db and db.database is not None:
-            all_interviews = await db.get_interviews()
+            # Get user_id for data isolation
+            user_id = current_user.get("userId")
+            if not user_id:
+                logger.warning("⚠️ No userId found - cannot filter interviews per user")
+            
+            all_interviews = await db.get_interviews(user_id=user_id)
         else:
             all_interviews = []
     except Exception as e:

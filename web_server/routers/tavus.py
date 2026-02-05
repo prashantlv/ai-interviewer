@@ -68,12 +68,22 @@ async def replicas_page(
             api_replica_type = 'user'
         
         # Fetch replicas with pagination and optional type filter
+        tavus_api_key = api_keys.get("tavus")
+        user_id = current_user.get("userId", "unknown")
+        
+        # Log which API key is being used (for debugging data isolation)
+        if tavus_api_key:
+            key_preview = tavus_api_key[:10] + "..." if len(tavus_api_key) > 10 else tavus_api_key
+            logger.info(f"🔍 DEBUG: User {user_id} using Tavus API key: {key_preview} (length: {len(tavus_api_key)})")
+        else:
+            logger.warning(f"⚠️ User {user_id} has no Tavus API key - using environment variable (SHARED)")
+        
         result = await tavus_service.list_replicas(
             verbose=True, 
             limit=limit, 
             page=page,
             replica_type=api_replica_type,
-            api_key=api_keys.get("tavus")
+            api_key=tavus_api_key
         )
         
         replicas = []

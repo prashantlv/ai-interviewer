@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from dependencies import DbServiceDep
+from dependencies import DbServiceDep, CurrentUserDep
 from services.hire2inspire_service import hire2inspire_service
 import logging
 
@@ -44,14 +44,20 @@ class InterviewUpdate(BaseModel):
 @router.get("/", response_model=List[InterviewResponse])
 async def get_interviews(
     db: DbServiceDep,
+    current_user: CurrentUserDep,
     status: Optional[str] = Query(None, description="Filter by status"),
     limit: int = Query(50, description="Number of interviews to return"),
     offset: int = Query(0, description="Number of interviews to skip")
 ):
-    """Get list of interviews with optional filtering"""
+    """Get list of interviews with optional filtering (filtered by current user)"""
     try:
+        # Get user_id for data isolation
+        user_id = current_user.get("userId")
+        if not user_id:
+            logger.warning("⚠️ No userId found - cannot filter interviews per user")
+        
         # Use database service with dependency injection
-        interviews = await db.get_interviews(status=status, limit=limit, offset=offset)
+        interviews = await db.get_interviews(status=status, limit=limit, offset=offset, user_id=user_id)
         
         # If no interviews found, return empty list (not mock data)
         if not interviews:
@@ -115,9 +121,18 @@ async def get_interviews_mock(
     return mock_interviews[offset:offset + limit]
 
 @router.post("/", response_model=InterviewResponse)
-async def create_interview(interview: InterviewCreate, db: DbServiceDep):
-    """Create a new interview"""
+async def create_interview(
+    interview: InterviewCreate, 
+    db: DbServiceDep,
+    current_user: CurrentUserDep
+):
+    """Create a new interview (filtered by current user)"""
     try:
+        # Get user_id for data isolation
+        user_id = current_user.get("userId")
+        if not user_id:
+            logger.warning("⚠️ No userId found - interview will not be isolated per user")
+        
         # Create interview data dict
         interview_data = {
             "candidate_name": interview.candidate_name,
@@ -128,7 +143,8 @@ async def create_interview(interview: InterviewCreate, db: DbServiceDep):
             "scheduled_date": interview.scheduled_date,
             "config": interview.config or {},
             "status": "scheduled",
-            "created_at": datetime.now()
+            "created_at": datetime.now(),
+            "user_id": user_id  # Store user_id for data isolation
         }
         
         # Create in database
