@@ -32,6 +32,11 @@ class TavusService:
         if not key:
             raise ValueError("Tavus API key not provided and TAVUS_API_KEY env var not set")
         
+        # Log which key is being used (for debugging data isolation)
+        key_source = "provided" if api_key else "default_env"
+        key_preview = key[:6] + "..." + key[-4:] if len(key) > 10 else key
+        logger.debug(f"🔑 Tavus API using key from {key_source}: {key_preview}")
+        
         return {
             "x-api-key": key,
             "Content-Type": "application/json"

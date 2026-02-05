@@ -256,12 +256,32 @@ async def get_user_api_keys(
         "daily": await db.get_user_api_key(user_id, "daily")
     }
     
+    # Log which keys are from database vs env fallback
+    import logging
+    _log = logging.getLogger(__name__)
+    
+    for provider in ["openai", "tavus", "cartesia", "daily"]:
+        if api_keys[provider]:
+            key_preview = api_keys[provider][:6] + "..." + api_keys[provider][-4:] if len(api_keys[provider]) > 10 else api_keys[provider]
+            _log.info(f"🔑 User {user_id[:8]}... has {provider} key from DB: {key_preview}")
+        else:
+            env_key = os.getenv(f"{provider.upper()}_API_KEY")
+            if env_key:
+                key_preview = env_key[:6] + "..." + env_key[-4:] if len(env_key) > 10 else env_key
+                _log.warning(f"⚠️ User {user_id[:8]}... using SHARED {provider} key from env: {key_preview}")
+            else:
+                _log.warning(f"⚠️ User {user_id[:8]}... has no {provider} key (neither DB nor env)")
+    
     # Fallback to environment variables if user hasn't configured their own keys
-    # This ensures backward compatibility
+    # ⚠️ WARNING: This means multiple users will share the same API key and see each other's data!
+    # For proper isolation, each user should set their own API keys via /api/v1/user/integrations/{provider}
     if not api_keys["openai"]:
         api_keys["openai"] = os.getenv("OPENAI_API_KEY")
     if not api_keys["tavus"]:
-        api_keys["tavus"] = os.getenv("TAVUS_API_KEY")
+        env_tavus = os.getenv("TAVUS_API_KEY")
+        api_keys["tavus"] = env_tavus
+        if env_tavus:
+            _log.warning(f"⚠️ CRITICAL: User {user_id[:8]}... using SHARED Tavus API key from env - will see replicas from other users using same key!")
     if not api_keys["cartesia"]:
         api_keys["cartesia"] = os.getenv("CARTESIA_API_KEY")
     if not api_keys["daily"]:

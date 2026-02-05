@@ -284,11 +284,14 @@ class DatabaseService:
                     query["status"] = status
                 
                 # CRITICAL: Filter by user_id for data isolation
+                # Only show interviews with matching user_id (strict isolation)
                 if user_id:
                     query["user_id"] = user_id
-                    print(f"🔍 DEBUG: Filtering interviews by user_id: {user_id}")
+                    print(f"🔍 DEBUG: Filtering interviews by user_id: {user_id} (strict isolation - old interviews without user_id will NOT be shown)")
                 else:
-                    print(f"⚠️ WARNING: get_interviews called without user_id - returning ALL interviews (no isolation)")
+                    # If no user_id provided, return empty (don't show interviews without user_id to everyone)
+                    print(f"⚠️ WARNING: get_interviews called without user_id - returning EMPTY (strict isolation)")
+                    return []
                 
                 # Sort by date (most recent first) BEFORE pagination
                 # Use completed_at if available, otherwise created_at

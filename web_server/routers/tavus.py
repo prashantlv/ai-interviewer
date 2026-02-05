@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime
+import os
 from services.tavus_service import tavus_service
 from services.voice_cloning_service import voice_cloning_service
 from dependencies import DbServiceDep, CurrentUserDep, UserApiKeysDep
@@ -72,11 +73,21 @@ async def replicas_page(
         user_id = current_user.get("userId", "unknown")
         
         # Log which API key is being used (for debugging data isolation)
+        logger.info("=" * 60)
+        logger.info(f"🔍 DEBUG: Listing replicas for user: {user_id}")
         if tavus_api_key:
-            key_preview = tavus_api_key[:10] + "..." if len(tavus_api_key) > 10 else tavus_api_key
-            logger.info(f"🔍 DEBUG: User {user_id} using Tavus API key: {key_preview} (length: {len(tavus_api_key)})")
+            key_preview = tavus_api_key[:6] + "..." + tavus_api_key[-4:] if len(tavus_api_key) > 10 else tavus_api_key
+            # Check if this is from DB or env by comparing with env var
+            env_key = os.getenv("TAVUS_API_KEY")
+            if env_key and tavus_api_key == env_key:
+                logger.warning(f"⚠️ User {user_id} using SHARED Tavus API key from env: {key_preview}")
+                logger.warning(f"   ⚠️ This user will see replicas created by ANY user using the same shared key!")
+            else:
+                logger.info(f"✅ User {user_id} using their OWN Tavus API key from DB: {key_preview}")
+            logger.info(f"   Key length: {len(tavus_api_key)}")
         else:
-            logger.warning(f"⚠️ User {user_id} has no Tavus API key - using environment variable (SHARED)")
+            logger.error(f"❌ User {user_id} has NO Tavus API key (neither DB nor env)")
+        logger.info("=" * 60)
         
         result = await tavus_service.list_replicas(
             verbose=True, 
@@ -85,6 +96,14 @@ async def replicas_page(
             replica_type=api_replica_type,
             api_key=tavus_api_key
         )
+        
+        # Log how many replicas were returned
+        if result:
+            replicas_count = len(result.get('data', []))
+            logger.info(f"📊 User {user_id} sees {replicas_count} replicas (total_count: {result.get('total_count', 0)})")
+            # Log replica IDs to see if they match between users
+            replica_ids = [r.get('replica_id') for r in result.get('data', [])[:5]]
+            logger.info(f"   First 5 replica IDs: {replica_ids}")
         
         replicas = []
         total_count = 0
@@ -284,14 +303,37 @@ async def list_replicas(
         - total_count: Total number of replicas
     """
     try:
+        tavus_api_key = api_keys.get("tavus")
+        user_id = current_user.get("userId", "unknown")
+        
+        # Log which API key is being used (for debugging data isolation)
+        logger.info("=" * 60)
+        logger.info(f"🔍 DEBUG: API list_replicas for user: {user_id}")
+        if tavus_api_key:
+            key_preview = tavus_api_key[:6] + "..." + tavus_api_key[-4:] if len(tavus_api_key) > 10 else tavus_api_key
+            env_key = os.getenv("TAVUS_API_KEY")
+            if env_key and tavus_api_key == env_key:
+                logger.warning(f"⚠️ User {user_id} using SHARED Tavus API key from env: {key_preview}")
+                logger.warning(f"   ⚠️ Will see replicas from other users using same shared key!")
+            else:
+                logger.info(f"✅ User {user_id} using their OWN Tavus API key: {key_preview}")
+        else:
+            logger.error(f"❌ User {user_id} has NO Tavus API key")
+        logger.info("=" * 60)
+        
         result = await tavus_service.list_replicas(
             limit=limit,
             page=page,
             verbose=verbose,
             replica_type=replica_type,
             replica_ids=replica_ids,
-            api_key=api_keys.get("tavus")
+            api_key=tavus_api_key
         )
+        
+        # Log results
+        if result:
+            replicas_count = len(result.get('data', []))
+            logger.info(f"📊 User {user_id} API call returned {replicas_count} replicas")
         
         if result:
             return JSONResponse(
