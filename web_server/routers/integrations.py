@@ -34,6 +34,24 @@ class IntegrationListResponse(BaseModel):
 
 
 # ============================================================================
+# Debug: Inspect token payload (for debugging user_id / user_integrations)
+# ============================================================================
+
+@router.get("/api/v1/user/me")
+async def get_current_user_info(current_user: CurrentUserDep) -> Dict[str, Any]:
+    """
+    Return the current user as derived from the JWT. Use this to verify which
+    userId is used for user_integrations and that it differs per user.
+    Call with the same cookie/header you use for integrations.
+    """
+    return {
+        "userId": current_user.get("userId"),
+        "dataModel": current_user.get("dataModel"),
+        "payload": current_user.get("payload"),
+    }
+
+
+# ============================================================================
 # API Endpoints - User Integrations Management
 # ============================================================================
 

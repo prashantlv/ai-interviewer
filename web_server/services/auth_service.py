@@ -13,6 +13,8 @@ import time
 import hmac
 import hashlib
 import base64
+import re
+import logging
 from typing import Optional, Dict, Any
 from fastapi import HTTPException, status
 
@@ -96,17 +98,96 @@ class AuthService:
     def verify_access_token(self, token: str) -> Dict[str, Any]:
         """Verify access token from human2intelligence.com."""
         try:
+            _log = logging.getLogger(__name__)
+            
+            # DEBUG: Log token info
+            _log.info("=" * 60)
+            _log.info("🔍 DEBUG: JWT Token Verification")
+            _log.info("=" * 60)
+            _log.info(f"Token length: {len(token)}")
+            _log.info(f"Token preview: {token[:50]}...")
+            
             payload = self._decode_and_verify_hs256_jwt(token, self.access_token_secret)
+            
+            # DEBUG: Log full payload
+            _log.info("Full JWT Payload:")
+            _log.info(json.dumps(payload, indent=2, default=str))
+            _log.info("-" * 60)
+            _log.info("All claims in payload:")
+            for key, value in payload.items():
+                _log.info(f"  {key}: {value} (type: {type(value).__name__})")
+            _log.info("-" * 60)
 
-            # Extract userId and dataModel
-            user_id = payload.get("userId") or payload.get("sub") or payload.get("aud")
-            data_model = payload.get("dataModel") or payload.get("data_model")
+            # Extract userId: check standard claims first, then fallback to "aud" ONLY if it looks like a user ID.
+            # NOTE: "aud" is normally "audience" (who token is FOR), but in this system it appears to be the user ID.
+            # We check standard claims first, then use "aud" as last resort if it looks like a MongoDB ObjectId (24 hex chars).
+            _log.info("🔍 Extracting userId from claims...")
+            
+            user_id = None
+            checked_claims = []
+            
+            # Check standard claims
+            for claim_name in ["userId", "user_id", "sub", "id"]:
+                value = payload.get(claim_name)
+                checked_claims.append(f"{claim_name}={value}")
+                if value:
+                    user_id = value
+                    _log.info(f"✅ Found userId in '{claim_name}': {value}")
+                    break
+            
+            # Check nested data claims
+            if not user_id and "data" in payload:
+                data_obj = payload.get("data") or {}
+                if isinstance(data_obj, dict):
+                    for claim_name in ["userId", "user_id", "id"]:
+                        value = data_obj.get(claim_name)
+                        checked_claims.append(f"data.{claim_name}={value}")
+                        if value:
+                            user_id = value
+                            _log.info(f"✅ Found userId in 'data.{claim_name}': {value}")
+                            break
+            
+            # Fallback: If no standard user ID found, check if "aud" looks like a user ID (MongoDB ObjectId = 24 hex chars)
+            if not user_id:
+                aud_value = payload.get("aud")
+                checked_claims.append(f"aud={aud_value}")
+                if aud_value:
+                    aud_str = str(aud_value).strip()
+                    _log.info(f"🔍 Checking 'aud' claim: {aud_str}")
+                    # MongoDB ObjectId is 24 hex characters - if aud matches this pattern, use it as user_id
+                    if re.match(r'^[0-9a-fA-F]{24}$', aud_str):
+                        user_id = aud_str
+                        _log.warning("⚠️ Using 'aud' claim as userId (no standard user ID found)")
+                        _log.warning(f"   aud value: {aud_str}")
+                    else:
+                        _log.warning(f"⚠️ 'aud' does not match MongoDB ObjectId pattern (24 hex chars)")
+                        _log.warning(f"   aud value: {aud_str} (length: {len(aud_str)})")
+            
+            _log.info(f"Checked claims: {', '.join(checked_claims)}")
+            
+            data_model = payload.get("dataModel") or payload.get("data_model") or payload.get("model")
 
             if not user_id:
+                _log.error("❌ No userId found in any checked claims")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Token missing userId",
+                    detail="Token missing userId (expected claim: userId, user_id, sub, or id)",
                 )
+
+            # Normalize to string (e.g. if issuer sends id as number)
+            user_id = str(user_id).strip()
+            if not user_id:
+                _log.error("❌ userId is empty after normalization")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token userId is empty",
+                )
+
+            # Log which userId we use (masked) so we can verify per-user isolation
+            _mask = (user_id[:4] + "…") if len(user_id) > 4 else user_id
+            _log.info(f"✅ Final userId: {_mask} (full length: {len(user_id)})")
+            _log.info(f"   dataModel: {data_model}")
+            _log.info("=" * 60)
 
             return {
                 "userId": user_id,

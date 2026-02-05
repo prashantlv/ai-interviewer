@@ -7,6 +7,7 @@ Handles authentication and data fetching from Hire2Inspire platform
 import httpx
 import os
 import asyncio
+import json
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 import logging
@@ -18,7 +19,7 @@ class Hire2InspireService:
     """Service to interact with Hire2Inspire API"""
     
     def __init__(self):
-        self.base_url = "https://pro.hireinspire.com/api"
+        self.base_url = "https://api.hireinspire.com/api"
         self.email = os.getenv("H2I_EMAIL", "hire2inspireh2i@gmail.com")
         self.password = os.getenv("H2I_PASSWORD", "Sant@1506")
         # Token is always obtained from cookies (via request) or login
@@ -108,14 +109,39 @@ class Hire2InspireService:
                 
                 response.raise_for_status()
                 
+                # DEBUG: Log full login response
+                logger.info("=" * 60)
+                logger.info("🔍 DEBUG: Hire2Inspire Login Response")
+                logger.info("=" * 60)
+                logger.info(f"Status Code: {response.status_code}")
+                logger.info(f"Response Headers: {dict(response.headers)}")
+                logger.info(f"Full Response JSON:")
+                logger.info(json.dumps(data, indent=2, default=str))
+                logger.info("-" * 60)
+                
                 # Extract token from response
                 if "data" in data and "accessToken" in data["data"]:
                     self.token = data["data"]["accessToken"]
                     # Token typically expires in 24 hours
                     self.token_expiry = datetime.now() + timedelta(hours=23)
+                    logger.info(f"✅ Extracted accessToken (length: {len(self.token)})")
+                    logger.info(f"   Token preview: {self.token[:50]}...")
+                    
+                    # DEBUG: Check if response has user info
+                    if "data" in data:
+                        user_info = data["data"]
+                        logger.info("🔍 User info in login response:")
+                        for key in ["userId", "user_id", "id", "email", "name", "agency_id", "agencyId"]:
+                            if key in user_info:
+                                logger.info(f"   {key}: {user_info[key]}")
+                    
                     logger.info("✅ Logged in to Hire2Inspire successfully")
+                    logger.info("=" * 60)
                 else:
                     logger.error("❌ No token in response")
+                    logger.error(f"   Response structure: {list(data.keys())}")
+                    if "data" in data:
+                        logger.error(f"   Data keys: {list(data['data'].keys()) if isinstance(data['data'], dict) else 'not a dict'}")
                     raise Exception("Failed to get access token")
                     
         except Exception as e:
