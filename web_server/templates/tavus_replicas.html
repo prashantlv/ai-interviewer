@@ -170,6 +170,19 @@
 {% endblock %}
 
 {% block content %}
+{% if error %}
+<!-- Error Message -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <h5 class="alert-heading"><i class="bi bi-exclamation-triangle-fill me-2"></i>Account Setup Required</h5>
+            <p class="mb-0">{{ error }}</p>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Default Replica Selector -->
 <div class="row mb-4">
     <div class="col-12">

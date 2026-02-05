@@ -90,12 +90,15 @@ async def replicas_page(
                 "tavus_replicas.html",
                 {
                     "request": request,
-                    "error": "Tavus API key not configured. Please configure your Tavus API key via Settings > Integrations.",
+                    "error": "Your account is not completely set up. Please contact your administrator to configure your account.",
                     "replicas": [],
                     "total_count": 0,
-                    "page": page,
+                    "page_title": "Replicas",
+                    "current_page": page,
                     "limit": limit,
-                    "replica_type": replica_type
+                    "total_pages": 0,
+                    "replica_type": replica_type or "all",
+                    "default_replica_id": None
                 }
             )
         
