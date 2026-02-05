@@ -4,13 +4,12 @@ Tavus Replica Management Router
 Provides REST API endpoints for managing Tavus replicas (create, read, list, update, delete).
 """
 
-from fastapi import APIRouter, HTTPException, Request, Form
+from fastapi import APIRouter, HTTPException, Request, Form, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime
-import os
 from services.tavus_service import tavus_service
 from services.voice_cloning_service import voice_cloning_service
 from dependencies import DbServiceDep, CurrentUserDep, UserApiKeysDep
@@ -77,17 +76,28 @@ async def replicas_page(
         logger.info(f"🔍 DEBUG: Listing replicas for user: {user_id}")
         if tavus_api_key:
             key_preview = tavus_api_key[:6] + "..." + tavus_api_key[-4:] if len(tavus_api_key) > 10 else tavus_api_key
-            # Check if this is from DB or env by comparing with env var
-            env_key = os.getenv("TAVUS_API_KEY")
-            if env_key and tavus_api_key == env_key:
-                logger.warning(f"⚠️ User {user_id} using SHARED Tavus API key from env: {key_preview}")
-                logger.warning(f"   ⚠️ This user will see replicas created by ANY user using the same shared key!")
-            else:
-                logger.info(f"✅ User {user_id} using their OWN Tavus API key from DB: {key_preview}")
+            logger.info(f"✅ User {user_id} using their OWN Tavus API key from DB: {key_preview}")
             logger.info(f"   Key length: {len(tavus_api_key)}")
         else:
-            logger.error(f"❌ User {user_id} has NO Tavus API key (neither DB nor env)")
+            logger.error(f"❌ User {user_id} has NO Tavus API key configured in DB")
+            logger.error(f"   User must configure their Tavus API key via /api/v1/user/integrations/tavus")
         logger.info("=" * 60)
+        
+        # Return error if no API key configured
+        if not tavus_api_key:
+            logger.error(f"❌ User {user_id} attempted to access replicas without Tavus API key")
+            return templates.TemplateResponse(
+                "tavus_replicas.html",
+                {
+                    "request": request,
+                    "error": "Tavus API key not configured. Please configure your Tavus API key via Settings > Integrations.",
+                    "replicas": [],
+                    "total_count": 0,
+                    "page": page,
+                    "limit": limit,
+                    "replica_type": replica_type
+                }
+            )
         
         result = await tavus_service.list_replicas(
             verbose=True, 
@@ -311,15 +321,18 @@ async def list_replicas(
         logger.info(f"🔍 DEBUG: API list_replicas for user: {user_id}")
         if tavus_api_key:
             key_preview = tavus_api_key[:6] + "..." + tavus_api_key[-4:] if len(tavus_api_key) > 10 else tavus_api_key
-            env_key = os.getenv("TAVUS_API_KEY")
-            if env_key and tavus_api_key == env_key:
-                logger.warning(f"⚠️ User {user_id} using SHARED Tavus API key from env: {key_preview}")
-                logger.warning(f"   ⚠️ Will see replicas from other users using same shared key!")
-            else:
-                logger.info(f"✅ User {user_id} using their OWN Tavus API key: {key_preview}")
+            logger.info(f"✅ User {user_id} using their OWN Tavus API key from DB: {key_preview}")
         else:
-            logger.error(f"❌ User {user_id} has NO Tavus API key")
+            logger.error(f"❌ User {user_id} has NO Tavus API key configured in DB")
+            logger.error(f"   User must configure their Tavus API key via /api/v1/user/integrations/tavus")
         logger.info("=" * 60)
+        
+        # Return error if no API key configured
+        if not tavus_api_key:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Tavus API key not configured. Please configure your Tavus API key via /api/v1/user/integrations/tavus"
+            )
         
         result = await tavus_service.list_replicas(
             limit=limit,

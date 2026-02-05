@@ -225,7 +225,7 @@ async def get_user_api_keys(
     Dependency to get user's API keys from database
     
     Fetches encrypted API keys from database and decrypts them.
-    Falls back to environment variables if user hasn't configured their own keys.
+    ⚠️ NO FALLBACK to environment variables - users MUST configure their own keys.
     
     Returns:
         Dict with provider names as keys and API keys as values (or None if not set)
@@ -236,11 +236,13 @@ async def get_user_api_keys(
             "daily": None
         }
     """
-    import os
+    import logging
+    _log = logging.getLogger(__name__)
     
     user_id = current_user.get("userId")
     if not user_id:
-        # If no user_id, return all None (will use env vars as fallback)
+        # If no user_id, return all None
+        _log.warning("⚠️ No user_id found - returning None for all API keys")
         return {
             "openai": None,
             "tavus": None,
@@ -248,7 +250,7 @@ async def get_user_api_keys(
             "daily": None
         }
     
-    # Fetch user's API keys from database
+    # Fetch user's API keys from database ONLY (no env fallback)
     api_keys = {
         "openai": await db.get_user_api_key(user_id, "openai"),
         "tavus": await db.get_user_api_key(user_id, "tavus"),
@@ -256,36 +258,14 @@ async def get_user_api_keys(
         "daily": await db.get_user_api_key(user_id, "daily")
     }
     
-    # Log which keys are from database vs env fallback
-    import logging
-    _log = logging.getLogger(__name__)
-    
+    # Log which keys are configured
     for provider in ["openai", "tavus", "cartesia", "daily"]:
         if api_keys[provider]:
             key_preview = api_keys[provider][:6] + "..." + api_keys[provider][-4:] if len(api_keys[provider]) > 10 else api_keys[provider]
-            _log.info(f"🔑 User {user_id[:8]}... has {provider} key from DB: {key_preview}")
+            _log.info(f"✅ User {user_id[:8]}... has {provider} key from DB: {key_preview}")
         else:
-            env_key = os.getenv(f"{provider.upper()}_API_KEY")
-            if env_key:
-                key_preview = env_key[:6] + "..." + env_key[-4:] if len(env_key) > 10 else env_key
-                _log.warning(f"⚠️ User {user_id[:8]}... using SHARED {provider} key from env: {key_preview}")
-            else:
-                _log.warning(f"⚠️ User {user_id[:8]}... has no {provider} key (neither DB nor env)")
-    
-    # Fallback to environment variables if user hasn't configured their own keys
-    # ⚠️ WARNING: This means multiple users will share the same API key and see each other's data!
-    # For proper isolation, each user should set their own API keys via /api/v1/user/integrations/{provider}
-    if not api_keys["openai"]:
-        api_keys["openai"] = os.getenv("OPENAI_API_KEY")
-    if not api_keys["tavus"]:
-        env_tavus = os.getenv("TAVUS_API_KEY")
-        api_keys["tavus"] = env_tavus
-        if env_tavus:
-            _log.warning(f"⚠️ CRITICAL: User {user_id[:8]}... using SHARED Tavus API key from env - will see replicas from other users using same key!")
-    if not api_keys["cartesia"]:
-        api_keys["cartesia"] = os.getenv("CARTESIA_API_KEY")
-    if not api_keys["daily"]:
-        api_keys["daily"] = os.getenv("DAILY_API_KEY")
+            _log.warning(f"⚠️ User {user_id[:8]}... has NO {provider} key configured in DB")
+            _log.warning(f"   ⚠️ User must configure their own {provider} API key via /api/v1/user/integrations/{provider}")
     
     return api_keys
 
@@ -329,7 +309,7 @@ async def get_user_integration_configs(
 
 # Type alias for user API keys dependency
 UserApiKeysDep = Annotated[Dict[str, Optional[str]], Depends(get_user_api_keys)]
-"""User API keys dependency - injects user's API keys (with env fallback)"""
+"""User API keys dependency - injects user's API keys from database ONLY (no env fallback)"""
 
 # Type alias for user integration configs dependency
 UserIntegrationConfigsDep = Annotated[Dict[str, Dict[str, Any]], Depends(get_user_integration_configs)]
