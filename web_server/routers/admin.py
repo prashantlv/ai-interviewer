@@ -188,16 +188,15 @@ async def admin_dashboard(
         if access_token:
             logger.info("✅ Using access token from sign-in cookie for Hire2Inspire API calls")
         else:
-            logger.warning("⚠️ No access token found in cookies - will use env var or login")
+            logger.warning("⚠️ No access token found in cookies - Admin needs to log into Hire2Inspire platform first")
+            logger.warning("   Visit https://human2inspire.com/signin/agency and login, then return to admin panel")
         
         # Get agencies list
         agencies = []
         try:
-            # Get user_id from current user for Hire2Inspire credentials
-            current_user = request.state.current_user if hasattr(request.state, 'current_user') else None
-            user_id = current_user.get("userId") if current_user else None
-            
-            agencies = await hire2inspire_service.get_agency_list(user_type="agencies", token=access_token, user_id=user_id)
+            # For admin panel, we don't have user_id context, so pass None
+            # Token from cookies should be sufficient if admin logged into Hire2Inspire platform
+            agencies = await hire2inspire_service.get_agency_list(user_type="agencies", token=access_token, user_id=None)
             logger.info(f"📊 Loaded {len(agencies)} agencies for admin dashboard")
             if len(agencies) == 0:
                 logger.warning("⚠️ No agencies returned from API - check logs for details")
@@ -208,11 +207,9 @@ async def admin_dashboard(
         # Get employers list
         employers = []
         try:
-            # Get user_id from current user for Hire2Inspire credentials
-            current_user = request.state.current_user if hasattr(request.state, 'current_user') else None
-            user_id = current_user.get("userId") if current_user else None
-            
-            employers = await hire2inspire_service.get_agency_list(user_type="employers", token=access_token, user_id=user_id)
+            # For admin panel, we don't have user_id context, so pass None
+            # Token from cookies should be sufficient if admin logged into Hire2Inspire platform
+            employers = await hire2inspire_service.get_agency_list(user_type="employers", token=access_token, user_id=None)
             logger.info(f"📊 Loaded {len(employers)} employers for admin dashboard")
             if len(employers) == 0:
                 logger.warning("⚠️ No employers returned from API - check logs for details")
